@@ -17,3 +17,8 @@ def test_confirmation_requires_idempotency_header() -> None:
     operation = app.openapi()["paths"]["/api/v1/imports/{import_id}/confirm"]["post"]
     parameters = {item["name"]: item for item in operation["parameters"]}
     assert parameters["Idempotency-Key"]["required"] is True
+
+
+def test_backend_image_has_no_frontend_catch_all() -> None:
+    paths = app.openapi()["paths"]
+    assert "/" not in paths

@@ -1,5 +1,3 @@
-from pathlib import Path
-
 import sentry_sdk
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -11,9 +9,6 @@ from starlette.responses import JSONResponse
 from app.api.main import api_router
 from app.core.config import settings
 from app.core.observability import configure_logging, configure_tracing
-
-FRONTEND_DIR = Path(__file__).parent / "frontend"
-
 
 def custom_generate_unique_id(route: APIRoute) -> str:
     return f"{route.tags[0]}-{route.name}"
@@ -59,6 +54,5 @@ app.add_middleware(
 
 app.include_router(api_router, prefix=settings.API_V1_STR)
 app.mount("/internal/metrics", make_asgi_app())
-app.frontend("/", directory=FRONTEND_DIR, check_dir=False)
 configure_logging()
 configure_tracing(app)
