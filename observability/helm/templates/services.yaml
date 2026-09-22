@@ -1,22 +1,47 @@
-{{- $services := list
-  (dict "name" "fde-prometheus" "selector" "fde-prometheus" "ports" (list (dict "name" "http" "port" 9090)))
-  (dict "name" "fde-alertmanager" "selector" "fde-alertmanager" "ports" (list (dict "name" "http" "port" 9093)))
-  (dict "name" "fde-loki" "selector" "fde-loki" "ports" (list (dict "name" "http" "port" 3100)))
-  (dict "name" "fde-tempo" "selector" "fde-tempo" "ports" (list (dict "name" "http" "port" 3200) (dict "name" "otlp-grpc" "port" 4317) (dict "name" "otlp-http" "port" 4318)))
-  (dict "name" "fde-otel-collector" "selector" "fde-otel-collector" "ports" (list (dict "name" "otlp-grpc" "port" 4317) (dict "name" "otlp-http" "port" 4318) (dict "name" "metrics" "port" 8889)))
-  (dict "name" "fde-grafana" "selector" "fde-grafana" "ports" (list (dict "name" "http" "port" 3000)))
--}}
-{{- range $index, $service := $services }}
-{{- if gt $index 0 }}---
-{{- end }}
 apiVersion: v1
 kind: Service
-metadata: { name: {{ $service.name }} }
+metadata: { name: fde-prometheus }
 spec:
-  type: ClusterIP
-  selector: { app.kubernetes.io/name: {{ $service.selector }} }
+  selector: { app.kubernetes.io/name: fde-prometheus }
+  ports: [{ name: http, port: 9090, targetPort: http }]
+---
+apiVersion: v1
+kind: Service
+metadata: { name: fde-alertmanager }
+spec:
+  selector: { app.kubernetes.io/name: fde-alertmanager }
+  ports: [{ name: http, port: 9093, targetPort: http }]
+---
+apiVersion: v1
+kind: Service
+metadata: { name: fde-loki }
+spec:
+  selector: { app.kubernetes.io/name: fde-loki }
+  ports: [{ name: http, port: 3100, targetPort: http }]
+---
+apiVersion: v1
+kind: Service
+metadata: { name: fde-tempo }
+spec:
+  selector: { app.kubernetes.io/name: fde-tempo }
   ports:
-    {{- range $service.ports }}
-    - { name: {{ .name }}, port: {{ .port }}, targetPort: {{ .name }} }
-    {{- end }}
-{{- end }}
+    - { name: http, port: 3200, targetPort: http }
+    - { name: otlp-grpc, port: 4317, targetPort: otlp-grpc }
+    - { name: otlp-http, port: 4318, targetPort: otlp-http }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: fde-otel-collector }
+spec:
+  selector: { app.kubernetes.io/name: fde-otel-collector }
+  ports:
+    - { name: otlp-grpc, port: 4317, targetPort: otlp-grpc }
+    - { name: otlp-http, port: 4318, targetPort: otlp-http }
+    - { name: metrics, port: 8889, targetPort: metrics }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: fde-grafana }
+spec:
+  selector: { app.kubernetes.io/name: fde-grafana }
+  ports: [{ name: http, port: 3000, targetPort: http }]
