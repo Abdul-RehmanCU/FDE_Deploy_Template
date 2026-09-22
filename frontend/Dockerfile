@@ -14,6 +14,7 @@ RUN bun run build
 FROM nginxinc/nginx-unprivileged:1.29.1-alpine
 
 ENV BACKEND_UPSTREAM=http://fde-api:8000
+ENV FDE_BRAND_NAME="FDE Deploy"
 
 COPY frontend/nginx/default.conf.template /etc/nginx/templates/default.conf.template
 COPY --from=build /app/backend/app/frontend /usr/share/nginx/html

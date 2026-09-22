@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router"
 import { DatabaseZap } from "lucide-react"
 
+import { brandName } from "@/config/runtime"
 import { cn } from "@/lib/utils"
 
 interface LogoProps {
@@ -28,7 +29,7 @@ export function Logo({
           </span>
           <span className="leading-tight">
             <span className="block text-sm font-semibold tracking-tight">
-              FDE Deploy
+              {brandName}
             </span>
             <span className="block text-[11px] text-muted-foreground">
               Customer operations
@@ -41,7 +42,7 @@ export function Logo({
             className,
           )}
         >
-          <DatabaseZap className="size-5" aria-label="FDE Deploy" />
+          <DatabaseZap className="size-5" aria-label={brandName} />
         </span>
       </>
     ) : (
@@ -51,7 +52,7 @@ export function Logo({
         </span>
         {variant === "full" && (
           <span className="text-lg font-semibold tracking-tight">
-            FDE Deploy
+            {brandName}
           </span>
         )}
       </span>

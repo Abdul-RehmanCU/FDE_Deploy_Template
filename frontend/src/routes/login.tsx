@@ -16,6 +16,7 @@ import {
 import { Input } from "@/components/ui/input"
 import { LoadingButton } from "@/components/ui/loading-button"
 import { PasswordInput } from "@/components/ui/password-input"
+import { brandName } from "@/config/runtime"
 import useAuth, { isLoggedIn } from "@/hooks/useAuth"
 
 const formSchema = z.object({
@@ -71,7 +72,7 @@ function Login() {
           className="flex flex-col gap-6"
         >
           <div className="flex flex-col items-center gap-2 text-center">
-            <h1 className="text-2xl font-bold">Sign in to FDE Deploy</h1>
+            <h1 className="text-2xl font-bold">Sign in to {brandName}</h1>
             <p className="text-sm text-muted-foreground">
               Use the account provided by your administrator.
             </p>
