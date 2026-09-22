@@ -21,10 +21,18 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
       - name: Set up Python
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.14"
+      - name: Set up uv
+        uses: astral-sh/setup-uv@d0d8abe699bfb85fec6de9f7adb5ae17292296ff # v6
+        with:
+          version: "0.9.18"
+      - name: Audit workflow security
+        run: uv run --frozen --only-group dev zizmor --pedantic .github/workflows
       - name: Verify repository invariants
         run: python scripts/ci/verify_repository.py
 
@@ -34,7 +42,7 @@ jobs:
     timeout-minutes: 20
     services:
       postgres:
-        image: postgres:16.10-bookworm
+        image: postgres:16.10-bookworm@sha256:38471f330eb885e04de130b768d6db4e10469e2311879c7e5c699f6d2d8a1c74
         env:
           POSTGRES_DB: app
           POSTGRES_USER: postgres
@@ -47,7 +55,7 @@ jobs:
           --health-timeout 5s
           --health-retries 10
       redis:
-        image: redis:8.2.1-alpine
+        image: redis:8.2.1-alpine@sha256:987c376c727652f99625c7d205a1cba3cb2c53b92b0b62aade2bd48ee1593232
         ports:
           - 6379:6379
         options: >-
@@ -70,6 +78,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
       - name: Set up Python
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
@@ -99,6 +109,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
       - name: Set up Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
@@ -139,7 +151,7 @@ jobs:
     timeout-minutes: 30
     services:
       postgres:
-        image: postgres:16.10-bookworm
+        image: postgres:16.10-bookworm@sha256:38471f330eb885e04de130b768d6db4e10469e2311879c7e5c699f6d2d8a1c74
         env:
           POSTGRES_DB: app
           POSTGRES_USER: postgres
@@ -152,7 +164,7 @@ jobs:
           --health-timeout 5s
           --health-retries 10
       redis:
-        image: redis:8.2.1-alpine
+        image: redis:8.2.1-alpine@sha256:987c376c727652f99625c7d205a1cba3cb2c53b92b0b62aade2bd48ee1593232
         ports:
           - 6379:6379
         options: >-
@@ -176,6 +188,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
       - name: Set up Python
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
@@ -244,6 +258,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
       - name: Create kind cluster
         uses: helm/kind-action@a1b0e391336a6ee6713a0583f8c6240d70863de3 # v1.12.0
         with:
@@ -435,6 +451,75 @@ jobs:
         run: |
           kubectl -n fde-staging delete pod --selector=app.kubernetes.io/component=worker
           kubectl -n fde-staging rollout status deployment/fde-ci-demo-staging-worker --timeout=120s
+      - name: Collect failure diagnostics
+        if: failure()
+        run: |
+          kubectl -n fde-staging get all,pvc
+          kubectl -n fde-staging describe pods
+          kubectl -n fde-staging logs --all-containers --prefix --tail=200 --selector=app.kubernetes.io/name=fde
+
+  observability-kind:
+    name: kind observability rehearsal
+    needs: infrastructure
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Create kind cluster
+        uses: helm/kind-action@a1b0e391336a6ee6713a0583f8c6240d70863de3 # v1.12.0
+        with:
+          cluster_name: fde-observability-ci
+          version: v0.30.0
+      - name: Set up Helm
+        uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
+        with:
+          version: v4.1.1
+      - name: Build application images
+        run: |
+          docker build --tag localhost/fde-backend:ci --file backend/Dockerfile .
+          docker build --tag localhost/fde-frontend:ci --file frontend/Dockerfile .
+      - name: Load images into kind
+        run: |
+          kind load docker-image --name fde-observability-ci localhost/fde-backend:ci
+          kind load docker-image --name fde-observability-ci localhost/fde-frontend:ci
+      - name: Install application and bootstrap test administrator
+        shell: bash
+        run: |
+          set -euo pipefail
+          kubectl create namespace fde-staging
+          kubectl -n fde-staging create secret generic fde-runtime-secrets \
+            --from-literal=secret-key=kind-only-secret-key-with-at-least-32-characters \
+            --from-literal=postgres-password=kind-postgres-password \
+            --from-literal=redis-password=kind-redis-password \
+            --from-literal=database-url=postgresql://app:kind-postgres-password@fde-ci-demo-staging-postgres:5432/app \
+            --from-literal=redis-url=redis://:kind-redis-password@fde-ci-demo-staging-redis:6379/0
+          helm upgrade --install fde infra/helm/fde \
+            --namespace fde-staging \
+            --values infra/helm/fde/values-kind.yaml \
+            --set-string branding.name='CI Customer Directory' \
+            --wait \
+            --timeout 12m
+          kubectl -n fde-staging port-forward service/fde-ci-demo-staging-frontend 18085:8080 > "$RUNNER_TEMP/observability-bootstrap-forward.log" 2>&1 &
+          for attempt in {1..30}; do
+            curl --fail --silent http://127.0.0.1:18085/api/v1/health/ready >/dev/null && break
+            sleep 1
+          done
+          bootstrap_output=$(kubectl -n fde-staging exec deployment/fde-ci-demo-staging-api -- python -m app.bootstrap_admin kind-admin@example.com --full-name "Kind Administrator")
+          temporary_password=$(printf '%s\n' "$bootstrap_output" | sed -n 's/^One-time temporary password: //p')
+          test -n "$temporary_password"
+          echo "::add-mask::$temporary_password"
+          token=$(curl --fail --silent --request POST \
+            --data-urlencode username=kind-admin@example.com \
+            --data-urlencode password="$temporary_password" \
+            http://127.0.0.1:18085/api/v1/login/access-token | jq --raw-output .access_token)
+          curl --fail --silent --request POST \
+            --header "Authorization: Bearer $token" \
+            --header "Content-Type: application/json" \
+            --data "{\"current_password\":\"$temporary_password\",\"new_password\":\"Kind-Admin-Password-2026!\"}" \
+            http://127.0.0.1:18085/api/v1/users/me/password >/dev/null
       - name: Install compact observability stack
         shell: bash
         run: |
@@ -566,12 +651,13 @@ jobs:
           path: ${{ runner.temp }}/observability-evidence
           if-no-files-found: warn
           retention-days: 14
-      - name: Collect failure diagnostics
+      - name: Collect observability failure diagnostics
         if: failure()
         run: |
           kubectl -n fde-staging get all,pvc
-          kubectl -n fde-staging describe pods
-          kubectl -n fde-staging logs --all-containers --prefix --tail=200 --selector=app.kubernetes.io/name=fde
+          kubectl -n observability get all,pvc || true
+          kubectl -n observability describe pods || true
+          kubectl -n observability logs --all-containers --prefix --tail=200 --selector=app.kubernetes.io/part-of=fde-observability || true
 
   infrastructure:
     name: Terraform and Helm validation
@@ -580,6 +666,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
         with:
@@ -630,6 +718,8 @@ jobs:
     steps:
       - name: Check out repository
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
       - name: Set up Python
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
