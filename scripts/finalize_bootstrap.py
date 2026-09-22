@@ -47,10 +47,13 @@ def list_bucket_generations(bucket_uri: str) -> list[dict[str, object]]:
 
 
 def require_soft_delete_disabled(bucket: dict[str, object]) -> None:
-    policy = bucket.get("softDeletePolicy") or {}
+    policy = bucket.get("soft_delete_policy") or bucket.get("softDeletePolicy") or {}
     if not isinstance(policy, dict):
         raise TypeError("state bucket soft-delete policy has an unexpected shape")
-    raw = policy.get("retentionDurationSeconds", policy.get("retentionDuration", 0))
+    raw = policy.get(
+        "retention_duration_seconds",
+        policy.get("retentionDurationSeconds", policy.get("retentionDuration", 0)),
+    )
     seconds = int(str(raw).removesuffix("s") or "0")
     if seconds > 0:
         raise RuntimeError("state bucket soft delete must be disabled before teardown")
@@ -80,13 +83,25 @@ def main() -> int:
     root = Path(__file__).resolve().parents[1]
     terraform_dir = root / "infra" / "terraform" / "bootstrap"
     bucket_uri = f"gs://{args.state_bucket}"
+    owned_buckets = json.loads(
+        run(
+            [
+                "gcloud",
+                "storage",
+                "buckets",
+                "list",
+                f"--project={args.project}",
+                f"--filter=name={args.state_bucket}",
+                "--format=json(name)",
+            ]
+        ).stdout
+    )
+    if [row.get("name") for row in owned_buckets] != [args.state_bucket]:
+        raise SystemExit("state bucket is not uniquely owned by the confirmed project")
     bucket = json.loads(
         run(
             ["gcloud", "storage", "buckets", "describe", bucket_uri, "--format=json"]
         ).stdout
-    )
-    project = json.loads(
-        run(["gcloud", "projects", "describe", args.project, "--format=json"]).stdout
     )
     labels = bucket.get("labels", {})
     if (
@@ -96,8 +111,6 @@ def main() -> int:
         raise SystemExit(
             "state bucket labels do not identify the FDE Terraform state bucket"
         )
-    if str(bucket.get("projectNumber")) != str(project.get("projectNumber")):
-        raise SystemExit("state bucket does not belong to the confirmed project")
     if str(bucket.get("location", "")).lower() != args.region.lower():
         raise SystemExit("state bucket is not in the confirmed Montréal region")
     require_soft_delete_disabled(bucket)
@@ -226,7 +239,8 @@ def main() -> int:
             "location": bucket.get("location"),
             "labels": labels,
             "versioning": bucket.get("versioning"),
-            "softDeletePolicy": bucket.get("softDeletePolicy"),
+            "softDeletePolicy": bucket.get("soft_delete_policy")
+            or bucket.get("softDeletePolicy"),
         },
         "object_generations_before": all_versions_before,
         "object_generations_after": all_versions_after,
