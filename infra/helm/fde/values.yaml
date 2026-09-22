@@ -65,7 +65,7 @@ secretProvider:
 demoDependencies:
   enabled: true
   postgres:
-    image: postgres:17.6-alpine3.22
+    image: postgres:16.10-alpine3.22
     storage: 10Gi
     resources:
       requests: { cpu: 150m, memory: 256Mi }
