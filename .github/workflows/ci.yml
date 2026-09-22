@@ -366,7 +366,6 @@ jobs:
             sleep 2
           done
           test "$status" = validated
-
           curl --fail --silent --request POST \
             --header "Authorization: Bearer $token" \
             --header "Idempotency-Key: kind-confirm-001" \
@@ -590,10 +589,14 @@ jobs:
             --set observability.otlpEndpoint=http://fde-otel-collector.observability.svc.cluster.local:4317 \
             --wait \
             --timeout 5m
+          kubectl -n fde-staging rollout status deployment/fde-ci-demo-staging-api --timeout=180s
+          kubectl -n fde-staging rollout status deployment/fde-ci-demo-staging-worker --timeout=180s
+          kubectl -n fde-staging rollout status deployment/fde-ci-demo-staging-publisher --timeout=180s
       - name: Verify metrics logs traces dashboard and alert lifecycle
         shell: bash
         run: |
           set -euo pipefail
+          verification_failed=0
           evidence_dir="$RUNNER_TEMP/observability-evidence"
           mkdir -p "$evidence_dir"
           kubectl -n observability rollout status statefulset/fde-prometheus --timeout=180s
@@ -654,12 +657,19 @@ jobs:
             "http://127.0.0.1:18083/api/v1/imports/$import_id/validate" >/dev/null
           trace_id=$(awk 'tolower($1) == "x-trace-id:" {gsub("\\r", "", $2); print $2}' "$RUNNER_TEMP/validate-response-headers.txt" | tail -1)
           [[ "$trace_id" =~ ^[0-9a-f]{32}$ ]]
+          printf '%s\n' "$trace_id" > "$evidence_dir/trace-id.txt"
           for attempt in {1..60}; do
             status=$(curl --fail --silent --header "Authorization: Bearer $token" "http://127.0.0.1:18083/api/v1/imports/$import_id" | jq --raw-output .status)
             test "$status" = validated && break
             sleep 2
           done
           test "$status" = validated
+          stored_traceparent=$(kubectl -n fde-staging exec statefulset/fde-ci-demo-staging-postgres -- sh -c \
+            "PGPASSWORD=\"\$(cat /var/run/secrets/fde/postgres-password)\" psql -U app -d app -Atc \"SELECT traceparent FROM job WHERE import_id = '$import_id' ORDER BY created_at DESC LIMIT 1\"")
+          if [[ "$stored_traceparent" != "00-$trace_id-"* ]]; then
+            echo "Stored job trace carrier does not match the API trace." > "$evidence_dir/trace-carrier-failure.txt"
+            verification_failed=1
+          fi
           for attempt in {1..60}; do
             http_count=$(curl --fail --silent --get --data-urlencode 'query=sum(http_server_request_duration_seconds_count)' http://127.0.0.1:19090/api/v1/query | jq -r '.data.result[0].value[1] // "0"')
             http_buckets=$(curl --fail --silent --get --data-urlencode 'query=count(http_server_request_duration_seconds_bucket)' http://127.0.0.1:19090/api/v1/query | jq -r '.data.result[0].value[1] // "0"')
@@ -670,7 +680,9 @@ jobs:
             if awk -v a="$http_count" -v b="$http_buckets" -v c="$import_rows" -v d="$oldest_job" -v e="$database_connections" -v f="$job_attempts" 'BEGIN { exit !(a>0 && b>0 && c>0 && d>0 && e>0 && f>0) }'; then break; fi
             sleep 2
           done
-          awk -v a="$http_count" -v b="$http_buckets" -v c="$import_rows" -v d="$oldest_job" -v e="$database_connections" -v f="$job_attempts" 'BEGIN { exit !(a>0 && b>0 && c>0 && d>0 && e>0 && f>0) }'
+          if ! awk -v a="$http_count" -v b="$http_buckets" -v c="$import_rows" -v d="$oldest_job" -v e="$database_connections" -v f="$job_attempts" 'BEGIN { exit !(a>0 && b>0 && c>0 && d>0 && e>0 && f>0) }'; then
+            verification_failed=1
+          fi
           jq -n --argjson api_targets "$api_targets" --argjson worker_up "$worker_up" \
             --arg http_count "$http_count" --arg http_buckets "$http_buckets" \
             --arg import_rows "$import_rows" --arg oldest_job "$oldest_job" \
@@ -678,35 +690,54 @@ jobs:
             '{api_targets:$api_targets,worker_up:$worker_up,http_request_count:($http_count|tonumber),http_histogram_buckets:($http_buckets|tonumber),worker_series:{import_rows:($import_rows|tonumber),oldest_queued_job:($oldest_job|tonumber),database_connections:($database_connections|tonumber),job_attempts:($job_attempts|tonumber)}}' \
             > "$evidence_dir/metrics-summary.json"
           for attempt in {1..60}; do
-            services=$(curl --fail --silent "http://127.0.0.1:13200/api/traces/$trace_id" | jq -r '.. | objects | select(.key? == "service.name") | .value.stringValue? // empty' | sort -u || true)
+            tempo_status=$(curl --silent --output "$evidence_dir/tempo-trace-last.json" --write-out '%{http_code}' "http://127.0.0.1:13200/api/v2/traces/$trace_id" || true)
+            services=""
+            if test "$tempo_status" = 200; then
+              services=$(jq -r '.trace.resourceSpans[]?.resource.attributes[]? | select(.key == "service.name") | .value.stringValue' "$evidence_dir/tempo-trace-last.json" | sort -u || true)
+            fi
+            printf '%s\n' "$services" > "$evidence_dir/trace-services-last.txt"
             if grep -qx fde-api <<<"$services" && grep -qx fde-outbox-publisher <<<"$services" && grep -qx fde-worker <<<"$services"; then break; fi
             sleep 2
           done
-          grep -qx fde-api <<<"$services"
-          grep -qx fde-outbox-publisher <<<"$services"
-          grep -qx fde-worker <<<"$services"
+          missing_services=""
+          for required_service in fde-api fde-outbox-publisher fde-worker; do
+            grep -qx "$required_service" <<<"$services" || missing_services="$missing_services $required_service"
+          done
+          if test -n "$missing_services"; then
+            printf 'Tempo status=%s missing services:%s\n' "$tempo_status" "$missing_services" | tee "$evidence_dir/trace-missing-services.txt" >&2
+            verification_failed=1
+          fi
           printf '%s\n' "$services" > "$evidence_dir/trace-services.txt"
+          cp "$evidence_dir/tempo-trace-last.json" "$evidence_dir/tempo-trace.json"
 
-          curl --fail --silent --get \
+          if ! curl --fail --silent --get \
             --data-urlencode "query={namespace=\"fde-staging\"} | json | trace_id=\"$trace_id\"" \
             --data-urlencode "start=$(date -u -d '10 minutes ago' +%s)000000000" \
-            http://127.0.0.1:13100/loki/api/v1/query_range > "$RUNNER_TEMP/trace-logs.json"
+            http://127.0.0.1:13100/loki/api/v1/query_range > "$RUNNER_TEMP/trace-logs.json"; then
+            printf '{"data":{"result":[]}}\n' > "$RUNNER_TEMP/trace-logs.json"
+            verification_failed=1
+          fi
           log_containers=$(jq -r '.data.result[].stream.container' "$RUNNER_TEMP/trace-logs.json" | sort -u)
-          grep -Eq 'api' <<<"$log_containers"
-          grep -Eq 'worker' <<<"$log_containers"
+          api_log_count=$(jq '[.data.result[] | select(.stream.container | test("api")) | .values[]] | length' "$RUNNER_TEMP/trace-logs.json")
+          publisher_log_count=$(jq '[.data.result[] | select(.stream.container | test("publisher")) | .values[]] | length' "$RUNNER_TEMP/trace-logs.json")
+          worker_log_count=$(jq '[.data.result[] | select(.stream.container | test("worker")) | .values[]] | length' "$RUNNER_TEMP/trace-logs.json")
+          if ! { test "$api_log_count" -gt 0 && test "$publisher_log_count" -gt 0 && test "$worker_log_count" -gt 0; }; then
+            verification_failed=1
+          fi
           jq -n --arg trace_id "$trace_id" --arg containers "$log_containers" \
-            '{trace_id:$trace_id,containers:($containers|split("\n")|map(select(length>0))),pii_included:false}' \
+            --argjson api "$api_log_count" --argjson publisher "$publisher_log_count" --argjson worker "$worker_log_count" \
+            '{trace_id:$trace_id,containers:($containers|split("\n")|map(select(length>0))),log_counts:{api:$api,publisher:$publisher,worker:$worker},pii_included:false}' \
             > "$evidence_dir/loki-trace-summary.json"
 
           kubectl -n fde-staging scale deployment/fde-ci-demo-staging-api --replicas=0
           sleep 150
           curl --fail --silent http://127.0.0.1:19093/api/v2/alerts > "$evidence_dir/alert-firing.json"
-          jq -e 'any(.[]; .labels.alertname == "FDEApiUnavailable")' "$evidence_dir/alert-firing.json" >/dev/null
-          GRAFANA_URL=http://127.0.0.1:13000 \
+          if ! jq -e 'any(.[]; .labels.alertname == "FDEApiUnavailable")' "$evidence_dir/alert-firing.json" >/dev/null; then verification_failed=1; fi
+          if ! GRAFANA_URL=http://127.0.0.1:13000 \
             ALERTMANAGER_URL=http://127.0.0.1:19093 \
             GRAFANA_USER=admin GRAFANA_PASSWORD="$grafana_password" \
             TRACE_ID="$trace_id" OUTPUT_DIR="$evidence_dir" ALERT_PHASE=firing \
-            bun scripts/ci/capture_observability_evidence.ts
+            bun scripts/ci/capture_observability_evidence.ts; then verification_failed=1; fi
           kubectl -n fde-staging scale deployment/fde-ci-demo-staging-api --replicas=2
           kubectl -n fde-staging rollout status deployment/fde-ci-demo-staging-api --timeout=180s
           for attempt in {1..60}; do
@@ -714,13 +745,21 @@ jobs:
             if ! jq -e 'any(.[]; .labels.alertname == "FDEApiUnavailable")' "$evidence_dir/alert-resolved.json" >/dev/null; then break; fi
             sleep 3
           done
-          ! jq -e 'any(.[]; .labels.alertname == "FDEApiUnavailable")' "$evidence_dir/alert-resolved.json" >/dev/null
-          GRAFANA_URL=http://127.0.0.1:13000 \
+          if jq -e 'any(.[]; .labels.alertname == "FDEApiUnavailable")' "$evidence_dir/alert-resolved.json" >/dev/null; then verification_failed=1; fi
+          if ! GRAFANA_URL=http://127.0.0.1:13000 \
             ALERTMANAGER_URL=http://127.0.0.1:19093 \
             GRAFANA_USER=admin GRAFANA_PASSWORD="$grafana_password" \
             TRACE_ID="$trace_id" OUTPUT_DIR="$evidence_dir" ALERT_PHASE=resolved \
-            bun scripts/ci/capture_observability_evidence.ts
+            bun scripts/ci/capture_observability_evidence.ts; then verification_failed=1; fi
+          for component in api publisher worker; do
+            kubectl -n fde-staging logs --all-containers --prefix --tail=1000 \
+              --selector="app.kubernetes.io/component=$component" | grep "$trace_id" \
+              > "$evidence_dir/${component}-trace-logs.txt" || true
+          done
+          kubectl -n observability logs deployment/fde-otel-collector --tail=200 > "$evidence_dir/otel-collector-tail.txt" || true
+          kubectl -n observability logs statefulset/fde-tempo --tail=200 > "$evidence_dir/tempo-tail.txt" || true
           kubectl get all -A -o wide > "$evidence_dir/kubernetes-inventory.txt"
+          test "$verification_failed" -eq 0
       - name: Upload sanitized kind observability evidence
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
