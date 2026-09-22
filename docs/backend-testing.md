@@ -40,6 +40,14 @@ passed. Later worker recovery, metrics, upload lifecycle, audit rollback, and
 container changes are **pending service-backed CI and independent re-review**;
 do not use the earlier run as evidence for them.
 
+Current backend evidence is [GitHub Actions run 35707717123](https://github.com/Abdul-RehmanCU/FDE_Deploy_Template/actions/runs/35707717123)
+at `93d9a67`: Ruff, Mypy, Alembic, 39 PostgreSQL/Redis tests, the additive
+legacy-data upgrade, and the version-matched `pg_dump`/`pg_restore` drill all
+passed. The restore target was the generated disposable database
+`fde_restore_35707717123_14380` and was removed by the script. Other jobs in
+that workflow have separate acceptance status; the backend job does not prove
+kind, GKE, or observability criteria.
+
 No local result substitutes for kind/GKE, rolling-release, backup/restore,
 trace, alert, or teardown evidence. Each such claim must link the tested commit,
 workflow run, image digest, and sanitized artifact.

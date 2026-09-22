@@ -41,6 +41,11 @@ Backup/restore execution against a live GCP installation remains **pending
 verification** until its evidence bundle identifies the tested revision,
 database target, timestamps, counts, and cleanup result.
 
+The PostgreSQL 16 CI drill passed at `93d9a67` in workflow run `35707717123`.
+It restored into `fde_restore_35707717123_14380`, verified current and retained
+legacy tables, and removed the disposable target. This is real database-tool
+evidence for the application schema; it is not a Cloud SQL backup/PITR test.
+
 CI runs the same logical drill against its PostgreSQL service with matching
 client tools:
 
