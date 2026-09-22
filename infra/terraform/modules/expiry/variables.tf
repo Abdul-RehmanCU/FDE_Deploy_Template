@@ -78,7 +78,7 @@ variable "address_resources" {
   validation {
     condition = (
       length(var.address_resources) == length(distinct([for resource in var.address_resources : resource.name])) &&
-      [for resource in var.address_resources : resource.name] == sort([for resource in var.address_resources : resource.name]) &&
+      join(",", [for resource in var.address_resources : resource.name]) == join(",", sort([for resource in var.address_resources : resource.name])) &&
       alltrue([for resource in var.address_resources :
         can(regex("^[a-z][a-z0-9-]{1,61}[a-z0-9]$", resource.name)) && can(formatdate("YYYY", resource.creation_timestamp))
       ])

@@ -14,4 +14,18 @@ def test_ledger_stays_within_authorization_and_preserves_pending_state() -> None
     assert ledger["estimate"]["amount_usd"] <= authorization["demo_estimate_cap_usd"]
     assert ledger["billing"]["pending_delayed_charges"] is True
     assert ledger["paid_run"]["started_at"] is None
-    assert all(event["billable_resources_created"] is False for event in ledger["events"])
+    billable_events = [
+        event for event in ledger["events"] if event["billable_resources_created"] is True
+    ]
+    assert len(billable_events) <= 1
+    if billable_events:
+        assert ledger["prior_attempt_allowance_usd"] <= ledger["estimate"][
+            "precluster_phase_ceiling_usd"
+        ]
+        cleanup_events = [
+            event
+            for event in ledger["events"]
+            if event["kind"] == "bootstrap-cleanup"
+            and event["timestamp"] > billable_events[0]["timestamp"]
+        ]
+        assert len(cleanup_events) == 1

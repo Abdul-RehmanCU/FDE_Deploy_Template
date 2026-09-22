@@ -27,6 +27,18 @@
       "kind": "billing-baseline",
       "detail": "Authenticated billing report showed CA$0.00 current actual and forecast with no result rows; billing delay remains possible.",
       "billable_resources_created": false
+    },
+    {
+      "timestamp": "2026-09-22T11:11:47.394Z",
+      "kind": "bootstrap-attempt",
+      "detail": "Initial state/WIF bootstrap started. The keyless expiry reconciliation failed because Cloud Resource Manager was disabled. No GKE cluster, VM, application disk, image registry, application secret or expiry scheduler was created.",
+      "billable_resources_created": true
+    },
+    {
+      "timestamp": "2026-09-22T14:45:49Z",
+      "kind": "bootstrap-cleanup",
+      "detail": "Owner finalization verified the first state bucket and every object generation absent, federation identities deleted, and all owned runtime/guard inventories empty. The original deadline was closed, not extended.",
+      "billable_resources_created": false
     }
   ],
   "billing": {
@@ -41,5 +53,6 @@
     "completed_at": null,
     "final_inventory_verified_at": null,
     "billable_resources_remaining": null
-  }
+  },
+  "prior_attempt_allowance_usd": 0.43
 }

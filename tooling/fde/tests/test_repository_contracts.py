@@ -60,3 +60,12 @@ def test_called_cleanup_has_explicit_authorization_for_dispatch_callers() -> Non
     assert callee["on"]["workflow_call"]["inputs"]["confirm_cleanup"]["required"] == "true"
     # Reusable workflows inherit the caller's event_name, including dispatch.
     assert callee["jobs"]["cleanup"]["if"] == "inputs.confirm_cleanup == 'DESTROY-DEMO'"
+
+
+def test_expiry_accepts_the_intentionally_empty_address_allowlist() -> None:
+    text = (ROOT / "infra" / "terraform" / "modules" / "expiry" / "variables.tf").read_text(
+        encoding="utf-8"
+    )
+    block = terraform_block(text, 'variable "address_resources"')
+    assert 'default     = []' in block
+    assert 'join(",", [for resource in var.address_resources : resource.name])' in block
