@@ -716,6 +716,8 @@ jobs:
           kubectl -n fde-staging get all,pvc
           kubectl -n observability get all,pvc || true
           kubectl -n observability describe pods || true
+          kubectl -n observability logs daemonset/fde-alloy --all-containers --prefix --tail=200 || true
+          kubectl -n observability logs daemonset/fde-alloy --all-containers --prefix --previous --tail=200 || true
           kubectl -n observability logs --all-containers --prefix --tail=200 --selector=app.kubernetes.io/part-of=fde-observability || true
 
   infrastructure:
