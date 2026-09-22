@@ -1,0 +1,185 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fde-prometheus-config
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+      evaluation_interval: 15s
+      external_labels: { installation: fde-demo }
+    rule_files: [/etc/prometheus/rules/*.yml]
+    alerting:
+      alertmanagers:
+        - static_configs: [{ targets: ["fde-alertmanager:9093"] }]
+    scrape_configs:
+      - job_name: prometheus
+        static_configs: [{ targets: ["localhost:9090"] }]
+      - job_name: fde-api
+        kubernetes_sd_configs: [{ role: endpoints }]
+        relabel_configs:
+          - { source_labels: [__meta_kubernetes_service_label_app_kubernetes_io_component], regex: metrics, action: keep }
+          - { source_labels: [__meta_kubernetes_namespace], target_label: namespace }
+          - { source_labels: [__meta_kubernetes_service_label_fde_dev_customer], target_label: customer }
+          - { source_labels: [__meta_kubernetes_service_label_fde_dev_environment], target_label: environment }
+        metrics_path: /internal/metrics
+      - job_name: otel-collector
+        static_configs: [{ targets: ["fde-otel-collector:8889"] }]
+  alerts.yml: |
+    groups:
+      - name: fde.application
+        rules:
+          - alert: FDEApiUnavailable
+            expr: sum(up{job="fde-api"}) by (namespace) < 1
+            for: 2m
+            labels: { severity: critical }
+            annotations: { summary: "FDE API has no ready scrape target" }
+          - alert: FDEElevatedErrorRatio
+            expr: sum(rate(http_server_request_duration_seconds_count{http_response_status_code=~"5.."}[5m])) / clamp_min(sum(rate(http_server_request_duration_seconds_count[5m])), 1) > 0.05
+            for: 5m
+            labels: { severity: warning }
+            annotations: { summary: "FDE API error ratio is above 5%" }
+          - alert: FDEOldestQueuedJob
+            expr: fde_oldest_queued_job_age_seconds > 300
+            for: 5m
+            labels: { severity: warning }
+            annotations: { summary: "Oldest FDE job has waited more than five minutes" }
+          - alert: FDEFailedJobsIncreasing
+            expr: increase(fde_jobs_total{status="failed"}[10m]) > 0
+            labels: { severity: warning }
+            annotations: { summary: "FDE jobs have failed in the last ten minutes" }
+          - alert: FDEWorkerHeartbeatMissing
+            expr: time() - fde_worker_last_heartbeat_timestamp_seconds > 120
+            for: 2m
+            labels: { severity: critical }
+            annotations: { summary: "FDE worker heartbeat is stale" }
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fde-alertmanager-config
+data:
+  alertmanager.yml: |
+    route:
+      receiver: internal-only
+      group_by: [alertname, namespace]
+      group_wait: 10s
+      group_interval: 2m
+      repeat_interval: 1h
+    receivers:
+      - name: internal-only
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fde-loki-config
+data:
+  loki.yml: |
+    auth_enabled: false
+    server: { http_listen_port: 3100 }
+    common:
+      path_prefix: /var/loki
+      replication_factor: 1
+      ring: { kvstore: { store: inmemory } }
+    schema_config:
+      configs:
+        - from: "2024-01-01"
+          store: tsdb
+          object_store: filesystem
+          schema: v13
+          index: { prefix: index_, period: 24h }
+    storage_config:
+      filesystem: { directory: /var/loki/chunks }
+    limits_config:
+      retention_period: {{ .Values.retention }}
+      allow_structured_metadata: true
+      max_query_series: 1000
+    compactor:
+      working_directory: /var/loki/compactor
+      retention_enabled: true
+      delete_request_store: filesystem
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fde-tempo-config
+data:
+  tempo.yml: |
+    server: { http_listen_port: 3200 }
+    distributor:
+      receivers:
+        otlp:
+          protocols:
+            grpc: { endpoint: 0.0.0.0:4317 }
+            http: { endpoint: 0.0.0.0:4318 }
+    storage:
+      trace:
+        backend: local
+        local: { path: /var/tempo/traces }
+        wal: { path: /var/tempo/wal }
+    compactor:
+      compaction: { block_retention: {{ .Values.retention }} }
+    metrics_generator:
+      registry: { external_labels: { source: tempo } }
+      storage: { path: /var/tempo/generator/wal, remote_write: [{ url: "http://fde-prometheus:9090/api/v1/write", send_exemplars: true }] }
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fde-otel-config
+data:
+  collector.yml: |
+    receivers:
+      otlp:
+        protocols:
+          grpc: { endpoint: 0.0.0.0:4317 }
+          http: { endpoint: 0.0.0.0:4318 }
+    processors:
+      memory_limiter: { check_interval: 1s, limit_mib: 256 }
+      batch: { timeout: 2s, send_batch_size: 512 }
+      attributes/redact:
+        actions:
+          - { key: http.request.header.authorization, action: delete }
+          - { key: enduser.id, action: delete }
+          - { key: user.email, action: delete }
+          - { key: db.statement, action: delete }
+    exporters:
+      otlp/tempo: { endpoint: fde-tempo:4317, tls: { insecure: true } }
+      prometheus: { endpoint: 0.0.0.0:8889, namespace: fde_otel }
+    extensions:
+      health_check: { endpoint: 0.0.0.0:13133 }
+    service:
+      extensions: [health_check]
+      telemetry: { logs: { level: info } }
+      pipelines:
+        traces: { receivers: [otlp], processors: [memory_limiter, attributes/redact, batch], exporters: [otlp/tempo] }
+        metrics: { receivers: [otlp], processors: [memory_limiter, batch], exporters: [prometheus] }
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fde-alloy-config
+data:
+  config.alloy: |
+    discovery.kubernetes "pods" { role = "pod" }
+    discovery.relabel "pod_logs" {
+      targets = discovery.kubernetes.pods.targets
+      rule { source_labels = ["__meta_kubernetes_pod_node_name"] regex = env("HOSTNAME") action = "keep" }
+      rule { source_labels = ["__meta_kubernetes_namespace"] target_label = "namespace" }
+      rule { source_labels = ["__meta_kubernetes_pod_name"] target_label = "pod" }
+      rule { source_labels = ["__meta_kubernetes_pod_container_name"] target_label = "container" }
+      rule { source_labels = ["__meta_kubernetes_pod_uid", "__meta_kubernetes_pod_container_name"] separator = "/" target_label = "__path__" replacement = "/var/log/pods/*$1/*.log" }
+    }
+    local.file_match "pod_logs" { path_targets = discovery.relabel.pod_logs.output }
+    loki.source.file "pod_logs" {
+      targets = local.file_match.pod_logs.targets
+      forward_to = [loki.process.json.receiver]
+    }
+    loki.process "json" {
+      stage.cri {}
+      stage.json { expressions = { level = "level", trace_id = "trace_id", job_id = "job_id" } }
+      stage.labels { values = { level = "" } }
+      stage.label_drop { values = ["filename", "job_id"] }
+      forward_to = [loki.write.default.receiver]
+    }
+    loki.write "default" { endpoint { url = "http://fde-loki:3100/loki/api/v1/push" } }

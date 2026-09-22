@@ -1,0 +1,22 @@
+namespace: observability
+retention: 6h
+grafanaAdminSecret: fde-grafana-admin
+images:
+  prometheus: prom/prometheus:v3.5.0
+  alertmanager: prom/alertmanager:v0.28.1
+  grafana: grafana/grafana:12.1.1
+  loki: grafana/loki:3.5.3
+  tempo: grafana/tempo:2.8.2
+  alloy: grafana/alloy:v1.10.2
+  otelCollector: otel/opentelemetry-collector-contrib:0.135.0
+storage:
+  prometheus: 8Gi
+  loki: 8Gi
+  tempo: 8Gi
+resources:
+  small:
+    requests: { cpu: 50m, memory: 128Mi }
+    limits: { cpu: 300m, memory: 384Mi }
+  medium:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits: { cpu: 500m, memory: 768Mi }

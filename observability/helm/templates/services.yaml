@@ -1,0 +1,22 @@
+{{- $services := list
+  (dict "name" "fde-prometheus" "selector" "fde-prometheus" "ports" (list (dict "name" "http" "port" 9090)))
+  (dict "name" "fde-alertmanager" "selector" "fde-alertmanager" "ports" (list (dict "name" "http" "port" 9093)))
+  (dict "name" "fde-loki" "selector" "fde-loki" "ports" (list (dict "name" "http" "port" 3100)))
+  (dict "name" "fde-tempo" "selector" "fde-tempo" "ports" (list (dict "name" "http" "port" 3200) (dict "name" "otlp-grpc" "port" 4317) (dict "name" "otlp-http" "port" 4318)))
+  (dict "name" "fde-otel-collector" "selector" "fde-otel-collector" "ports" (list (dict "name" "otlp-grpc" "port" 4317) (dict "name" "otlp-http" "port" 4318) (dict "name" "metrics" "port" 8889)))
+  (dict "name" "fde-grafana" "selector" "fde-grafana" "ports" (list (dict "name" "http" "port" 3000)))
+-}}
+{{- range $index, $service := $services }}
+{{- if gt $index 0 }}---
+{{- end }}
+apiVersion: v1
+kind: Service
+metadata: { name: {{ $service.name }} }
+spec:
+  type: ClusterIP
+  selector: { app.kubernetes.io/name: {{ $service.selector }} }
+  ports:
+    {{- range $service.ports }}
+    - { name: {{ .name }}, port: {{ .port }}, targetPort: {{ .name }} }
+    {{- end }}
+{{- end }}

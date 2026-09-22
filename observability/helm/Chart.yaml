@@ -1,0 +1,7 @@
+apiVersion: v2
+name: fde-observability
+description: Compact in-cluster metrics, logs, traces, dashboards, and alerts for the FDE demo
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+kubeVersion: ">=1.30.0-0"

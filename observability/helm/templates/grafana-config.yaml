@@ -1,0 +1,56 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fde-grafana-provisioning
+data:
+  datasources.yml: |
+    apiVersion: 1
+    datasources:
+      - { name: Prometheus, uid: prometheus, type: prometheus, url: "http://fde-prometheus:9090", access: proxy, isDefault: true }
+      - { name: Loki, uid: loki, type: loki, url: "http://fde-loki:3100", access: proxy }
+      - name: Tempo
+        uid: tempo
+        type: tempo
+        url: "http://fde-tempo:3200"
+        access: proxy
+        jsonData:
+          tracesToLogsV2: { datasourceUid: loki, spanStartTimeShift: "-1m", spanEndTimeShift: "1m", filterByTraceID: true }
+          serviceMap: { datasourceUid: prometheus }
+  dashboards.yml: |
+    apiVersion: 1
+    providers:
+      - name: FDE
+        folder: FDE
+        type: file
+        disableDeletion: true
+        updateIntervalSeconds: 30
+        options: { path: /var/lib/grafana/dashboards }
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: fde-grafana-dashboard
+data:
+  fde-overview.json: |
+    {
+      "annotations": {"list": []},
+      "editable": false,
+      "graphTooltip": 1,
+      "panels": [
+        {"type":"timeseries","title":"Request throughput","datasource":{"uid":"prometheus"},"targets":[{"expr":"sum(rate(http_server_request_duration_seconds_count[5m])) by (http_route)","legendFormat":"{{`{{http_route}}`}}"}],"gridPos":{"h":8,"w":8,"x":0,"y":0}},
+        {"type":"timeseries","title":"Error ratio","datasource":{"uid":"prometheus"},"targets":[{"expr":"sum(rate(http_server_request_duration_seconds_count{http_response_status_code=~\"5..\"}[5m])) / clamp_min(sum(rate(http_server_request_duration_seconds_count[5m])), 1)","legendFormat":"5xx ratio"}],"gridPos":{"h":8,"w":8,"x":8,"y":0}},
+        {"type":"timeseries","title":"p95 latency","datasource":{"uid":"prometheus"},"targets":[{"expr":"histogram_quantile(0.95, sum(rate(http_server_request_duration_seconds_bucket[5m])) by (le, http_route))","legendFormat":"{{`{{http_route}}`}}"}],"gridPos":{"h":8,"w":8,"x":16,"y":0}},
+        {"type":"stat","title":"Import outcomes","datasource":{"uid":"prometheus"},"targets":[{"expr":"sum(increase(fde_import_rows_total[1h])) by (outcome)","legendFormat":"{{`{{outcome}}`}}"}],"gridPos":{"h":7,"w":8,"x":0,"y":8}},
+        {"type":"timeseries","title":"Oldest queued job","datasource":{"uid":"prometheus"},"targets":[{"expr":"fde_oldest_queued_job_age_seconds","legendFormat":"age"}],"gridPos":{"h":7,"w":8,"x":8,"y":8}},
+        {"type":"timeseries","title":"Worker health and attempts","datasource":{"uid":"prometheus"},"targets":[{"expr":"time() - fde_worker_last_heartbeat_timestamp_seconds","legendFormat":"heartbeat age"},{"expr":"sum(rate(fde_job_attempts_total[5m])) by (result)","legendFormat":"attempt {{`{{result}}`}}"}],"gridPos":{"h":7,"w":8,"x":16,"y":8}},
+        {"type":"timeseries","title":"Database connections","datasource":{"uid":"prometheus"},"targets":[{"expr":"fde_database_pool_connections","legendFormat":"{{`{{state}}`}}"}],"gridPos":{"h":7,"w":8,"x":0,"y":15}},
+        {"type":"logs","title":"Correlated application logs","datasource":{"uid":"loki"},"targets":[{"expr":"{namespace=~\"staging|production-demo\"} | json","refId":"A"}],"gridPos":{"h":7,"w":16,"x":8,"y":15}}
+      ],
+      "schemaVersion": 41,
+      "tags": ["fde","demo"],
+      "templating":{"list":[]},
+      "time":{"from":"now-1h","to":"now"},
+      "title":"FDE Operations Overview",
+      "uid":"fde-operations-overview",
+      "version":1
+    }
