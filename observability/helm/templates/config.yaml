@@ -130,6 +130,10 @@ data:
     metrics_generator:
       registry: { external_labels: { source: tempo } }
       storage: { path: /var/tempo/generator/wal, remote_write: [{ url: "http://fde-prometheus:9090/api/v1/write", send_exemplars: true }] }
+    overrides:
+      defaults:
+        metrics_generator:
+          processors: [service-graphs, span-metrics]
 ---
 apiVersion: v1
 kind: ConfigMap

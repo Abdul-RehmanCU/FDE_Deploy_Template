@@ -95,4 +95,31 @@ spec:
     - from:
         - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: observability } }
       ports: [{ protocol: TCP, port: 9100 }]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: rolling-probe-egress
+spec:
+  podSelector: { matchLabels: { fde.dev/probe: "true" } }
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - podSelector: { matchLabels: { app.kubernetes.io/component: api } }
+      ports: [{ protocol: TCP, port: 8000 }]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: backend-to-otel
+spec:
+  podSelector:
+    matchExpressions:
+      - { key: app.kubernetes.io/component, operator: In, values: [api, worker, publisher, migration] }
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: observability } }
+          podSelector: { matchLabels: { app.kubernetes.io/name: fde-otel-collector } }
+      ports: [{ protocol: TCP, port: 4317 }]
 {{- end }}

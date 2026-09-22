@@ -18,7 +18,24 @@ spec:
     - to: [{ namespaceSelector: {} }]
       ports:
         - { protocol: TCP, port: 8000 }
+        - { protocol: TCP, port: 9100 }
         - { protocol: UDP, port: 53 }
         - { protocol: TCP, port: 53 }
     - to: [{ ipBlock: { cidr: 0.0.0.0/0 } }]
       ports: [{ protocol: TCP, port: 443 }]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata: { name: otel-from-fde-apps }
+spec:
+  podSelector: { matchLabels: { app.kubernetes.io/name: fde-otel-collector } }
+  policyTypes: [Ingress]
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchExpressions:
+              - { key: kubernetes.io/metadata.name, operator: In, values: [staging, production-demo, fde-staging] }
+          podSelector:
+            matchExpressions:
+              - { key: app.kubernetes.io/component, operator: In, values: [api, worker, publisher, migration] }
+      ports: [{ protocol: TCP, port: 4317 }]
