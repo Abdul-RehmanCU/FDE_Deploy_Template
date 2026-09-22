@@ -1,5 +1,6 @@
 import os
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
 
 import pytest
@@ -17,6 +18,7 @@ from app.models import (
     ImportBatch,
     Job,
     JobAttempt,
+    JobKind,
     JobOutbox,
     JobStatus,
     User,
@@ -131,6 +133,8 @@ def test_real_import_flow_is_authorized_atomic_and_replay_safe() -> None:
         validation_job_id = uuid.UUID(queued.json()["job_id"])
         with Session(engine) as session:
             run_validation(session, validation_job_id)
+            run_validation(session, validation_job_id)
+            assert len(session.exec(select(ValidationRow)).all()) == 4
 
         result = client.get(f"/api/v1/imports/{import_id}", headers=viewer_headers)
         assert result.status_code == 200
@@ -178,6 +182,11 @@ def test_real_import_flow_is_authorized_atomic_and_replay_safe() -> None:
         )
         assert conflict.status_code == 409
         assert conflict.json()["detail"]["code"] == "idempotency_conflict"
+        too_late = client.post(
+            f"/api/v1/imports/{import_id}/cancel", headers=operator_headers
+        )
+        assert too_late.status_code == 409
+        assert too_late.json()["detail"]["code"] == "import_commit_started"
 
 
 def test_cancelled_queued_validation_is_harmless() -> None:
@@ -202,3 +211,47 @@ def test_cancelled_queued_validation_is_harmless() -> None:
             assert session.exec(select(ValidationRow)).all() == []
             job = session.get(Job, job_id)
             assert job and job.status == JobStatus.CANCELLED
+
+
+def test_concurrent_confirmation_accepts_exactly_one_idempotency_key() -> None:
+    with Session(engine) as session:
+        clear_database(session)
+        operator = create_ready_user(
+            session,
+            "concurrent@example.com",
+            UserRole.OPERATOR,
+            "A-strong-password-concurrent",
+        )
+        headers = headers_for(operator)
+    content = (
+        b"Email,First,Last,Company,Country,External\n"
+        b"concurrent-contact@example.com,Con,Current,,CA,C-1\n"
+    )
+    with TestClient(app) as client:
+        import_id = upload_and_map(client, headers, content)
+        queued = client.post(f"/api/v1/imports/{import_id}/validate", headers=headers)
+    with Session(engine) as session:
+        run_validation(session, uuid.UUID(queued.json()["job_id"]))
+
+    def confirm(key: str) -> tuple[int, dict[str, object]]:
+        with TestClient(app) as threaded_client:
+            response = threaded_client.post(
+                f"/api/v1/imports/{import_id}/confirm",
+                headers={**headers, "Idempotency-Key": key},
+            )
+            return response.status_code, response.json()
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        responses = list(
+            pool.map(confirm, ["concurrent-key-one", "concurrent-key-two"])
+        )
+    assert sorted(status for status, _ in responses) == [202, 409]
+    conflict = next(body for status, body in responses if status == 409)
+    assert conflict["detail"]["code"] == "idempotency_conflict"  # type: ignore[index]
+    with Session(engine) as session:
+        confirmation_jobs = session.exec(
+            select(Job).where(
+                Job.import_id == uuid.UUID(import_id), Job.kind == JobKind.CONFIRM
+            )
+        ).all()
+        assert len(confirmation_jobs) == 1
