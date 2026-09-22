@@ -37,11 +37,13 @@ data:
     groups:
       - name: fde.application
         rules:
+          {{- range .Values.monitoredNamespaces }}
           - alert: FDEApiUnavailable
-            expr: absent(up{job="fde-api"}) or sum(up{job="fde-api"}) by (namespace) < 1
+            expr: absent(up{job="fde-api",namespace="{{ . }}"}) or sum(up{job="fde-api",namespace="{{ . }}"}) < 1
             for: 2m
-            labels: { severity: critical }
-            annotations: { summary: "FDE API has no ready scrape target" }
+            labels: { severity: critical, namespace: "{{ . }}" }
+            annotations: { summary: "FDE API has no ready scrape target in {{ . }}" }
+          {{- end }}
           - alert: FDEElevatedErrorRatio
             expr: sum(rate(http_server_request_duration_seconds_count{http_response_status_code=~"5.."}[5m])) / clamp_min(sum(rate(http_server_request_duration_seconds_count[5m])), 1) > 0.05
             for: 5m

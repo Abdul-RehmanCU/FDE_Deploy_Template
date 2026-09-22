@@ -1,6 +1,7 @@
 namespace: observability
 retention: 6h
 grafanaAdminSecret: fde-grafana-admin
+monitoredNamespaces: [staging, production-demo]
 images:
   prometheus: prom/prometheus:v3.5.0
   alertmanager: prom/alertmanager:v0.28.1

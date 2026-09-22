@@ -1,8 +1,14 @@
 {
   "$schema": "https://json-schema.org/draft-07/schema#",
   "type": "object",
-  "required": ["storage"],
+  "required": ["storage", "monitoredNamespaces"],
   "properties": {
+    "monitoredNamespaces": {
+      "type": "array",
+      "minItems": 1,
+      "uniqueItems": true,
+      "items": { "type": "string", "pattern": "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$" }
+    },
     "storage": {
       "type": "object",
       "required": ["predeclared", "prometheus", "loki", "tempo", "volumeHandles"],
