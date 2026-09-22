@@ -5,6 +5,7 @@ from typing import Any
 
 from pydantic import EmailStr
 from sqlalchemy import JSON, Column, DateTime, Index, UniqueConstraint
+from sqlalchemy import Enum as SAEnum
 from sqlmodel import Field, SQLModel
 
 
@@ -53,7 +54,18 @@ class JobStatus(StrEnum):
 class UserBase(SQLModel):
     email: EmailStr = Field(index=True, unique=True, max_length=255)
     full_name: str | None = Field(default=None, max_length=255)
-    role: UserRole = Field(default=UserRole.VIEWER, max_length=16, index=True)
+    role: UserRole = Field(
+        default=UserRole.VIEWER,
+        sa_column=Column(
+            SAEnum(
+                UserRole,
+                values_callable=lambda members: [member.value for member in members],
+                native_enum=False,
+                length=16,
+            ),
+            nullable=False,
+        ),
+    )
     is_active: bool = True
 
 
@@ -72,6 +84,7 @@ class UserUpdate(SQLModel):
 
 class User(UserBase, table=True):
     __tablename__ = "user"
+    __table_args__ = (Index("ix_user_role", "role"),)
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     hashed_password: str = Field(max_length=255)
     must_change_password: bool = True
@@ -140,7 +153,18 @@ class ImportBatch(SQLModel, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     original_filename: str = Field(max_length=255)
     upload_object_key: str = Field(max_length=512, unique=True)
-    status: ImportStatus = Field(default=ImportStatus.UPLOADED, max_length=24)
+    status: ImportStatus = Field(
+        default=ImportStatus.UPLOADED,
+        sa_column=Column(
+            SAEnum(
+                ImportStatus,
+                values_callable=lambda members: [member.value for member in members],
+                native_enum=False,
+                length=24,
+            ),
+            nullable=False,
+        ),
+    )
     mapping: dict[str, str] | None = Field(default=None, sa_column=Column(JSON))
     header: list[str] = Field(default_factory=list, sa_column=Column(JSON, nullable=False))
     total_rows: int = 0
@@ -152,7 +176,7 @@ class ImportBatch(SQLModel, table=True):
     skipped_count: int = 0
     error_code: str | None = Field(default=None, max_length=64)
     error_message: str | None = Field(default=None, max_length=500)
-    confirm_idempotency_key: str | None = Field(default=None, max_length=128, unique=True)
+    confirm_idempotency_key: str | None = Field(default=None, max_length=128)
     confirmation_started_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))  # type: ignore[call-overload]
     created_by_id: uuid.UUID = Field(foreign_key="user.id", ondelete="RESTRICT")
     created_at: datetime = Field(default_factory=utc_now, sa_type=DateTime(timezone=True))  # type: ignore[call-overload]
@@ -168,7 +192,17 @@ class ValidationRow(SQLModel, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     import_id: uuid.UUID = Field(foreign_key="import_batch.id", ondelete="CASCADE")
     row_number: int
-    outcome: RowOutcome = Field(max_length=24)
+    outcome: RowOutcome = Field(
+        sa_column=Column(
+            SAEnum(
+                RowOutcome,
+                values_callable=lambda members: [member.value for member in members],
+                native_enum=False,
+                length=24,
+            ),
+            nullable=False,
+        )
+    )
     normalized_email: str | None = Field(default=None, max_length=320)
     clean_data: dict[str, str | None] | None = Field(default=None, sa_column=Column(JSON))
     errors: list[dict[str, str]] = Field(default_factory=list, sa_column=Column(JSON, nullable=False))
@@ -203,8 +237,29 @@ class Job(SQLModel, table=True):
     )
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     import_id: uuid.UUID = Field(foreign_key="import_batch.id", ondelete="CASCADE")
-    kind: JobKind = Field(max_length=16)
-    status: JobStatus = Field(default=JobStatus.QUEUED, max_length=24)
+    kind: JobKind = Field(
+        sa_column=Column(
+            SAEnum(
+                JobKind,
+                values_callable=lambda members: [member.value for member in members],
+                native_enum=False,
+                length=16,
+            ),
+            nullable=False,
+        )
+    )
+    status: JobStatus = Field(
+        default=JobStatus.QUEUED,
+        sa_column=Column(
+            SAEnum(
+                JobStatus,
+                values_callable=lambda members: [member.value for member in members],
+                native_enum=False,
+                length=24,
+            ),
+            nullable=False,
+        ),
+    )
     attempt_count: int = 0
     max_attempts: int = 3
     traceparent: str | None = Field(default=None, max_length=255)
@@ -226,7 +281,17 @@ class JobAttempt(SQLModel, table=True):
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     job_id: uuid.UUID = Field(foreign_key="job.id", ondelete="CASCADE")
     attempt_number: int
-    status: JobStatus = Field(max_length=24)
+    status: JobStatus = Field(
+        sa_column=Column(
+            SAEnum(
+                JobStatus,
+                values_callable=lambda members: [member.value for member in members],
+                native_enum=False,
+                length=24,
+            ),
+            nullable=False,
+        )
+    )
     worker_id: str | None = Field(default=None, max_length=255)
     error_code: str | None = Field(default=None, max_length=64)
     error_message: str | None = Field(default=None, max_length=500)

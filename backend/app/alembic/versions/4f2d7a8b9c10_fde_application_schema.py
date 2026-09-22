@@ -49,7 +49,7 @@ def upgrade() -> None:
         sa.Column("skipped_count", sa.Integer(), server_default="0", nullable=False),
         sa.Column("error_code", sa.String(64), nullable=True),
         sa.Column("error_message", sa.String(500), nullable=True),
-        sa.Column("confirm_idempotency_key", sa.String(128), nullable=True, unique=True),
+        sa.Column("confirm_idempotency_key", sa.String(128), nullable=True),
         sa.Column("confirmation_started_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("created_by_id", sa.Uuid(), sa.ForeignKey("user.id", ondelete="RESTRICT"), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
