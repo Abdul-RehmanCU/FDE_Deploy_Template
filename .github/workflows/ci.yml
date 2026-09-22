@@ -212,6 +212,76 @@ jobs:
           if-no-files-found: warn
           retention-days: 14
 
+  kind-rehearsal:
+    name: kind deployment rehearsal
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Create kind cluster
+        uses: helm/kind-action@a1b0e391336a6ee6713a0583f8c6240d70863de3 # v1.12.0
+        with:
+          cluster_name: fde-ci
+          version: v0.30.0
+      - name: Set up Helm
+        uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
+        with:
+          version: v4.1.1
+      - name: Build application images
+        run: |
+          docker build --tag localhost/fde-backend:ci --file backend/Dockerfile .
+          docker build --tag localhost/fde-frontend:ci --file frontend/Dockerfile .
+      - name: Load images into kind
+        run: |
+          kind load docker-image --name fde-ci localhost/fde-backend:ci
+          kind load docker-image --name fde-ci localhost/fde-frontend:ci
+      - name: Install chart with isolated test secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          kubectl create namespace fde-staging
+          kubectl -n fde-staging create secret generic fde-runtime-secrets \
+            --from-literal=secret-key=kind-only-secret-key-with-at-least-32-characters \
+            --from-literal=postgres-password=kind-postgres-password \
+            --from-literal=redis-password=kind-redis-password \
+            --from-literal=database-url=postgresql://app:kind-postgres-password@fde-ci-demo-staging-postgres:5432/app \
+            --from-literal=redis-url=redis://:kind-redis-password@fde-ci-demo-staging-redis:6379/0
+          helm upgrade --install fde infra/helm/fde \
+            --namespace fde-staging \
+            --values infra/helm/fde/values-kind.yaml \
+            --wait \
+            --timeout 12m
+      - name: Verify probes, migration, and frontend proxy
+        shell: bash
+        run: |
+          set -euo pipefail
+          kubectl -n fde-staging wait --for=condition=complete job/fde-ci-demo-staging-migrate-1 --timeout=120s
+          kubectl -n fde-staging rollout status deployment/fde-ci-demo-staging-api --timeout=120s
+          kubectl -n fde-staging rollout status deployment/fde-ci-demo-staging-worker --timeout=120s
+          kubectl -n fde-staging rollout status deployment/fde-ci-demo-staging-publisher --timeout=120s
+          kubectl -n fde-staging rollout status deployment/fde-ci-demo-staging-frontend --timeout=120s
+          kubectl -n fde-staging port-forward service/fde-ci-demo-staging-frontend 18080:8080 > "$RUNNER_TEMP/port-forward.log" 2>&1 &
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:18080/ >/dev/null && \
+               curl --fail --silent http://127.0.0.1:18080/api/v1/health/ready >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat "$RUNNER_TEMP/port-forward.log"
+          exit 1
+      - name: Restart worker without losing readiness
+        run: |
+          kubectl -n fde-staging delete pod --selector=app.kubernetes.io/component=worker
+          kubectl -n fde-staging rollout status deployment/fde-ci-demo-staging-worker --timeout=120s
+      - name: Collect failure diagnostics
+        if: failure()
+        run: |
+          kubectl -n fde-staging get all,pvc
+          kubectl -n fde-staging describe pods
+          kubectl -n fde-staging logs --all-containers --prefix --tail=200 --selector=app.kubernetes.io/name=fde
+
   infrastructure:
     name: Terraform and Helm validation
     runs-on: ubuntu-24.04
