@@ -388,7 +388,7 @@ jobs:
         run: |
           set -euo pipefail
           kubectl -n fde-staging run fde-rolling-probe \
-            --image=curlimages/curl:8.16.0 \
+            --image=curlimages/curl:8.16.0@sha256:463eaf6072688fe96ac64fa623fe73e1dbe25d8ad6c34404a669ad3ce1f104b6 \
             --labels=fde.dev/probe=true \
             --restart=Never \
             --command -- sh -ec '
@@ -468,6 +468,14 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version: 1.3.10
+      - name: Install browser evidence dependencies
+        run: |
+          bun install --frozen-lockfile
+          bunx playwright install --with-deps chromium
       - name: Create kind cluster
         uses: helm/kind-action@a1b0e391336a6ee6713a0583f8c6240d70863de3 # v1.12.0
         with:
@@ -650,6 +658,11 @@ jobs:
           sleep 150
           curl --fail --silent http://127.0.0.1:19093/api/v2/alerts > "$evidence_dir/alert-firing.json"
           jq -e 'any(.[]; .labels.alertname == "FDEApiUnavailable")' "$evidence_dir/alert-firing.json" >/dev/null
+          GRAFANA_URL=http://127.0.0.1:13000 \
+            ALERTMANAGER_URL=http://127.0.0.1:19093 \
+            GRAFANA_USER=admin GRAFANA_PASSWORD="$grafana_password" \
+            TRACE_ID="$trace_id" OUTPUT_DIR="$evidence_dir" ALERT_PHASE=firing \
+            bun scripts/ci/capture_observability_evidence.ts
           kubectl -n fde-staging scale deployment/fde-ci-demo-staging-api --replicas=2
           kubectl -n fde-staging rollout status deployment/fde-ci-demo-staging-api --timeout=180s
           for attempt in {1..60}; do
@@ -658,6 +671,11 @@ jobs:
             sleep 3
           done
           ! jq -e 'any(.[]; .labels.alertname == "FDEApiUnavailable")' "$evidence_dir/alert-resolved.json" >/dev/null
+          GRAFANA_URL=http://127.0.0.1:13000 \
+            ALERTMANAGER_URL=http://127.0.0.1:19093 \
+            GRAFANA_USER=admin GRAFANA_PASSWORD="$grafana_password" \
+            TRACE_ID="$trace_id" OUTPUT_DIR="$evidence_dir" ALERT_PHASE=resolved \
+            bun scripts/ci/capture_observability_evidence.ts
           kubectl get all -A -o wide > "$evidence_dir/kubernetes-inventory.txt"
       - name: Upload sanitized kind observability evidence
         if: always()
@@ -706,6 +724,8 @@ jobs:
             terraform -chdir="$module" init -backend=false -input=false -lockfile=readonly
             terraform -chdir="$module" validate
           done
+      - name: Execute mocked managed-profile plans
+        run: terraform -chdir=infra/terraform/modules/managed test -no-color
       - name: Set up Helm
         uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
         with:
@@ -718,12 +738,12 @@ jobs:
           helm template fde-observability observability/helm --namespace observability > "$RUNNER_TEMP/observability-rendered.yaml"
       - name: Validate rendered Kubernetes resources
         run: >-
-          docker run --rm -i ghcr.io/yannh/kubeconform:v0.7.0
+          docker run --rm -i ghcr.io/yannh/kubeconform:v0.7.0@sha256:85dbef6b4b312b99133decc9c6fc9495e9fc5f92293d4ff3b7e1b30f5611823c
           -strict -summary -ignore-missing-schemas
           < "$RUNNER_TEMP/fde-rendered.yaml"
       - name: Validate rendered observability resources
         run: >-
-          docker run --rm -i ghcr.io/yannh/kubeconform:v0.7.0
+          docker run --rm -i ghcr.io/yannh/kubeconform:v0.7.0@sha256:85dbef6b4b312b99133decc9c6fc9495e9fc5f92293d4ff3b7e1b30f5611823c
           -strict -summary -ignore-missing-schemas
           < "$RUNNER_TEMP/observability-rendered.yaml"
 
