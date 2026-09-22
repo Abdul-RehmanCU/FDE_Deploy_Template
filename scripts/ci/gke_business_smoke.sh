@@ -57,9 +57,12 @@ curl --fail --silent --request PUT \
   --header "Content-Type: application/json" \
   --data '{"mapping":{"email":"Email","first_name":"First Name","last_name":"Last Name","company":"Company","country_code":"Country","external_id":"External ID"}}' \
   "http://127.0.0.1:${local_port}/api/v1/imports/${import_id}/mapping" >/dev/null
-curl --fail --silent --request POST \
+validate_headers=$(mktemp)
+curl --fail --silent --dump-header "$validate_headers" --request POST \
   --header "Authorization: Bearer $token" \
   "http://127.0.0.1:${local_port}/api/v1/imports/${import_id}/validate" >/dev/null
+trace_id=$(awk 'tolower($1) == "x-trace-id:" {gsub("\r", "", $2); print $2}' "$validate_headers" | tail -1)
+[[ "$trace_id" =~ ^[0-9a-f]{32}$ ]]
 
 status=unknown
 for _ in {1..90}; do
@@ -95,7 +98,8 @@ jq -n \
   --arg namespace "$namespace" \
   --arg release "$release" \
   --arg status "$status" \
+  --arg trace_id "$trace_id" \
   --argjson contact_count "$contact_count" \
   --argjson version "$version" \
-  '{namespace:$namespace,release:$release,import_status:$status,matching_contacts:$contact_count,version:$version,synthetic_data_only:true}' \
+  '{namespace:$namespace,release:$release,import_status:$status,matching_contacts:$contact_count,version:$version,trace_id:$trace_id,synthetic_data_only:true}' \
   >"$evidence_path"

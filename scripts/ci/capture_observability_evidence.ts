@@ -13,6 +13,7 @@ const alertmanagerUrl = required("ALERTMANAGER_URL")
 const username = required("GRAFANA_USER")
 const password = required("GRAFANA_PASSWORD")
 const traceId = required("TRACE_ID")
+const lokiNamespace = required("LOKI_NAMESPACE")
 const outputDir = required("OUTPUT_DIR")
 const alertPhase = required("ALERT_PHASE")
 
@@ -47,7 +48,7 @@ if (alertPhase === "firing") {
   await page.getByText(/fde-worker/i).first().waitFor({ timeout: 30_000 })
   await page.screenshot({ path: path.join(outputDir, "tempo-trace.png"), fullPage: true })
 
-  const logQuery = `{namespace="fde-staging"} | json | trace_id="${traceId}"`
+  const logQuery = `{namespace="${lokiNamespace}"} | json | trace_id="${traceId}"`
   const lokiQuery = encodeURIComponent(
     JSON.stringify({
       logs: {
