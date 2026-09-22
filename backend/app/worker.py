@@ -8,12 +8,18 @@ from sqlmodel import Session
 
 from app.core.config import settings
 from app.core.db import engine
+from app.core.observability import (
+    configure_common_instrumentation,
+    configure_tracer_provider,
+)
 from app.models import JobKind
 from app.services.jobs import reconcile_stalled_jobs, run_confirmation, run_validation
 from app.worker_metrics import DurableJobCollector
 
 assert settings.REDIS_URL
 celery_app = Celery("fde", broker=settings.REDIS_URL)
+configure_tracer_provider()
+configure_common_instrumentation()
 CeleryInstrumentor().instrument()
 celery_app.conf.update(
     broker_connection_retry_on_startup=True,

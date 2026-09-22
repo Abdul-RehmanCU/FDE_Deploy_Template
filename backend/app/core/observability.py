@@ -16,6 +16,9 @@ from opentelemetry.trace import Span
 from app.core.config import settings
 from app.core.db import engine
 
+_tracer_provider_configured = False
+_common_instrumentation_configured = False
+
 
 class JsonFormatter(logging.Formatter):
     def format(self, record: logging.LogRecord) -> str:
@@ -61,23 +64,41 @@ def configure_logging() -> None:
     logging.getLogger("uvicorn.access").addFilter(AccessLogPrivacyFilter())
 
 
-def configure_tracing(app: FastAPI) -> None:
-    if settings.OTEL_EXPORTER_OTLP_ENDPOINT:
-        provider = TracerProvider(
-            resource=Resource.create(
-                {
-                    "service.name": settings.OTEL_SERVICE_NAME,
-                    "service.version": settings.APP_VERSION,
-                    "deployment.environment.name": settings.APP_ENVIRONMENT,
-                }
-            )
+def build_tracer_provider(endpoint: str, service_name: str) -> TracerProvider:
+    provider = TracerProvider(
+        resource=Resource.create(
+            {
+                "service.name": service_name,
+                "service.version": settings.APP_VERSION,
+                "deployment.environment.name": settings.APP_ENVIRONMENT,
+            }
         )
-        provider.add_span_processor(
-            BatchSpanProcessor(
-                OTLPSpanExporter(endpoint=settings.OTEL_EXPORTER_OTLP_ENDPOINT)
-            )
-        )
-        trace.set_tracer_provider(provider)
-    FastAPIInstrumentor.instrument_app(app, server_request_hook=redact_request_trace)
+    )
+    provider.add_span_processor(BatchSpanProcessor(OTLPSpanExporter(endpoint=endpoint)))
+    return provider
+
+
+def configure_tracer_provider() -> TracerProvider | None:
+    global _tracer_provider_configured
+    endpoint = settings.OTEL_EXPORTER_OTLP_ENDPOINT
+    if not endpoint or _tracer_provider_configured:
+        return None
+    provider = build_tracer_provider(endpoint, settings.OTEL_SERVICE_NAME)
+    trace.set_tracer_provider(provider)
+    _tracer_provider_configured = True
+    return provider
+
+
+def configure_common_instrumentation() -> None:
+    global _common_instrumentation_configured
+    if _common_instrumentation_configured:
+        return
     SQLAlchemyInstrumentor().instrument(engine=engine)
     RedisInstrumentor().instrument()
+    _common_instrumentation_configured = True
+
+
+def configure_tracing(app: FastAPI) -> None:
+    configure_tracer_provider()
+    configure_common_instrumentation()
+    FastAPIInstrumentor.instrument_app(app, server_request_hook=redact_request_trace)
