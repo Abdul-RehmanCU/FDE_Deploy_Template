@@ -109,6 +109,46 @@ jobs:
       - name: Build frontend
         run: bun run --filter frontend build
 
+  infrastructure:
+    name: Terraform and Helm validation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
+        with:
+          terraform_version: 1.15.8
+      - name: Check Terraform formatting
+        run: terraform fmt -check -recursive infra/terraform
+      - name: Validate Terraform modules without remote state
+        shell: bash
+        run: |
+          set -euo pipefail
+          for module in \
+            infra/terraform/bootstrap \
+            infra/terraform/modules/demo \
+            infra/terraform/modules/expiry \
+            infra/terraform/modules/managed
+          do
+            terraform -chdir="$module" init -backend=false -input=false -lockfile=readonly
+            terraform -chdir="$module" validate
+          done
+      - name: Set up Helm
+        uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
+        with:
+          version: v4.1.1
+      - name: Lint and render chart
+        run: |
+          helm lint infra/helm/fde --strict
+          helm template fde infra/helm/fde --namespace fde-staging > "$RUNNER_TEMP/fde-rendered.yaml"
+      - name: Validate rendered Kubernetes resources
+        run: >-
+          docker run --rm -i ghcr.io/yannh/kubeconform:v0.7.0
+          -strict -summary -ignore-missing-schemas
+          < "$RUNNER_TEMP/fde-rendered.yaml"
+
   deployment-cli:
     name: Deployment CLI tests
     runs-on: ubuntu-24.04
