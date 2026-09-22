@@ -62,7 +62,7 @@ export interface ImportRowPublic {
 
 export interface ImportActionPublic {
   import_batch: ImportPublic
-  job_id: string | null
+  job_id?: string | null
 }
 
 export interface ImportPreviewPublic {
@@ -119,9 +119,9 @@ export interface AuditEventPublic {
 export interface UserPublic {
   id: string
   email: string
-  full_name: string | null
-  role: UserRole
-  is_active: boolean
+  full_name?: string | null
+  role?: UserRole
+  is_active?: boolean
   must_change_password: boolean
   created_at: string
   updated_at: string
@@ -133,7 +133,7 @@ export interface UserCreatedPublic extends UserPublic {
 
 export interface CursorPage<T> {
   data: T[]
-  next_cursor: string | null
+  next_cursor?: string | null
   has_more: boolean
 }
 

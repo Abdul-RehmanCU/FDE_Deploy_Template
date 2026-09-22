@@ -299,8 +299,8 @@ function EditUserDialog({
   })
   useEffect(() => {
     if (user) {
-      setRole(user.role)
-      setActive(user.is_active)
+      setRole(user.role ?? "viewer")
+      setActive(user.is_active ?? false)
     }
   }, [user])
   const open = user !== null

@@ -95,7 +95,7 @@ function ImportDetailPage() {
   const validate = useMutation({
     mutationFn: () => fdeApi.validateImport(importId),
     onSuccess: async (result) => {
-      setJobId(result.job_id)
+      setJobId(result.job_id ?? null)
       await refreshImport()
     },
   })
@@ -107,14 +107,14 @@ function ImportDetailPage() {
       return fdeApi.confirmImport(importId, key)
     },
     onSuccess: async (result) => {
-      setJobId(result.job_id)
+      setJobId(result.job_id ?? null)
       await refreshImport()
     },
   })
   const retry = useMutation({
     mutationFn: () => fdeApi.retryImport(importId),
     onSuccess: async (result) => {
-      setJobId(result.job_id)
+      setJobId(result.job_id ?? null)
       await refreshImport()
     },
   })
