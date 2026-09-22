@@ -1,0 +1,19 @@
+[build-system]
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"
+
+[project]
+name = "fde-deploy"
+version = "0.1.0"
+description = "Guardrailed deployment CLI for the FDE customer installation template"
+requires-python = ">=3.11"
+dependencies = ["PyYAML==6.0.2"]
+
+[project.scripts]
+fde = "fde_cli.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/fde_cli"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
