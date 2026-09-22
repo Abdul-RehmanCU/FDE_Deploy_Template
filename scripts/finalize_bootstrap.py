@@ -15,7 +15,7 @@ def run(
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Owner-ADC final teardown after runtime, expiry, and delayed-billing reconciliation"
+        description="Owner-ADC final teardown immediately after runtime and expiry reconciliation"
     )
     parser.add_argument("--project", required=True)
     parser.add_argument("--state-bucket", required=True)
@@ -53,6 +53,8 @@ def main() -> int:
         )
     if str(bucket.get("projectNumber")) != str(project.get("projectNumber")):
         raise SystemExit("state bucket does not belong to the confirmed project")
+    if str(bucket.get("location", "")).lower() != args.region.lower():
+        raise SystemExit("state bucket is not in the confirmed Montréal region")
 
     run(
         [
@@ -132,6 +134,39 @@ def main() -> int:
     fde_pools = [
         pool for pool in pools if str(pool.get("name", "")).endswith("/fde-github")
     ]
+    expected_accounts = {
+        f"fde-{name}@{args.project}.iam.gserviceaccount.com"
+        for name in ("build", "infra", "deploy", "cleanup")
+    }
+    service_accounts = json.loads(
+        run(
+            [
+                "gcloud",
+                "iam",
+                "service-accounts",
+                "list",
+                f"--project={args.project}",
+                "--format=json",
+            ]
+        ).stdout
+    )
+    fde_accounts = [
+        account for account in service_accounts if account.get("email") in expected_accounts
+    ]
+    policy = json.loads(
+        run(
+            ["gcloud", "projects", "get-iam-policy", args.project, "--format=json"]
+        ).stdout
+    )
+    fde_bindings = []
+    for binding in policy.get("bindings", []):
+        members = [
+            member
+            for member in binding.get("members", [])
+            if member.removeprefix("serviceAccount:") in expected_accounts
+        ]
+        if members:
+            fde_bindings.append({"role": binding.get("role"), "members": members})
     evidence = {
         "project": args.project,
         "state_bucket": args.state_bucket,
@@ -142,12 +177,19 @@ def main() -> int:
         ).returncode
         != 0,
         "fde_workload_identity_pools": fde_pools,
+        "fde_service_accounts": fde_accounts,
+        "fde_project_iam_bindings": fde_bindings,
     }
     args.evidence_out.parent.mkdir(parents=True, exist_ok=True)
     args.evidence_out.write_text(
         json.dumps(evidence, indent=2, sort_keys=True), encoding="utf-8"
     )
-    if not evidence["state_bucket_removed"] or evidence["fde_workload_identity_pools"]:
+    if (
+        not evidence["state_bucket_removed"]
+        or evidence["fde_workload_identity_pools"]
+        or evidence["fde_service_accounts"]
+        or evidence["fde_project_iam_bindings"]
+    ):
         raise SystemExit("bootstrap residue remains; inspect the private evidence file")
     return 0
 
