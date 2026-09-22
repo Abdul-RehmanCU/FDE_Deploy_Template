@@ -1,0 +1,6 @@
+project_id   = "example-fde-production"
+region       = "northamerica-northeast1"
+customer     = "example"
+environment  = "production"
+cluster_name = "fde-example-production"
+domain       = "directory.example.ca"
