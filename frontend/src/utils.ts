@@ -1,6 +1,6 @@
 import { AxiosError } from "axios"
 
-function extractErrorMessage(err: Error): string {
+export function extractErrorMessage(err: Error): string {
   if (err instanceof AxiosError) {
     const errDetail = (err.response?.data as any)?.detail
     if (Array.isArray(errDetail) && errDetail.length > 0) {
@@ -8,6 +8,14 @@ function extractErrorMessage(err: Error): string {
     }
     if (typeof errDetail === "string") {
       return errDetail
+    }
+    if (
+      typeof errDetail === "object" &&
+      errDetail !== null &&
+      "message" in errDetail &&
+      typeof errDetail.message === "string"
+    ) {
+      return errDetail.message
     }
     return err.message
   }

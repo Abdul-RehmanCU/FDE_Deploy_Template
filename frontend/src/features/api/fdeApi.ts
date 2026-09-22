@@ -93,6 +93,19 @@ export const fdeApi = {
       outcome,
     }),
 
+  downloadImportReport: async (
+    id: string,
+    report: "accepted" | "errors" | "duplicates",
+  ) => {
+    const response = await client.get<{ 200: Blob }, Errors, true>({
+      responseType: "blob",
+      security,
+      throwOnError: true,
+      url: `/api/v1/imports/${id}/reports/${report}`,
+    })
+    return response.data
+  },
+
   getJob: (id: string) => get<JobPublic>(`/api/v1/jobs/${id}`),
 
   listJobAttempts: (id: string) =>
