@@ -39,6 +39,10 @@ spec:
           env:
             {{- include "fde.backendEnv" . | nindent 12 }}
             - { name: OTEL_SERVICE_NAME, value: fde-api }
+          lifecycle:
+            preStop:
+              exec:
+                command: ["python", "-c", "import time; time.sleep(5)"]
           volumeMounts:
             {{- include "fde.backendMounts" . | nindent 12 }}
           startupProbe:
