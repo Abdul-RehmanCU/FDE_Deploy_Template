@@ -124,6 +124,13 @@ def collect_evidence(config: InstallationConfig, output_dir: Path) -> Path:
         "cluster": [executable("gcloud"), "container", "clusters", "describe", f"fde-{config.customer}-demo", f"--zone={config.zone}", f"--project={config.project}", "--format=json"],
         "workloads": [executable("kubectl"), "get", "deployments,statefulsets,jobs,pods,pvc", "--namespace", config.namespace, "-o", "json"],
         "helm": [executable("helm"), "status", config.release, "--namespace", config.namespace, "--output", "json"],
+        "compute_instances": [executable("gcloud"), "compute", "instances", "list", f"--project={config.project}", "--format=json"],
+        "compute_disks": [executable("gcloud"), "compute", "disks", "list", f"--project={config.project}", "--format=json"],
+        "compute_addresses": [executable("gcloud"), "compute", "addresses", "list", f"--project={config.project}", "--format=json"],
+        "artifact_repositories": [executable("gcloud"), "artifacts", "repositories", "list", f"--project={config.project}", "--location=all", "--format=json"],
+        "storage_buckets": [executable("gcloud"), "storage", "buckets", "list", f"--project={config.project}", "--format=json"],
+        "expiry_workflows": [executable("gcloud"), "workflows", "list", f"--project={config.project}", f"--location={config.region}", "--format=json"],
+        "expiry_schedules": [executable("gcloud"), "scheduler", "jobs", "list", f"--project={config.project}", f"--location={config.region}", "--format=json"],
     }
     evidence: dict[str, object] = {"scope": {"customer": config.customer, "environment": config.environment, "project": config.project}, "config_fingerprint": config.fingerprint}
     for name, command in commands.items():
