@@ -647,6 +647,7 @@ jobs:
             --header "Authorization: Bearer $token" \
             --form file=@fixtures/customer-data/formula-like.csv \
             http://127.0.0.1:18083/api/v1/imports | jq --raw-output .id)
+          [[ "$import_id" =~ ^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$ ]]
           curl --fail --silent --request PUT \
             --header "Authorization: Bearer $token" \
             --header "Content-Type: application/json" \
@@ -689,6 +690,7 @@ jobs:
             --arg database_connections "$database_connections" --arg job_attempts "$job_attempts" \
             '{api_targets:$api_targets,worker_up:$worker_up,http_request_count:($http_count|tonumber),http_histogram_buckets:($http_buckets|tonumber),worker_series:{import_rows:($import_rows|tonumber),oldest_queued_job:($oldest_job|tonumber),database_connections:($database_connections|tonumber),job_attempts:($job_attempts|tonumber)}}' \
             > "$evidence_dir/metrics-summary.json"
+          printf '{"trace":{"resourceSpans":[]}}\n' > "$evidence_dir/tempo-trace-last.json"
           for attempt in {1..60}; do
             tempo_status=$(curl --silent --output "$evidence_dir/tempo-trace-last.json" --write-out '%{http_code}' "http://127.0.0.1:13200/api/v2/traces/$trace_id" || true)
             services=""
