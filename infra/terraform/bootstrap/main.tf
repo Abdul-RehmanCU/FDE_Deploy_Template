@@ -49,6 +49,7 @@ locals {
     ])
     cleanup = toset([
       "roles/artifactregistry.admin",
+      "roles/cloudasset.viewer",
       "roles/cloudscheduler.admin",
       "roles/compute.networkAdmin",
       "roles/container.admin",

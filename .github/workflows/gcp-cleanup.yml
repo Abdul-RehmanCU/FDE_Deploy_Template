@@ -8,6 +8,7 @@ on:
       state_bucket: { required: true, type: string }
       expiry_id: { required: true, type: string }
       expires_at: { required: true, type: string }
+      confirm_cleanup: { required: true, type: string }
   workflow_dispatch:
     inputs:
       project_id: { description: Dedicated GCP project ID, required: true, type: string }
@@ -30,7 +31,7 @@ concurrency:
 jobs:
   cleanup:
     name: Destroy exact demo and expiry guard
-    if: github.event_name == 'workflow_call' || inputs.confirm_cleanup == 'DESTROY-DEMO'
+    if: inputs.confirm_cleanup == 'DESTROY-DEMO'
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     environment: demo-cleanup
@@ -149,7 +150,7 @@ jobs:
         run: |
           set -euo pipefail
           workflow_name="fde-expiry-${EXPIRY_ID}"
-          scheduler_jobs=("fde-expiry-${EXPIRY_ID}-primary" "fde-expiry-${EXPIRY_ID}-recovery-1" "fde-expiry-${EXPIRY_ID}-recovery-2")
+          scheduler_jobs=("fde-expiry-${EXPIRY_ID}-primary" "fde-expiry-${EXPIRY_ID}-recovery_1" "fde-expiry-${EXPIRY_ID}-recovery_2")
           terraform -chdir=infra/terraform/environments/expiry destroy -input=false -auto-approve -lock-timeout=60s \
             -var-file="$RUNNER_TEMP/fde-cleanup/expiry.auto.tfvars.json"
           if gcloud workflows describe "$workflow_name" --project="$PROJECT_ID" --location="$REGION" >/dev/null 2>&1; then

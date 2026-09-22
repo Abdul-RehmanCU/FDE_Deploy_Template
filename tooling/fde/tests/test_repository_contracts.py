@@ -1,5 +1,7 @@
 from pathlib import Path
 
+import yaml
+
 ROOT = Path(__file__).parents[3]
 
 
@@ -47,3 +49,14 @@ def test_publisher_recreate_prevents_old_observability_configuration_overlap() -
         encoding="utf-8"
     )
     assert "  strategy:\n    type: Recreate" in text
+
+
+def test_called_cleanup_has_explicit_authorization_for_dispatch_callers() -> None:
+    caller = yaml.load((ROOT / ".github/workflows/gcp-demo.yml").read_text(), Loader=yaml.BaseLoader)
+    cleanup_call = next(job for job in caller["jobs"].values()
+                        if job.get("uses") == "./.github/workflows/gcp-cleanup.yml")
+    callee = yaml.load((ROOT / ".github/workflows/gcp-cleanup.yml").read_text(), Loader=yaml.BaseLoader)
+    assert cleanup_call["with"]["confirm_cleanup"] == "DESTROY-DEMO"
+    assert callee["on"]["workflow_call"]["inputs"]["confirm_cleanup"]["required"] == "true"
+    # Reusable workflows inherit the caller's event_name, including dispatch.
+    assert callee["jobs"]["cleanup"]["if"] == "inputs.confirm_cleanup == 'DESTROY-DEMO'"

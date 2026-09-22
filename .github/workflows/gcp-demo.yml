@@ -608,6 +608,7 @@ jobs:
       id-token: write # required by called keyless GCP authentication
     uses: ./.github/workflows/gcp-cleanup.yml
     with:
+      confirm_cleanup: DESTROY-DEMO
       project_id: ${{ needs.preflight.outputs.project_id }}
       customer: ${{ needs.preflight.outputs.customer }}
       state_bucket: ${{ needs.preflight.outputs.state_bucket }}

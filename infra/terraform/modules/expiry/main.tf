@@ -41,6 +41,7 @@ resource "google_project_iam_custom_role" "cleanup" {
     "container.clusters.delete",
     "container.clusters.get",
     "container.operations.get",
+    "logging.logEntries.create",
     "resourcemanager.projects.get",
     "storage.buckets.delete",
     "storage.buckets.get",
