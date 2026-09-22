@@ -40,8 +40,9 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
     uv sync --frozen --no-dev --package app
 
-# Build tooling is not needed by the non-root runtime.
-RUN /usr/local/bin/python -m pip uninstall --yes setuptools
+# The upstream Python runtime bundles package metadata that scanners inspect.
+# Keep those distributions on fixed versions even though the app does not import them.
+RUN UV_NO_CACHE=1 uv pip install --system "msgpack==1.2.2" "setuptools==84.0.0"
 
 WORKDIR /app/backend/
 
