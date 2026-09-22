@@ -67,6 +67,9 @@ def database_schema_is_compatible(session: Session) -> bool:
     try:
         session.execute(union_all(*checks)).all()
     except SQLAlchemyError:
-        session.rollback()
+        try:
+            session.rollback()
+        except SQLAlchemyError:
+            pass
         return False
     return True
