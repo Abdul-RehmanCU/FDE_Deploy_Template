@@ -1,0 +1,19 @@
+customer: example
+environment: production
+project: example-fde-production
+region: northamerica-northeast1
+zone: northamerica-northeast1-a
+profile: managed
+namespace: production
+image_repository: northamerica-northeast1-docker.pkg.dev/example-fde-production/fde-images/api
+image_digest: sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+domain: directory.example.ca
+branding:
+  name: Example Contact Directory
+sizing:
+  api_replicas: 3
+  worker_replicas: 2
+  api_cpu: 500m
+  api_memory: 768Mi
+  worker_cpu: 500m
+  worker_memory: 768Mi

@@ -1,0 +1,22 @@
+customer: ci-demo
+environment: staging
+appVersion: ci
+images:
+  backend:
+    repository: localhost/fde-backend
+    digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    pullPolicy: Never
+  frontend:
+    repository: localhost/fde-frontend
+    digest: sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+    pullPolicy: Never
+serviceAccount:
+  gcpServiceAccount: ci@fdetemplate.iam.gserviceaccount.com
+storage:
+  backend: local
+  gcsBucket: unused-in-kind
+secretProvider:
+  enabled: false
+  kubernetesSecretName: fde-runtime-secrets
+observability:
+  enabled: false
