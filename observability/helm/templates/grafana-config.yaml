@@ -38,13 +38,13 @@ data:
       "graphTooltip": 1,
       "panels": [
         {"type":"timeseries","title":"Request throughput","datasource":{"uid":"prometheus"},"targets":[{"expr":"sum(rate(http_server_request_duration_seconds_count[5m])) by (http_route)","legendFormat":"{{`{{http_route}}`}}"}],"gridPos":{"h":8,"w":8,"x":0,"y":0}},
-        {"type":"timeseries","title":"Error ratio","datasource":{"uid":"prometheus"},"targets":[{"expr":"sum(rate(http_server_request_duration_seconds_count{http_response_status_code=~\"5..\"}[5m])) / clamp_min(sum(rate(http_server_request_duration_seconds_count[5m])), 1)","legendFormat":"5xx ratio"}],"gridPos":{"h":8,"w":8,"x":8,"y":0}},
+        {"type":"timeseries","title":"Error ratio","datasource":{"uid":"prometheus"},"targets":[{"expr":"(sum(rate(http_server_request_duration_seconds_count{http_response_status_code=~\"5..\"}[5m])) or vector(0)) / clamp_min(sum(rate(http_server_request_duration_seconds_count[5m])), 1)","legendFormat":"5xx ratio"}],"gridPos":{"h":8,"w":8,"x":8,"y":0}},
         {"type":"timeseries","title":"p95 latency","datasource":{"uid":"prometheus"},"targets":[{"expr":"histogram_quantile(0.95, sum(rate(http_server_request_duration_seconds_bucket[5m])) by (le, http_route))","legendFormat":"{{`{{http_route}}`}}"}],"gridPos":{"h":8,"w":8,"x":16,"y":0}},
         {"type":"stat","title":"Import outcomes","datasource":{"uid":"prometheus"},"targets":[{"expr":"fde_import_rows","legendFormat":"{{`{{outcome}}`}}"}],"gridPos":{"h":7,"w":8,"x":0,"y":8}},
         {"type":"timeseries","title":"Oldest queued job","datasource":{"uid":"prometheus"},"targets":[{"expr":"fde_oldest_queued_job_seconds","legendFormat":"age"}],"gridPos":{"h":7,"w":8,"x":8,"y":8}},
         {"type":"timeseries","title":"Worker health and attempts","datasource":{"uid":"prometheus"},"targets":[{"expr":"fde_worker_metrics_collection_success","legendFormat":"collector"},{"expr":"fde_job_attempts","legendFormat":"attempts {{`{{kind}}`}}"}],"gridPos":{"h":7,"w":8,"x":16,"y":8}},
         {"type":"timeseries","title":"Database connections","datasource":{"uid":"prometheus"},"targets":[{"expr":"fde_database_connections","legendFormat":"{{`{{state}}`}}"}],"gridPos":{"h":7,"w":8,"x":0,"y":15}},
-        {"type":"logs","title":"Correlated application logs","datasource":{"uid":"loki"},"targets":[{"expr":"{namespace=~\"staging|production-demo\"} | json","refId":"A"}],"gridPos":{"h":7,"w":16,"x":8,"y":15}}
+        {"type":"logs","title":"Correlated application logs","datasource":{"uid":"loki"},"targets":[{"expr":"{namespace=~\"{{ join "|" .Values.monitoredNamespaces }}\"} | json","refId":"A"}],"gridPos":{"h":7,"w":16,"x":8,"y":15}}
       ],
       "schemaVersion": 41,
       "tags": ["fde","demo"],
