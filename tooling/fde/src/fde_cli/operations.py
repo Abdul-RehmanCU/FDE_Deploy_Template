@@ -80,6 +80,10 @@ def validate_helm_values(config: InstallationConfig, path: Path) -> None:
         "appSecretKey": f"{prefix}-secret-key",
         "postgresPassword": f"{prefix}-postgres-password",
         "redisPassword": f"{prefix}-redis-password",
+        "redisCa": f"{prefix}-redis-ca",
+        "databaseSslRootCert": f"{prefix}-database-ssl-root-cert",
+        "databaseSslCert": f"{prefix}-database-ssl-cert",
+        "databaseSslKey": f"{prefix}-database-ssl-key",
     }
     if provider.get("enabled") is not True or provider.get("projectId") != config.project:
         raise OperationError("Helm Secret Manager provider differs from installation project")
@@ -520,6 +524,7 @@ def destroy_demo(
         ("addresses", [gcloud, "compute", "addresses", "list", f"--project={config.project}", "--format=json"]),
         ("repositories", [gcloud, "artifacts", "repositories", "list", f"--project={config.project}", "--location=all", "--format=json"]),
         ("buckets", [gcloud, "storage", "buckets", "list", f"--project={config.project}", "--format=json"]),
+        ("secrets", [gcloud, "secrets", "list", f"--project={config.project}", "--format=json"]),
     )
     inventory = []
     for name, command in inventory_commands:
@@ -532,6 +537,11 @@ def destroy_demo(
         "addresses": {item["name"] for item in manifest.get("address_resources", [])},
         "repositories": {manifest["artifact_repository"]},
         "buckets": set(manifest.get("bucket_names", [])),
+        "secrets": {
+            f"fde-{config.customer}-{environment}-{name}"
+            for environment in ("staging", "production-demo")
+            for name in ("database-url", "postgres-password", "redis-password", "redis-url", "secret-key")
+        },
     }
     residues: dict[str, list[str]] = {}
     for kind, names in expected_names.items():

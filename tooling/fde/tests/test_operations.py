@@ -186,8 +186,8 @@ def test_paid_cost_gate_requires_fresh_explicit_authorization() -> None:
     now = datetime(2026, 9, 22, 10, 0, tzinfo=timezone.utc)
     base = dict(
         project="fdetemplate",
-        estimated_total_usd=Decimal("4.72619304"),
-        calculated_total_usd=Decimal("4.72619304"),
+        estimated_total_usd=Decimal("4.96619304"),
+        calculated_total_usd=Decimal("4.96619304"),
         estimate_cap_usd=Decimal("10"),
         reserve_usd=Decimal("15"),
         baseline_amount=Decimal("0"),
@@ -227,6 +227,10 @@ def valid_helm_values(tmp_path: Path) -> tuple[object, Path, dict[str, object]]:
                 "appSecretKey": f"{prefix}-secret-key",
                 "postgresPassword": f"{prefix}-postgres-password",
                 "redisPassword": f"{prefix}-redis-password",
+                "redisCa": f"{prefix}-redis-ca",
+                "databaseSslRootCert": f"{prefix}-database-ssl-root-cert",
+                "databaseSslCert": f"{prefix}-database-ssl-cert",
+                "databaseSslKey": f"{prefix}-database-ssl-key",
             },
         },
         "ingress": {"enabled": False},

@@ -53,11 +53,11 @@ items:
     estimated_usd: 0.0004
     basis: "Two GiB for four hours using a rate above the regional Standard storage hourly equivalent."
   - id: secret-manager
-    quantity: 6
+    quantity: 10
     unit: active-version-month
     unit_price_usd: 0.06
-    estimated_usd: 0.36
-    basis: "Six regional secret versions, charged conservatively as a full month."
+    estimated_usd: 0.60
+    basis: "Five regional runtime secret versions in each of two demo namespaces, charged conservatively as a full month."
   - id: cloud-logging
     quantity: 2
     unit: GiB-ingested
@@ -100,7 +100,7 @@ items:
     unit_price_usd: 1.50
     estimated_usd: 1.50
     basis: "Rounding, price drift, cleanup latency, and usage-estimation uncertainty."
-estimated_total_usd: 4.72619304
+estimated_total_usd: 4.96619304
 precluster_phase:
   ceiling_usd: 0.43
   includes:
