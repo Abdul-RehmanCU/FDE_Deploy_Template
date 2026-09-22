@@ -1,0 +1,4 @@
+project_id        = "fdetemplate"
+region            = "northamerica-northeast1"
+github_repository = "Abdul-RehmanCU/FDE_Deploy_Template"
+state_bucket_name = "fdetemplate-fde-tfstate-REPLACE"
