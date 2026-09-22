@@ -2,7 +2,7 @@
 
 import { type Client, formDataBodySerializer, type Options as Options2, type TDataShape, urlSearchParamsBodySerializer } from './client';
 import { client } from './client.gen';
-import type { auditListAuditEventsData, auditListAuditEventsErrors, auditListAuditEventsResponses, contactsListContactsData, contactsListContactsErrors, contactsListContactsResponses, dashboardDashboardData, dashboardDashboardResponses, importsCancelImportData, importsCancelImportErrors, importsCancelImportResponses, importsConfirmImportData, importsConfirmImportErrors, importsConfirmImportResponses, importsDownloadReportData, importsDownloadReportErrors, importsDownloadReportResponses, importsGetImportData, importsGetImportErrors, importsGetImportResponses, importsListImportsData, importsListImportsErrors, importsListImportsResponses, importsListValidationRowsData, importsListValidationRowsErrors, importsListValidationRowsResponses, importsRetryImportData, importsRetryImportErrors, importsRetryImportResponses, importsSetMappingData, importsSetMappingErrors, importsSetMappingResponses, importsUploadImportData, importsUploadImportErrors, importsUploadImportResponses, importsValidateImportData, importsValidateImportErrors, importsValidateImportResponses, jobsGetJobData, jobsGetJobErrors, jobsGetJobResponses, jobsListAttemptsData, jobsListAttemptsErrors, jobsListAttemptsResponses, loginLoginAccessTokenData, loginLoginAccessTokenErrors, loginLoginAccessTokenResponses, operationsLivenessData, operationsLivenessResponses, operationsReadinessData, operationsReadinessResponses, operationsVersionData, operationsVersionResponses, usersChangePasswordData, usersChangePasswordErrors, usersChangePasswordResponses, usersCreateUserData, usersCreateUserErrors, usersCreateUserResponses, usersIssueTemporaryPasswordData, usersIssueTemporaryPasswordErrors, usersIssueTemporaryPasswordResponses, usersListUsersData, usersListUsersErrors, usersListUsersResponses, usersReadUserData, usersReadUserErrors, usersReadUserMeData, usersReadUserMeResponses, usersReadUserResponses, usersUpdateUserData, usersUpdateUserErrors, usersUpdateUserResponses } from './types.gen';
+import type { auditListAuditEventsData, auditListAuditEventsErrors, auditListAuditEventsResponses, contactsListContactsData, contactsListContactsErrors, contactsListContactsResponses, dashboardDashboardData, dashboardDashboardResponses, importsCancelImportData, importsCancelImportErrors, importsCancelImportResponses, importsConfirmImportData, importsConfirmImportErrors, importsConfirmImportResponses, importsDownloadReportData, importsDownloadReportErrors, importsDownloadReportResponses, importsGetImportData, importsGetImportErrors, importsGetImportResponses, importsListImportsData, importsListImportsErrors, importsListImportsResponses, importsListValidationRowsData, importsListValidationRowsErrors, importsListValidationRowsResponses, importsPreviewImportData, importsPreviewImportErrors, importsPreviewImportResponses, importsRetryImportData, importsRetryImportErrors, importsRetryImportResponses, importsSetMappingData, importsSetMappingErrors, importsSetMappingResponses, importsUploadImportData, importsUploadImportErrors, importsUploadImportResponses, importsValidateImportData, importsValidateImportErrors, importsValidateImportResponses, jobsGetJobData, jobsGetJobErrors, jobsGetJobResponses, jobsListAttemptsData, jobsListAttemptsErrors, jobsListAttemptsResponses, loginLoginAccessTokenData, loginLoginAccessTokenErrors, loginLoginAccessTokenResponses, operationsLivenessData, operationsLivenessResponses, operationsReadinessData, operationsReadinessResponses, operationsVersionData, operationsVersionResponses, usersChangePasswordData, usersChangePasswordErrors, usersChangePasswordResponses, usersCreateUserData, usersCreateUserErrors, usersCreateUserResponses, usersIssueTemporaryPasswordData, usersIssueTemporaryPasswordErrors, usersIssueTemporaryPasswordResponses, usersListUsersData, usersListUsersErrors, usersListUsersResponses, usersReadUserData, usersReadUserErrors, usersReadUserMeData, usersReadUserMeResponses, usersReadUserResponses, usersUpdateUserData, usersUpdateUserErrors, usersUpdateUserResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -186,6 +186,18 @@ export class ImportsService {
             responseType: 'json',
             security: [{ scheme: 'bearer', type: 'http' }],
             url: '/api/v1/imports/{import_id}',
+            ...options
+        });
+    }
+    
+    /**
+     * Preview Import
+     */
+    public static previewImport<ThrowOnError extends boolean = true>(options: Options<importsPreviewImportData, ThrowOnError>) {
+        return (options.client ?? client).get<importsPreviewImportResponses, importsPreviewImportErrors, ThrowOnError>({
+            responseType: 'json',
+            security: [{ scheme: 'bearer', type: 'http' }],
+            url: '/api/v1/imports/{import_id}/preview',
             ...options
         });
     }

@@ -240,6 +240,24 @@ export type ImportPage = {
 };
 
 /**
+ * ImportPreview
+ */
+export type ImportPreview = {
+    /**
+     * Header
+     */
+    header: Array<string>;
+    /**
+     * Rows
+     */
+    rows: Array<Array<string>>;
+    /**
+     * Truncated
+     */
+    truncated: boolean;
+};
+
+/**
  * ImportPublic
  */
 export type ImportPublic = {
@@ -1018,6 +1036,36 @@ export type importsGetImportResponses = {
 };
 
 export type importsGetImportResponse = importsGetImportResponses[keyof importsGetImportResponses];
+
+export type importsPreviewImportData = {
+    body?: never;
+    path: {
+        /**
+         * Import Id
+         */
+        import_id: string;
+    };
+    query?: never;
+    url: '/api/v1/imports/{import_id}/preview';
+};
+
+export type importsPreviewImportErrors = {
+    /**
+     * Validation Error
+     */
+    422: HTTPValidationError;
+};
+
+export type importsPreviewImportError = importsPreviewImportErrors[keyof importsPreviewImportErrors];
+
+export type importsPreviewImportResponses = {
+    /**
+     * Successful Response
+     */
+    200: ImportPreview;
+};
+
+export type importsPreviewImportResponse = importsPreviewImportResponses[keyof importsPreviewImportResponses];
 
 export type importsSetMappingData = {
     body: MappingUpdate;
