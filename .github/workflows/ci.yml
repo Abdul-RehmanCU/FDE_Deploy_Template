@@ -416,12 +416,14 @@ jobs:
           warmup_errors=$(awk '$2=="warmup" && $3=="error" {count++} END {print count+0}' "$RUNNER_TEMP/rolling-probe.txt")
           rollout_successes=$(awk '$2=="rollout" && $3=="success" {count++} END {print count+0}' "$RUNNER_TEMP/rolling-probe.txt")
           rollout_errors=$(awk '$2=="rollout" && $3=="error" {count++} END {print count+0}' "$RUNNER_TEMP/rolling-probe.txt")
+          error_codes=$(awk '$3=="error" {count[$4]++} END {for (code in count) printf "%s=%s ", code, count[code]}' "$RUNNER_TEMP/rolling-probe.txt")
           test "$rollout_successes" -gt 0
           echo "Rolling probe warmup=$warmup_successes/$warmup_errors rollout=$rollout_successes/$rollout_errors"
           {
             echo "### kind rolling update measurement"
             echo "- Warmup successful/failed: $warmup_successes / $warmup_errors"
             echo "- Rollout successful/failed: $rollout_successes / $rollout_errors"
+            echo "- Error status categories: ${error_codes:-none}"
             echo "- Rollout window: $rollout_started to $rollout_finished"
           } >> "$GITHUB_STEP_SUMMARY"
 
@@ -454,6 +456,14 @@ jobs:
           done
           cat "$RUNNER_TEMP/recovery-port-forward.log"
           exit 1
+      - name: Upload timestamped rolling probe evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: kind-rolling-evidence-${{ github.sha }}
+          path: ${{ runner.temp }}/rolling-probe.txt
+          if-no-files-found: warn
+          retention-days: 14
       - name: Restart worker without losing readiness
         run: |
           kubectl -n fde-staging delete pod --selector=app.kubernetes.io/component=worker
@@ -601,18 +611,6 @@ jobs:
           done
           test "$api_targets" -ge 2
           test "$worker_up" -ge 1
-          http_count=$(curl --fail --silent --get --data-urlencode 'query=sum(http_server_request_duration_seconds_count)' http://127.0.0.1:19090/api/v1/query | jq -r '.data.result[0].value[1] // "0"')
-          http_buckets=$(curl --fail --silent --get --data-urlencode 'query=count(http_server_request_duration_seconds_bucket)' http://127.0.0.1:19090/api/v1/query | jq -r '.data.result[0].value[1] // "0"')
-          for metric in fde_import_rows fde_oldest_queued_job_seconds fde_database_connections fde_job_attempts; do
-            count=$(curl --fail --silent --get --data-urlencode "query=count($metric)" http://127.0.0.1:19090/api/v1/query | jq -r '.data.result[0].value[1] // "0"')
-            awk -v value="$count" 'BEGIN { exit !(value > 0) }'
-          done
-          awk -v value="$http_count" 'BEGIN { exit !(value > 0) }'
-          awk -v value="$http_buckets" 'BEGIN { exit !(value > 0) }'
-          jq -n --argjson api_targets "$api_targets" --argjson worker_up "$worker_up" \
-            --arg http_count "$http_count" --arg http_buckets "$http_buckets" \
-            '{api_targets:$api_targets,worker_up:$worker_up,http_request_count:($http_count|tonumber),http_histogram_buckets:($http_buckets|tonumber),required_worker_metrics:true}' \
-            > "$evidence_dir/metrics-summary.json"
 
           grafana_password=kind-grafana-password-2026
           curl --fail --silent --user "admin:$grafana_password" \
@@ -643,6 +641,23 @@ jobs:
             sleep 2
           done
           test "$status" = validated
+          for attempt in {1..60}; do
+            http_count=$(curl --fail --silent --get --data-urlencode 'query=sum(http_server_request_duration_seconds_count)' http://127.0.0.1:19090/api/v1/query | jq -r '.data.result[0].value[1] // "0"')
+            http_buckets=$(curl --fail --silent --get --data-urlencode 'query=count(http_server_request_duration_seconds_bucket)' http://127.0.0.1:19090/api/v1/query | jq -r '.data.result[0].value[1] // "0"')
+            import_rows=$(curl --fail --silent --get --data-urlencode 'query=count(fde_import_rows)' http://127.0.0.1:19090/api/v1/query | jq -r '.data.result[0].value[1] // "0"')
+            oldest_job=$(curl --fail --silent --get --data-urlencode 'query=count(fde_oldest_queued_job_seconds)' http://127.0.0.1:19090/api/v1/query | jq -r '.data.result[0].value[1] // "0"')
+            database_connections=$(curl --fail --silent --get --data-urlencode 'query=count(fde_database_connections)' http://127.0.0.1:19090/api/v1/query | jq -r '.data.result[0].value[1] // "0"')
+            job_attempts=$(curl --fail --silent --get --data-urlencode 'query=count(fde_job_attempts)' http://127.0.0.1:19090/api/v1/query | jq -r '.data.result[0].value[1] // "0"')
+            if awk -v a="$http_count" -v b="$http_buckets" -v c="$import_rows" -v d="$oldest_job" -v e="$database_connections" -v f="$job_attempts" 'BEGIN { exit !(a>0 && b>0 && c>0 && d>0 && e>0 && f>0) }'; then break; fi
+            sleep 2
+          done
+          awk -v a="$http_count" -v b="$http_buckets" -v c="$import_rows" -v d="$oldest_job" -v e="$database_connections" -v f="$job_attempts" 'BEGIN { exit !(a>0 && b>0 && c>0 && d>0 && e>0 && f>0) }'
+          jq -n --argjson api_targets "$api_targets" --argjson worker_up "$worker_up" \
+            --arg http_count "$http_count" --arg http_buckets "$http_buckets" \
+            --arg import_rows "$import_rows" --arg oldest_job "$oldest_job" \
+            --arg database_connections "$database_connections" --arg job_attempts "$job_attempts" \
+            '{api_targets:$api_targets,worker_up:$worker_up,http_request_count:($http_count|tonumber),http_histogram_buckets:($http_buckets|tonumber),worker_series:{import_rows:($import_rows|tonumber),oldest_queued_job:($oldest_job|tonumber),database_connections:($database_connections|tonumber),job_attempts:($job_attempts|tonumber)}}' \
+            > "$evidence_dir/metrics-summary.json"
           for attempt in {1..60}; do
             services=$(curl --fail --silent "http://127.0.0.1:13200/api/traces/$trace_id" | jq -r '.. | objects | select(.key? == "service.name") | .value.stringValue? // empty' | sort -u || true)
             if grep -qx fde-api <<<"$services" && grep -qx fde-outbox-publisher <<<"$services" && grep -qx fde-worker <<<"$services"; then break; fi
