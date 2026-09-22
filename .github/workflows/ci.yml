@@ -394,29 +394,35 @@ jobs:
             --restart=Never \
             --command -- sh -ec '
               while test ! -f /tmp/stop; do
-                if curl --fail --silent --max-time 2 http://fde-ci-demo-staging-api:8000/api/v1/health/live >/dev/null; then
-                  echo success
-                else
-                  echo error
-                fi
+                phase=warmup; test -f /tmp/rollout && phase=rollout
+                code=$(curl --silent --output /dev/null --write-out "%{http_code}" --max-time 2 http://fde-ci-demo-staging-api:8000/api/v1/health/live || true)
+                status=error; test "$code" = 200 && status=success
+                echo "$(date -u +%s) $phase $status ${code:-000}"
                 sleep 0.2
               done'
           kubectl -n fde-staging wait --for=condition=Ready pod/fde-rolling-probe --timeout=120s
+          sleep 3
+          kubectl -n fde-staging exec fde-rolling-probe -- touch /tmp/rollout
+          rollout_started=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
           kubectl -n fde-staging patch deployment/fde-ci-demo-staging-api \
             --type merge \
             --patch "{\"spec\":{\"template\":{\"metadata\":{\"annotations\":{\"fde.dev/rollout-probe\":\"$(date +%s)\"}}}}}"
           kubectl -n fde-staging rollout status deployment/fde-ci-demo-staging-api --timeout=180s
+          rollout_finished=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
           kubectl -n fde-staging exec fde-rolling-probe -- touch /tmp/stop
           kubectl -n fde-staging wait --for=jsonpath='{.status.phase}'=Succeeded pod/fde-rolling-probe --timeout=30s
           kubectl -n fde-staging logs fde-rolling-probe > "$RUNNER_TEMP/rolling-probe.txt"
-          successes=$(grep -c '^success$' "$RUNNER_TEMP/rolling-probe.txt" || true)
-          errors=$(grep -c '^error$' "$RUNNER_TEMP/rolling-probe.txt" || true)
-          test "$successes" -gt 0
-          echo "Rolling probe successes=$successes errors=$errors"
+          warmup_successes=$(awk '$2=="warmup" && $3=="success" {count++} END {print count+0}' "$RUNNER_TEMP/rolling-probe.txt")
+          warmup_errors=$(awk '$2=="warmup" && $3=="error" {count++} END {print count+0}' "$RUNNER_TEMP/rolling-probe.txt")
+          rollout_successes=$(awk '$2=="rollout" && $3=="success" {count++} END {print count+0}' "$RUNNER_TEMP/rolling-probe.txt")
+          rollout_errors=$(awk '$2=="rollout" && $3=="error" {count++} END {print count+0}' "$RUNNER_TEMP/rolling-probe.txt")
+          test "$rollout_successes" -gt 0
+          echo "Rolling probe warmup=$warmup_successes/$warmup_errors rollout=$rollout_successes/$rollout_errors"
           {
             echo "### kind rolling update measurement"
-            echo "- Successful requests: $successes"
-            echo "- Failed requests: $errors"
+            echo "- Warmup successful/failed: $warmup_successes / $warmup_errors"
+            echo "- Rollout successful/failed: $rollout_successes / $rollout_errors"
+            echo "- Rollout window: $rollout_started to $rollout_finished"
           } >> "$GITHUB_STEP_SUMMARY"
 
           set +e
