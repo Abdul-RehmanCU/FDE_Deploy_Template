@@ -1,9 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod"
-import {
-  createFileRoute,
-  Link as RouterLink,
-  redirect,
-} from "@tanstack/react-router"
+import { createFileRoute, redirect } from "@tanstack/react-router"
 import { useForm } from "react-hook-form"
 import { z } from "zod"
 
@@ -44,7 +40,7 @@ export const Route = createFileRoute("/login")({
   head: () => ({
     meta: [
       {
-        title: "Log In - FastAPI Template",
+        title: "Sign in · FDE Deploy",
       },
     ],
   }),
@@ -75,7 +71,10 @@ function Login() {
           className="flex flex-col gap-6"
         >
           <div className="flex flex-col items-center gap-2 text-center">
-            <h1 className="text-2xl font-bold">Login to your account</h1>
+            <h1 className="text-2xl font-bold">Sign in to FDE Deploy</h1>
+            <p className="text-sm text-muted-foreground">
+              Use the account provided by your administrator.
+            </p>
           </div>
 
           <div className="grid gap-4">
@@ -103,15 +102,7 @@ function Login() {
               name="password"
               render={({ field }) => (
                 <FormItem>
-                  <div className="flex items-center">
-                    <FormLabel>Password</FormLabel>
-                    <RouterLink
-                      to="/recover-password"
-                      className="ml-auto text-sm underline-offset-4 hover:underline"
-                    >
-                      Forgot your password?
-                    </RouterLink>
-                  </div>
+                  <FormLabel>Password</FormLabel>
                   <FormControl>
                     <PasswordInput
                       data-testid="password-input"
@@ -125,16 +116,14 @@ function Login() {
             />
 
             <LoadingButton type="submit" loading={loginMutation.isPending}>
-              Log In
+              Sign in
             </LoadingButton>
           </div>
 
-          <div className="text-center text-sm">
-            Don't have an account yet?{" "}
-            <RouterLink to="/signup" className="underline underline-offset-4">
-              Sign up
-            </RouterLink>
-          </div>
+          <p className="text-center text-xs leading-5 text-muted-foreground">
+            There is no public registration or email password recovery. Contact
+            your installation administrator for access.
+          </p>
         </form>
       </Form>
     </AuthLayout>
