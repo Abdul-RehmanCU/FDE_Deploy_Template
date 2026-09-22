@@ -1,0 +1,47 @@
+{{- if eq .Values.storage.backend "local" }}
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ include "fde.fullname" . }}-storage-cleanup
+  labels:
+    {{- include "fde.labels" . | nindent 4 }}
+    app.kubernetes.io/component: storage-cleanup
+spec:
+  schedule: "17 3 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 2
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      activeDeadlineSeconds: 600
+      ttlSecondsAfterFinished: 3600
+      template:
+        metadata:
+          labels:
+            {{- include "fde.labels" . | nindent 12 }}
+            app.kubernetes.io/component: storage-cleanup
+        spec:
+          restartPolicy: Never
+          serviceAccountName: {{ .Values.serviceAccount.name }}
+          securityContext: { runAsNonRoot: true, seccompProfile: { type: RuntimeDefault } }
+          containers:
+            - name: cleanup
+              image: {{ include "fde.backendImage" . }}
+              imagePullPolicy: {{ .Values.images.backend.pullPolicy }}
+              command: ["python", "-m", "app.cleanup_storage"]
+              env:
+                {{- include "fde.backendEnv" . | nindent 16 }}
+                - { name: OTEL_SERVICE_NAME, value: fde-storage-cleanup }
+              volumeMounts:
+                {{- include "fde.secretMount" . | nindent 16 }}
+              resources:
+                requests: { cpu: 25m, memory: 64Mi }
+                limits: { cpu: 150m, memory: 192Mi }
+              securityContext:
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities: { drop: ["ALL"] }
+          volumes:
+            {{- include "fde.secretVolume" . | nindent 12 }}
+{{- end }}

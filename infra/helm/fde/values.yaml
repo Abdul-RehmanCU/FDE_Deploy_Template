@@ -48,6 +48,7 @@ frontend:
 storage:
   backend: gcs
   localRoot: /data/uploads
+  localSize: 2Gi
   gcsBucket: replace-me
 
 secretProvider:

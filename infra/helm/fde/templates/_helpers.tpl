@@ -29,7 +29,12 @@ fde.dev/environment: {{ .Values.environment | quote }}
 - name: runtime-tmp
   emptyDir: {}
 - name: local-storage
+  {{- if eq .Values.storage.backend "local" }}
+  persistentVolumeClaim:
+    claimName: {{ include "fde.fullname" . }}-local-storage
+  {{- else }}
   emptyDir: {}
+  {{- end }}
 {{- end -}}
 {{- define "fde.secretMount" -}}
 - name: runtime-secrets

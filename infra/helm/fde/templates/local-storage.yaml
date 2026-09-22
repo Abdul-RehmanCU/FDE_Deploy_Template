@@ -1,0 +1,13 @@
+{{- if eq .Values.storage.backend "local" }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "fde.fullname" . }}-local-storage
+  labels:
+    {{- include "fde.labels" . | nindent 4 }}
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: {{ .Values.storage.localSize }}
+{{- end }}
