@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["schema_version", "project", "currency", "authorization", "events", "billing"],
+  "properties": {
+    "schema_version": { "const": 1 },
+    "project": { "type": "string" },
+    "currency": { "const": "USD" },
+    "authorization": {
+      "type": "object",
+      "required": ["total_usd", "demo_estimate_cap_usd", "reserve_usd"],
+      "properties": {
+        "total_usd": { "type": "number", "maximum": 25 },
+        "demo_estimate_cap_usd": { "type": "number", "maximum": 10 },
+        "reserve_usd": { "type": "number", "minimum": 15 }
+      }
+    },
+    "events": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["timestamp", "kind", "detail", "billable_resources_created"],
+        "properties": {
+          "timestamp": { "type": "string", "format": "date-time" },
+          "kind": { "type": "string" },
+          "detail": { "type": "string" },
+          "billable_resources_created": { "type": "boolean" }
+        }
+      }
+    },
+    "billing": {
+      "type": "object",
+      "required": ["reported_amount", "display_currency", "pending_delayed_charges", "observed_at"],
+      "properties": {
+        "reported_amount": { "type": ["number", "null"] },
+        "display_currency": { "type": "string" },
+        "pending_delayed_charges": { "type": "boolean" },
+        "observed_at": { "type": "string", "format": "date-time" }
+      }
+    }
+  }
+}

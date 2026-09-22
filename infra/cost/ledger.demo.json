@@ -1,0 +1,44 @@
+{
+  "$schema": "./ledger.schema.json",
+  "schema_version": 1,
+  "project": "fdetemplate",
+  "currency": "USD",
+  "authorization": {
+    "total_usd": 25.0,
+    "demo_estimate_cap_usd": 10.0,
+    "reserve_usd": 15.0
+  },
+  "estimate": {
+    "source": "demo-estimate.yaml",
+    "amount_usd": 4.50619304,
+    "maximum_runtime_hours": 4,
+    "planned_primary_expiry_hours": 2
+  },
+  "events": [
+    {
+      "timestamp": "2026-09-22T07:31:00Z",
+      "kind": "readiness",
+      "detail": "Required no-charge service APIs enabled; enabling Compute created the provider default network and default compute service account.",
+      "billable_resources_created": false
+    },
+    {
+      "timestamp": "2026-09-22T07:47:00Z",
+      "kind": "billing-baseline",
+      "detail": "Authenticated billing report showed CA$0.00 current actual and forecast with no result rows; billing delay remains possible.",
+      "billable_resources_created": false
+    }
+  ],
+  "billing": {
+    "reported_amount": 0.0,
+    "display_currency": "CAD",
+    "pending_delayed_charges": true,
+    "observed_at": "2026-09-22T07:47:00Z"
+  },
+  "paid_run": {
+    "started_at": null,
+    "primary_expiry_at": null,
+    "completed_at": null,
+    "final_inventory_verified_at": null,
+    "billable_resources_remaining": null
+  }
+}
