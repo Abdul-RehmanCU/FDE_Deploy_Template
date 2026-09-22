@@ -276,6 +276,10 @@ function MappingPanel({
   onSaved: () => Promise<void>
 }) {
   const [mapping, setMapping] = useState<Mapping>(item.mapping ?? {})
+  const preview = useQuery({
+    queryKey: ["import-preview", item.id],
+    queryFn: () => fdeApi.previewImport(item.id),
+  })
   const save = useMutation({
     mutationFn: () => fdeApi.saveMapping(item.id, mapping),
     onSuccess: onSaved,
@@ -302,6 +306,54 @@ function MappingPanel({
         <span className="rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
           {item.header.length} source columns
         </span>
+      </div>
+      <div className="mt-6 overflow-hidden rounded-xl border">
+        <div className="flex items-center justify-between border-b bg-muted/40 px-4 py-3">
+          <h3 className="text-sm font-semibold">Source preview</h3>
+          {preview.data?.truncated && (
+            <span className="text-xs text-muted-foreground">
+              First 20 rows shown
+            </span>
+          )}
+        </div>
+        {preview.isPending ? (
+          <p className="p-4 text-sm text-muted-foreground">Loading preview…</p>
+        ) : preview.isError ? (
+          <p className="p-4 text-sm text-red-700">
+            {extractErrorMessage(preview.error)}
+          </p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-xs">
+              <thead className="bg-muted/25 text-left">
+                <tr>
+                  {preview.data.header.map((header) => (
+                    <th
+                      key={header}
+                      className="whitespace-nowrap px-3 py-2 font-medium"
+                    >
+                      {header}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {preview.data.rows.map((row, rowIndex) => (
+                  <tr key={`${item.id}-${rowIndex}`}>
+                    {row.map((value, columnIndex) => (
+                      <td
+                        key={`${item.id}-${rowIndex}-${columnIndex}`}
+                        className="max-w-56 truncate whitespace-nowrap px-3 py-2 text-muted-foreground"
+                      >
+                        {value || "—"}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
       <div className="mt-6 grid gap-4 md:grid-cols-2">
         {canonicalFields.map((field) => (
