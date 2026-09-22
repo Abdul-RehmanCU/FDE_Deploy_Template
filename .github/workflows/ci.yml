@@ -238,6 +238,7 @@ jobs:
 
   kind-rehearsal:
     name: kind deployment rehearsal
+    needs: infrastructure
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     steps:
