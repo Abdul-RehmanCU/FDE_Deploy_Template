@@ -34,7 +34,7 @@ jobs:
     timeout-minutes: 20
     services:
       postgres:
-        image: postgres:17.6-bookworm
+        image: postgres:16.10-bookworm
         env:
           POSTGRES_DB: app
           POSTGRES_USER: postgres
@@ -89,6 +89,8 @@ jobs:
         run: uv run alembic upgrade head
       - name: Test backend
         run: uv run --package app pytest -q backend/tests
+      - name: Exercise backup and restore into disposable database
+        run: bash backend/scripts/test-backup-restore.sh
 
   frontend:
     name: Frontend lint and build
@@ -115,7 +117,7 @@ jobs:
     timeout-minutes: 30
     services:
       postgres:
-        image: postgres:17.6-bookworm
+        image: postgres:16.10-bookworm
         env:
           POSTGRES_DB: app
           POSTGRES_USER: postgres
