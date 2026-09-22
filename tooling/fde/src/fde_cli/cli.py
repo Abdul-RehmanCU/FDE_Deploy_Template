@@ -74,6 +74,7 @@ def parser() -> argparse.ArgumentParser:
     destroy.add_argument("--terraform-dir", required=True)
     destroy.add_argument("--confirm-customer", required=True)
     destroy.add_argument("--expiry-id", required=True)
+    destroy.add_argument("--expiry-terraform-dir", required=True)
     return result
 
 
@@ -125,13 +126,13 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(verify_release(config, local_port=args.local_port), indent=2))
             return 0
         if args.command == "rollback":
-            rollback_release(config)
+            print(json.dumps(rollback_release(config), indent=2))
             return 0
         if args.command == "evidence":
             print(collect_evidence(config, Path(args.output_dir)))
             return 0
         if args.command == "destroy":
-            print(json.dumps(destroy_demo(config, Path(args.terraform_dir), args.confirm_customer, args.expiry_id), indent=2))
+            print(json.dumps(destroy_demo(config, Path(args.terraform_dir), args.confirm_customer, args.expiry_id, Path(args.expiry_terraform_dir)), indent=2))
             return 0
     except (ConfigurationError, OperationError, RuntimeError) as exc:
         print(json.dumps({"error": str(exc)}, indent=2), file=sys.stderr)

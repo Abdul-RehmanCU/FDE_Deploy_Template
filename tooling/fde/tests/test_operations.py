@@ -1,10 +1,12 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
 import yaml
 
 from fde_cli.config import load_config
+from fde_cli.cost import CostGate
 from fde_cli.operations import (
     OperationError,
     assert_scope,
@@ -14,6 +16,7 @@ from fde_cli.operations import (
     destroy_demo,
     validate_expiry_contract,
     validate_helm_values,
+    validate_paid_cost_gate,
     validate_demo_cost_drivers,
 )
 from test_config import VALID, write
@@ -48,7 +51,7 @@ def test_managed_profile_cannot_deploy_under_demo_authorization(tmp_path: Path) 
 
 def test_destroy_requires_exact_customer_before_running_tools(tmp_path: Path) -> None:
     with pytest.raises(OperationError, match="exactly match"):
-        destroy_demo(config(tmp_path), tmp_path, "wrong", "demo-test-run")
+        destroy_demo(config(tmp_path), tmp_path, "wrong", "demo-test-run", tmp_path)
 
 
 def test_bootstrap_requires_exact_project_before_cloud_calls(tmp_path: Path) -> None:
@@ -177,6 +180,25 @@ def test_cost_driver_gate_rejects_larger_machine() -> None:
     pool["values"]["node_config"][0]["machine_type"] = "e2-standard-8"  # type: ignore[index]
     with pytest.raises(OperationError, match="machine"):
         validate_demo_cost_drivers(resources, zone="northamerica-northeast1-a")
+
+
+def test_paid_cost_gate_requires_fresh_explicit_authorization() -> None:
+    now = datetime(2026, 9, 22, 10, 0, tzinfo=timezone.utc)
+    base = dict(
+        project="fdetemplate",
+        estimated_total_usd=Decimal("4.72619304"),
+        calculated_total_usd=Decimal("4.72619304"),
+        estimate_cap_usd=Decimal("10"),
+        reserve_usd=Decimal("15"),
+        baseline_amount=Decimal("0"),
+        baseline_observed_at=now,
+    )
+    validate_paid_cost_gate(CostGate(**base, paid_provisioning_allowed=True), now=now)
+    with pytest.raises(OperationError, match="not authorized"):
+        validate_paid_cost_gate(CostGate(**base, paid_provisioning_allowed=False), now=now)
+    stale = {**base, "baseline_observed_at": now - timedelta(minutes=31)}
+    with pytest.raises(OperationError, match="older than"):
+        validate_paid_cost_gate(CostGate(**stale, paid_provisioning_allowed=True), now=now)
 
 
 def valid_helm_values(tmp_path: Path) -> tuple[object, Path, dict[str, object]]:

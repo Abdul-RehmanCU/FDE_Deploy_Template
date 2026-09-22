@@ -11,13 +11,22 @@ from typing import Iterable
 import yaml
 
 from .config import InstallationConfig
-from .cost import load_cost_gate
+from .cost import CostGate, load_cost_gate
 from .gate import load_release_gate
 from .process import executable, redact, run
 
 
 class OperationError(RuntimeError):
     pass
+
+
+def validate_paid_cost_gate(cost: CostGate, *, now: datetime | None = None) -> None:
+    if not cost.paid_provisioning_allowed:
+        raise OperationError("cost evidence has not authorized paid provisioning")
+    current = now or datetime.now(timezone.utc)
+    baseline_age = current.astimezone(timezone.utc) - cost.baseline_observed_at.astimezone(timezone.utc)
+    if baseline_age.total_seconds() < 0 or baseline_age.total_seconds() > 1800:
+        raise OperationError("billing/resource cost baseline is older than 30 minutes")
 
 
 def validate_helm_values(config: InstallationConfig, path: Path) -> None:
@@ -355,6 +364,7 @@ def deploy_demo(
     validate_helm_values(config, values)
     cost = load_cost_gate(cost_path)
     gate = load_release_gate(gate_path)
+    validate_paid_cost_gate(cost)
     if cost.project != config.project or gate.project != config.project or gate.customer != config.customer:
         raise OperationError("cost/release evidence does not match explicit deployment scope")
     terraform = executable("terraform")
@@ -456,10 +466,11 @@ def verify_release(config: InstallationConfig, *, local_port: int = 18080) -> di
             process.kill()
 
 
-def rollback_release(config: InstallationConfig) -> None:
+def rollback_release(config: InstallationConfig) -> dict[str, object]:
     helm = executable("helm")
     run([helm, "rollback", config.release, "--namespace", config.namespace, "--wait", "--timeout", "8m"])
     run([executable("kubectl"), "rollout", "status", f"deployment/{config.release}-api", "--namespace", config.namespace, "--timeout=180s"])
+    return verify_release(config, local_port=18081)
 
 
 def collect_evidence(config: InstallationConfig, output_dir: Path) -> Path:
@@ -494,10 +505,12 @@ def destroy_demo(
     terraform_dir: Path,
     confirm_customer: str,
     expiry_id: str,
+    expiry_terraform_dir: Path,
 ) -> list[dict[str, object]]:
     if confirm_customer != config.customer:
         raise OperationError("--confirm-customer must exactly match the configured customer")
     terraform = executable("terraform")
+    manifest = json.loads(run([terraform, "output", "-json", "compiled_manifest"], cwd=expiry_terraform_dir).stdout)
     run([terraform, "destroy", "-input=false", "-auto-approve", "-lock-timeout=60s", f"-var=project_id={config.project}", f"-var=customer={config.customer}", f"-var=cluster_name=fde-{config.customer}-demo", f"-var=expiry_id={expiry_id}"], cwd=terraform_dir)
     gcloud = executable("gcloud")
     inventory_commands: Iterable[tuple[str, list[str]]] = (
@@ -505,9 +518,32 @@ def destroy_demo(
         ("instances", [gcloud, "compute", "instances", "list", f"--project={config.project}", "--format=json"]),
         ("disks", [gcloud, "compute", "disks", "list", f"--project={config.project}", "--format=json"]),
         ("addresses", [gcloud, "compute", "addresses", "list", f"--project={config.project}", "--format=json"]),
+        ("repositories", [gcloud, "artifacts", "repositories", "list", f"--project={config.project}", "--location=all", "--format=json"]),
+        ("buckets", [gcloud, "storage", "buckets", "list", f"--project={config.project}", "--format=json"]),
     )
     inventory = []
     for name, command in inventory_commands:
         result = run(command)
         inventory.append({"kind": name, "resources": json.loads(result.stdout)})
+    by_kind = {item["kind"]: item["resources"] for item in inventory}
+    expected_names = {
+        "clusters": {manifest["cluster_name"]},
+        "disks": {item["name"] for item in manifest.get("disk_resources", [])},
+        "addresses": {item["name"] for item in manifest.get("address_resources", [])},
+        "repositories": {manifest["artifact_repository"]},
+        "buckets": set(manifest.get("bucket_names", [])),
+    }
+    residues: dict[str, list[str]] = {}
+    for kind, names in expected_names.items():
+        present: list[str] = []
+        for resource in by_kind.get(kind, []):
+            raw_name = str(resource.get("name", ""))
+            normalized_name = raw_name.removeprefix("gs://").rstrip("/")
+            short_name = normalized_name.rsplit("/", 1)[-1]
+            if short_name in names:
+                present.append(short_name)
+        if present:
+            residues[kind] = sorted(present)
+    if residues:
+        raise OperationError(f"owned billable residues remain after destroy: {json.dumps(residues, sort_keys=True)}")
     return inventory

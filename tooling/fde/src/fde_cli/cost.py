@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
+from datetime import datetime
 from pathlib import Path
 
 import yaml
@@ -19,6 +20,7 @@ class CostGate:
     estimate_cap_usd: Decimal
     reserve_usd: Decimal
     baseline_amount: Decimal
+    baseline_observed_at: datetime
     paid_provisioning_allowed: bool
 
     @property
@@ -57,6 +59,7 @@ def load_cost_gate(path: str | Path) -> CostGate:
         estimate_cap_usd=_decimal(auth.get("demo_estimate_cap_usd"), "demo_estimate_cap_usd"),
         reserve_usd=_decimal(auth.get("delayed_charge_reserve_usd"), "delayed_charge_reserve_usd"),
         baseline_amount=_decimal(baseline.get("amount"), "baseline amount"),
+        baseline_observed_at=datetime.fromisoformat(str(baseline.get("observed_at", "")).replace("Z", "+00:00")),
         paid_provisioning_allowed=gate.get("paid_provisioning_allowed") is True,
     )
     if not result.project:
