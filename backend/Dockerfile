@@ -42,7 +42,11 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 # Editable/build tooling leaves package metadata in the application environment.
 # Keep those distributions on fixed versions and assert the exact scanned environment.
-RUN UV_NO_CACHE=1 uv pip install --python /app/.venv/bin/python "msgpack==1.2.2" "setuptools==84.0.0" && \
+RUN UV_NO_CACHE=1 uv pip install --system "msgpack==1.2.2" "setuptools==84.0.0" && \
+    /usr/local/bin/python -c "from importlib.metadata import version; assert version('msgpack') == '1.2.2'; assert version('setuptools') == '84.0.0'" && \
+    UV_NO_CACHE=1 uv pip install --python /app/.venv/bin/python "msgpack==1.2.2" "setuptools==84.0.0" && \
+    find /app/.venv -type d \( -name 'msgpack-1.1.2.dist-info' -o -name 'setuptools-70.3.0.dist-info' \) -exec rm -rf {} + && \
+    test -z "$(find /app/.venv -type d \( -name 'msgpack-1.1.2.dist-info' -o -name 'setuptools-70.3.0.dist-info' \) -print -quit)" && \
     /app/.venv/bin/python -c "from importlib.metadata import version; assert version('msgpack') == '1.2.2'; assert version('setuptools') == '84.0.0'"
 
 WORKDIR /app/backend/
