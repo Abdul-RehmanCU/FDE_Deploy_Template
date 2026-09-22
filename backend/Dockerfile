@@ -45,8 +45,10 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 RUN UV_NO_CACHE=1 uv pip install --system "msgpack==1.2.2" "setuptools==84.0.0" && \
     /usr/local/bin/python -c "from importlib.metadata import version; assert version('msgpack') == '1.2.2'; assert version('setuptools') == '84.0.0'" && \
     UV_NO_CACHE=1 uv pip install --python /app/.venv/bin/python "msgpack==1.2.2" "setuptools==84.0.0" && \
-    find /app/.venv -type d \( -name 'msgpack-1.1.2.dist-info' -o -name 'setuptools-70.3.0.dist-info' \) -exec rm -rf {} + && \
-    test -z "$(find /app/.venv -type d \( -name 'msgpack-1.1.2.dist-info' -o -name 'setuptools-70.3.0.dist-info' \) -print -quit)" && \
+    rm -rf /usr/local/lib/python3.14/site-packages/pip /usr/local/lib/python3.14/site-packages/pip-*.dist-info /usr/local/lib/python3.14/ensurepip && \
+    find /usr/local /app -type d \( -name 'msgpack-1.1.2.dist-info' -o -name 'setuptools-70.3.0.dist-info' \) -exec rm -rf {} + && \
+    find /usr/local /app -type f \( -name 'msgpack-1.1.2*.whl' -o -name 'setuptools-70.3.0*.whl' \) -delete && \
+    test -z "$(find /usr/local /app \( -name 'msgpack-1.1.2*' -o -name 'setuptools-70.3.0*' \) -print -quit)" && \
     /app/.venv/bin/python -c "from importlib.metadata import version; assert version('msgpack') == '1.2.2'; assert version('setuptools') == '84.0.0'"
 
 WORKDIR /app/backend/
