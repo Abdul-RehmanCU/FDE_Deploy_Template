@@ -3,6 +3,7 @@ FROM oven/bun:1.3.10-alpine AS build
 WORKDIR /app
 COPY package.json bun.lock ./
 COPY frontend/package.json ./frontend/package.json
+COPY packages/react-email/package.json ./packages/react-email/package.json
 RUN bun install --frozen-lockfile
 
 COPY frontend ./frontend
