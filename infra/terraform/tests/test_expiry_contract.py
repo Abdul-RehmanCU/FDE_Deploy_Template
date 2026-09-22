@@ -48,6 +48,7 @@ def test_probe_guards_precede_all_delete_calls() -> None:
     assert text.index("compiled project number does not match") < first_delete
     assert text.index("status: \"sentinel-ok\"") < first_delete
     assert text.index("status: \"not-due\"") < first_delete
+    assert text.index("status: \"stale-window\"") < first_delete
 
 
 def test_cleanup_polls_operations_and_retries_http() -> None:

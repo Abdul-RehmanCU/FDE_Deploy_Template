@@ -53,7 +53,7 @@ data:
             labels: { severity: warning }
             annotations: { summary: "Oldest FDE job has waited more than five minutes" }
           - alert: FDEFailedJobsIncreasing
-            expr: fde_jobs{status="failed"} > 0
+            expr: delta(fde_jobs{status="failed"}[10m]) > 0
             labels: { severity: warning }
             annotations: { summary: "FDE jobs have failed in the last ten minutes" }
           - alert: FDEWorkerHeartbeatMissing

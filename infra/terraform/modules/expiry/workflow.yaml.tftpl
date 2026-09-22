@@ -39,6 +39,10 @@ main:
               status: "sentinel-ok"
               manifest_sha: $${expected_sha}
               project_number: $${project_result.body.name}
+          - condition: $${sys.now() > time.parse(manifest.expires_at) + 3600}
+            return:
+              status: "stale-window"
+              manifest_sha: $${expected_sha}
           - condition: $${sys.now() < time.parse(manifest.expires_at)}
             return:
               status: "not-due"
