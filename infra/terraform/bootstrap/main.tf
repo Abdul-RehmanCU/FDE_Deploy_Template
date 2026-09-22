@@ -2,7 +2,6 @@ locals {
   github_owner = split("/", var.github_repository)[0]
   required_services = toset([
     "artifactregistry.googleapis.com",
-    "binaryauthorization.googleapis.com",
     "cloudasset.googleapis.com",
     "cloudscheduler.googleapis.com",
     "compute.googleapis.com",
@@ -67,7 +66,7 @@ resource "google_project_service" "required" {
 }
 
 resource "google_storage_bucket" "terraform_state" {
-  #checkov:skip=CKV_GCP_62: Access logs cannot safely target the same state bucket; project-level Data Access audit logging is the bootstrap prerequisite.
+  #checkov:skip=CKV_GCP_62: This short-lived versioned state bucket has no separate log sink; owner finalization exports evidence and deletes every generation.
   name                        = var.state_bucket_name
   project                     = var.project_id
   location                    = var.region

@@ -11,3 +11,7 @@ output "redis_host" {
 output "application_bucket" { value = google_storage_bucket.application.name }
 output "runtime_service_account" { value = google_service_account.runtime.email }
 output "customer_domain" { value = var.domain }
+output "postgres_bootstrap_sql" {
+  value       = "CREATE EXTENSION IF NOT EXISTS pgaudit;"
+  description = "Run once as a Cloud SQL database administrator before application migrations; Terraform database flags alone do not create the pgAudit extension."
+}

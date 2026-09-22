@@ -124,6 +124,7 @@ resource "google_container_cluster" "managed" {
   #checkov:skip=CKV_GCP_65: The reusable profile cannot invent a customer's Google Workspace security group; cluster and chart RBAC remain explicit prerequisites.
   #checkov:skip=CKV_GCP_21: resource_labels is the current provider field and is populated from mandatory installation labels; this check expects the legacy field.
   #checkov:skip=CKV_GCP_69: The separately managed node pool sets workload_metadata_config mode GKE_METADATA; this check does not follow that resource relationship.
+  #checkov:skip=CKV_GCP_66: Image attestors and signing authority are customer prerequisites; silently enforcing an absent project policy could block every workload.
   project                     = var.project_id
   name                        = var.cluster_name
   location                    = var.region
@@ -136,7 +137,6 @@ resource "google_container_cluster" "managed" {
   networking_mode             = "VPC_NATIVE"
   enable_shielded_nodes       = true
   enable_intranode_visibility = true
-  binary_authorization { evaluation_mode = "PROJECT_SINGLETON_POLICY_ENFORCE" }
 
   release_channel { channel = "REGULAR" }
   workload_identity_config { workload_pool = "${var.project_id}.svc.id.goog" }
@@ -197,7 +197,8 @@ resource "google_container_node_pool" "managed" {
 
 resource "google_sql_database_instance" "postgres" {
   #checkov:skip=CKV_GCP_79: PostgreSQL 16 matches the tested backup/restore and application support matrix; automatic major-version drift is unsafe.
-  #checkov:skip=CKV_GCP_111: Logging every SQL statement can expose customer PII; pgAudit is restricted to DDL and role changes instead.
+  #checkov:skip=CKV_GCP_109: Error-statement logging is set to PANIC because ERROR can record customer SQL and plaintext parameters; operational errors remain available without query text.
+  #checkov:skip=CKV_GCP_111: Logging every SQL statement can expose customer PII; pgAudit is restricted to masked DDL and role changes instead.
   project             = var.project_id
   name                = "${local.prefix}-postgres"
   region              = var.region
@@ -217,6 +218,14 @@ resource "google_sql_database_instance" "postgres" {
     database_flags {
       name  = "pgaudit.log"
       value = "ddl,role"
+    }
+    database_flags {
+      name  = "cloudsql.pgaudit_mask_literals"
+      value = "on"
+    }
+    database_flags {
+      name  = "pgaudit.log_parameter"
+      value = "off"
     }
     database_flags {
       name  = "log_checkpoints"
@@ -248,7 +257,7 @@ resource "google_sql_database_instance" "postgres" {
     }
     database_flags {
       name  = "log_min_error_statement"
-      value = "error"
+      value = "panic"
     }
     backup_configuration {
       enabled                        = true
@@ -298,7 +307,7 @@ resource "google_redis_instance" "redis" {
 }
 
 resource "google_storage_bucket" "application" {
-  #checkov:skip=CKV_GCP_62: GCS Data Access audit logging is a project-level prerequisite; a circular same-module access-log bucket is intentionally avoided.
+  #checkov:skip=CKV_GCP_62: Customer project Data Access audit logging and its external log sink are explicit managed-profile prerequisites; this module does not invent that destination.
   project                     = var.project_id
   name                        = "${var.project_id}-${local.prefix}-application"
   location                    = var.region

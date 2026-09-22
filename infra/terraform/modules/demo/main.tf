@@ -114,6 +114,7 @@ resource "google_container_cluster" "demo" {
   #checkov:skip=CKV_GCP_65: Google Groups RBAC requires customer Workspace group provisioning; Kubernetes RBAC remains explicit in the application chart.
   #checkov:skip=CKV_GCP_69: The separately managed node pool sets workload_metadata_config mode GKE_METADATA; this check does not follow that resource relationship.
   #checkov:skip=CKV_GCP_21: resource_labels is the current provider field and includes the mandatory expiry ownership label; this check expects the legacy field.
+  #checkov:skip=CKV_GCP_66: The demo publishes digests but does not create Binary Authorization attestations; enabling enforcement without a real signing policy would be misleading and could block every image.
   project                     = var.project_id
   name                        = var.cluster_name
   location                    = var.zone
@@ -125,7 +126,6 @@ resource "google_container_cluster" "demo" {
   resource_labels             = local.labels
   networking_mode             = "VPC_NATIVE"
   enable_intranode_visibility = true
-  binary_authorization { evaluation_mode = "PROJECT_SINGLETON_POLICY_ENFORCE" }
 
   release_channel { channel = "REGULAR" }
   workload_identity_config { workload_pool = "${var.project_id}.svc.id.goog" }
@@ -221,7 +221,7 @@ resource "google_artifact_registry_repository" "images" {
 }
 
 resource "google_storage_bucket" "application" {
-  #checkov:skip=CKV_GCP_62: GCS Data Access audit logging is a project-level prerequisite; a circular same-module access-log bucket is intentionally avoided.
+  #checkov:skip=CKV_GCP_62: The bounded demo accepts no separate access-log bucket; application audit evidence and exact object-generation cleanup remain mandatory.
   for_each                    = var.namespaces
   project                     = var.project_id
   name                        = "${var.project_id}-${local.prefix}-${each.key}"
@@ -232,6 +232,7 @@ resource "google_storage_bucket" "application" {
   force_destroy               = true
   labels                      = merge(local.labels, { environment = each.key })
   versioning { enabled = true }
+  soft_delete_policy { retention_duration_seconds = 0 }
   lifecycle_rule {
     condition { age = 7 }
     action { type = "Delete" }
