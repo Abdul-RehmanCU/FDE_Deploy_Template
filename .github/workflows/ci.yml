@@ -109,6 +109,108 @@ jobs:
       - name: Build frontend
         run: bun run --filter frontend build
 
+  browser-journey:
+    name: Real-stack browser journeys
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:17.6-bookworm
+        env:
+          POSTGRES_DB: app
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: e2e-postgres-password
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d app"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:8.2.1-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      FASTAPI_ENV: test
+      PROJECT_NAME: FDE Deployment Template E2E
+      SECRET_KEY: e2e-only-secret-key-with-at-least-32-characters
+      DATABASE_URL: postgresql://postgres:e2e-postgres-password@localhost:5432/app
+      REDIS_URL: redis://localhost:6379/0
+      BACKEND_CORS_ORIGINS: http://127.0.0.1:5173
+      STORAGE_BACKEND: local
+      STORAGE_LOCAL_ROOT: /tmp/fde-e2e-storage
+      VITE_API_URL: http://127.0.0.1:8000
+      PLAYWRIGHT_API_URL: http://127.0.0.1:8000
+      PLAYWRIGHT_BASE_URL: http://127.0.0.1:5173
+      E2E_ADMIN_PASSWORD: E2E-Admin-Password-2026!
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.14"
+      - name: Set up uv
+        uses: astral-sh/setup-uv@d0d8abe699bfb85fec6de9f7adb5ae17292296ff # v6
+        with:
+          enable-cache: true
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: package.json
+      - name: Install locked dependencies
+        run: |
+          uv sync --locked --all-groups
+          bun install --frozen-lockfile
+          bunx playwright install --with-deps chromium
+      - name: Migrate and bootstrap administrator
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$STORAGE_LOCAL_ROOT"
+          (cd backend && uv run alembic upgrade head)
+          bootstrap_output=$(cd backend && uv run python -m app.bootstrap_admin e2e-admin@example.com --full-name "E2E Administrator")
+          temporary_password=$(printf '%s\n' "$bootstrap_output" | sed -n 's/^One-time temporary password: //p')
+          test -n "$temporary_password"
+          echo "::add-mask::$temporary_password"
+          echo "E2E_ADMIN_TEMP_PASSWORD=$temporary_password" >> "$GITHUB_ENV"
+      - name: Start real application stack
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd backend && nohup uv run fastapi run app/main.py --host 127.0.0.1 --port 8000 > "$RUNNER_TEMP/api.log" 2>&1 &)
+          (cd backend && nohup uv run celery -A app.worker.celery_app worker --loglevel=warning --concurrency=1 > "$RUNNER_TEMP/worker.log" 2>&1 &)
+          (cd backend && nohup uv run python -m app.outbox_publisher > "$RUNNER_TEMP/publisher.log" 2>&1 &)
+          (cd frontend && nohup bunx vite --host 127.0.0.1 > "$RUNNER_TEMP/frontend.log" 2>&1 &)
+          for attempt in {1..60}; do
+            if curl --fail --silent http://127.0.0.1:8000/api/v1/health/ready >/dev/null && \
+               curl --fail --silent http://127.0.0.1:5173 >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat "$RUNNER_TEMP/api.log" "$RUNNER_TEMP/frontend.log"
+          exit 1
+      - name: Run role and import journeys
+        working-directory: frontend
+        run: bunx playwright test
+      - name: Upload browser evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: browser-evidence-${{ github.sha }}
+          path: |
+            frontend/playwright-report
+            frontend/test-results
+          if-no-files-found: warn
+          retention-days: 14
+
   infrastructure:
     name: Terraform and Helm validation
     runs-on: ubuntu-24.04
