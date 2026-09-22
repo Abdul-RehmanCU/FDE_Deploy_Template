@@ -72,3 +72,15 @@ def test_positive_soft_delete_retention_is_rejected() -> None:
             {"soft_delete_policy": {"retention_duration_seconds": "604800"}}
         )
     MODULE.require_soft_delete_disabled({"soft_delete_policy": {}})
+
+
+def test_versioning_evidence_accepts_both_gcloud_shapes() -> None:
+    assert MODULE.normalized_versioning({"versioning": {"enabled": True}}) == {
+        "enabled": True
+    }
+    assert MODULE.normalized_versioning({"versioning_enabled": True}) == {
+        "enabled": True
+    }
+    assert MODULE.normalized_versioning({"versioningEnabled": False}) == {
+        "enabled": False
+    }

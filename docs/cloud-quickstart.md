@@ -61,6 +61,8 @@ gcloud services enable cloudresourcemanager.googleapis.com --project=PROJECT_ID
 
 Terraform resource dependencies order creation; they cannot enable an API before Terraform refreshes existing project/IAM state. The bootstrap preflight prevents that `403 SERVICE_DISABLED` failure.
 
+Use a new globally unique state-bucket name for each installation after full teardown. Its name determines the federation-pool ID; deleted GCP federation IDs remain reserved temporarily, so a fresh bucket avoids reusing a deleted identity. The owner bootstrap grants the infrastructure and cleanup identities the project-scoped API, federation, and disk permissions required to manage their Terraform resources.
+
 ```bash
 uv run --project tooling/fde fde bootstrap \
   --config path/to/customer.yaml --customer CUSTOMER --environment staging --project PROJECT_ID \

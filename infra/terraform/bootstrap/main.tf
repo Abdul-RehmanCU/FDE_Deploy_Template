@@ -2,6 +2,9 @@ locals {
   # The owner CLI enables Resource Manager before init/import/refresh. Resource
   # dependencies below order creation, but cannot protect a prior state refresh.
   github_owner = split("/", var.github_repository)[0]
+  # Deleted WIF pool IDs remain reserved. A fresh state bucket gives a fresh
+  # bootstrap generation without reviving deleted identities.
+  workload_identity_pool_id = "fde-gh-${substr(sha256(var.state_bucket_name), 0, 12)}"
   required_services = toset([
     "artifactregistry.googleapis.com",
     "cloudasset.googleapis.com",
@@ -32,7 +35,10 @@ locals {
       "roles/container.admin",
       "roles/iam.roleAdmin",
       "roles/iam.serviceAccountAdmin",
+      "roles/iam.workloadIdentityPoolAdmin",
       "roles/resourcemanager.projectIamAdmin",
+      "roles/serviceusage.serviceUsageAdmin",
+      "roles/compute.storageAdmin",
       "roles/secretmanager.admin",
       "roles/storage.admin",
       "roles/workflows.admin",
@@ -48,7 +54,10 @@ locals {
       "roles/container.admin",
       "roles/iam.roleAdmin",
       "roles/iam.serviceAccountAdmin",
+      "roles/iam.workloadIdentityPoolAdmin",
       "roles/resourcemanager.projectIamAdmin",
+      "roles/serviceusage.serviceUsageAdmin",
+      "roles/compute.storageAdmin",
       "roles/secretmanager.admin",
       "roles/storage.admin",
       "roles/workflows.admin",
@@ -106,7 +115,7 @@ resource "google_service_account" "automation" {
 
 resource "google_iam_workload_identity_pool" "github" {
   project                   = var.project_id
-  workload_identity_pool_id = "fde-github"
+  workload_identity_pool_id = local.workload_identity_pool_id
   display_name              = "FDE GitHub Actions"
   description               = "Keyless GitHub Actions federation for the FDE repository"
 

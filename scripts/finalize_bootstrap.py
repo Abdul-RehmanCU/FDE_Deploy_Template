@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -14,9 +16,36 @@ def run(
     return subprocess.run(command, cwd=cwd, check=check, text=True, capture_output=True)
 
 
-def all_generation_delete_command(bucket_uri: str) -> list[str]:
+def resolve_executable(name: str) -> str:
+    """Resolve a command once so Windows .cmd shims are passed explicitly."""
+    candidates = [name]
+    if os.name == "nt" and not name.lower().endswith(".cmd"):
+        candidates.insert(0, f"{name}.cmd")
+    for candidate in candidates:
+        resolved = shutil.which(candidate)
+        if resolved:
+            return resolved
+    if os.name == "nt" and name == "gcloud":
+        local_app_data = os.environ.get("LOCALAPPDATA")
+        if local_app_data:
+            installed = (
+                Path(local_app_data)
+                / "Google"
+                / "Cloud SDK"
+                / "google-cloud-sdk"
+                / "bin"
+                / "gcloud.cmd"
+            )
+            if installed.is_file():
+                return str(installed)
+    raise FileNotFoundError(f"{name} is required")
+
+
+def all_generation_delete_command(
+    bucket_uri: str, gcloud: str = "gcloud"
+) -> list[str]:
     return [
-        "gcloud",
+        gcloud,
         "storage",
         "rm",
         "--recursive",
@@ -25,12 +54,16 @@ def all_generation_delete_command(bucket_uri: str) -> list[str]:
     ]
 
 
-def list_bucket_generations(bucket_uri: str) -> list[dict[str, object]]:
+def list_bucket_generations(
+    bucket_uri: str, gcloud: str = "gcloud"
+) -> list[dict[str, object]]:
     result = run(
-        ["gcloud", "storage", "ls", "--all-versions", "--json", f"{bucket_uri}/**"],
+        [gcloud, "storage", "ls", "--all-versions", "--json", f"{bucket_uri}/**"],
         check=False,
     )
     if result.returncode != 0:
+        if result.returncode == 1 and "matched no objects" in result.stderr.lower():
+            return []
         raise RuntimeError("cannot verify all state bucket object generations")
     if not result.stdout.strip():
         return []
@@ -59,6 +92,17 @@ def require_soft_delete_disabled(bucket: dict[str, object]) -> None:
         raise RuntimeError("state bucket soft delete must be disabled before teardown")
 
 
+def normalized_versioning(bucket: dict[str, object]) -> object:
+    """Keep the recorded versioning evidence stable across gcloud JSON shapes."""
+    metadata = bucket.get("versioning")
+    if isinstance(metadata, dict):
+        return metadata
+    for key in ("versioning_enabled", "versioningEnabled"):
+        if key in bucket:
+            return {"enabled": bucket[key]}
+    return metadata
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Owner-ADC final teardown immediately after runtime and expiry reconciliation"
@@ -76,9 +120,11 @@ def main() -> int:
         raise SystemExit("--confirm must exactly equal FINALIZE-BOOTSTRAP")
     if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", args.github_repository):
         raise SystemExit("--github-repository must be the exact OWNER/REPOSITORY")
-    for executable in ("gcloud", "terraform"):
-        if shutil.which(executable) is None:
-            raise SystemExit(f"{executable} is required")
+    try:
+        gcloud = resolve_executable("gcloud")
+        terraform = resolve_executable("terraform")
+    except FileNotFoundError as exc:
+        raise SystemExit(str(exc)) from exc
 
     root = Path(__file__).resolve().parents[1]
     terraform_dir = root / "infra" / "terraform" / "bootstrap"
@@ -86,7 +132,7 @@ def main() -> int:
     owned_buckets = json.loads(
         run(
             [
-                "gcloud",
+                gcloud,
                 "storage",
                 "buckets",
                 "list",
@@ -100,7 +146,7 @@ def main() -> int:
         raise SystemExit("state bucket is not uniquely owned by the confirmed project")
     bucket = json.loads(
         run(
-            ["gcloud", "storage", "buckets", "describe", bucket_uri, "--format=json"]
+            [gcloud, "storage", "buckets", "describe", bucket_uri, "--format=json"]
         ).stdout
     )
     labels = bucket.get("labels", {})
@@ -117,7 +163,7 @@ def main() -> int:
 
     run(
         [
-            "terraform",
+            terraform,
             "init",
             "-input=false",
             "-reconfigure",
@@ -135,8 +181,31 @@ def main() -> int:
         "google_service_account.automation",
         "google_project_service.required",
     )
+    state_result = run(
+        [terraform, "state", "list"], cwd=terraform_dir, check=False
+    )
+    if state_result.returncode == 0:
+        state = [line for line in state_result.stdout.splitlines() if line]
+    elif "no state file was found" in state_result.stderr.lower():
+        state = []
+    else:
+        raise RuntimeError(
+            "cannot inspect bootstrap Terraform state: "
+            + state_result.stderr.strip()
+        )
+    valid_state_prefixes = (*targets, "google_storage_bucket.terraform_state")
+    unexpected_state = [
+        entry
+        for entry in state
+        if not any(
+            entry == prefix or entry.startswith(f"{prefix}[")
+            for prefix in valid_state_prefixes
+        )
+    ]
+    if unexpected_state:
+        raise SystemExit(f"unexpected bootstrap state entries: {unexpected_state}")
     destroy = [
-        "terraform",
+        terraform,
         "destroy",
         "-input=false",
         "-auto-approve",
@@ -147,44 +216,59 @@ def main() -> int:
         f"-var=state_bucket_name={args.state_bucket}",
         *(f"-target={target}" for target in targets),
     ]
-    run(destroy, cwd=terraform_dir)
-    state = [
-        line
-        for line in run(
-            ["terraform", "state", "list"], cwd=terraform_dir
-        ).stdout.splitlines()
-        if line
-    ]
-    if state != ["google_storage_bucket.terraform_state"]:
-        raise SystemExit(f"unexpected bootstrap state remains: {state}")
-    run(
-        ["terraform", "state", "rm", "google_storage_bucket.terraform_state"],
-        cwd=terraform_dir,
+    recorded_target = any(
+        entry == target or entry.startswith(f"{target}[")
+        for entry in state
+        for target in targets
     )
+    if recorded_target:
+        run(destroy, cwd=terraform_dir)
+    state_after_destroy_result = run(
+        [terraform, "state", "list"], cwd=terraform_dir, check=False
+    )
+    if state_after_destroy_result.returncode == 0:
+        state_after_destroy = [
+            line for line in state_after_destroy_result.stdout.splitlines() if line
+        ]
+    elif "no state file was found" in state_after_destroy_result.stderr.lower():
+        state_after_destroy = []
+    else:
+        raise RuntimeError(
+            "cannot inspect bootstrap Terraform state after destroy: "
+            + state_after_destroy_result.stderr.strip()
+        )
+    if state_after_destroy == ["google_storage_bucket.terraform_state"]:
+        run(
+            [terraform, "state", "rm", "google_storage_bucket.terraform_state"],
+            cwd=terraform_dir,
+        )
+    elif state_after_destroy:
+        raise SystemExit(f"unexpected bootstrap state remains: {state_after_destroy}")
 
     authorization = f"{bucket_uri}/authorizations/single-paid-demo.json"
-    all_versions_before = list_bucket_generations(bucket_uri)
-    run(
-        [
-            "gcloud",
-            "storage",
-            "objects",
-            "update",
-            authorization,
-            "--clear-temporary-hold",
-        ],
-        check=False,
-    )
-    run(all_generation_delete_command(bucket_uri))
-    all_versions_after = list_bucket_generations(bucket_uri)
+    all_versions_before = list_bucket_generations(bucket_uri, gcloud)
+    if all_versions_before:
+        run(
+            [
+                gcloud,
+                "storage",
+                "objects",
+                "update",
+                authorization,
+                "--clear-temporary-hold",
+            ],
+            check=False,
+        )
+        run(all_generation_delete_command(bucket_uri, gcloud))
+    all_versions_after = list_bucket_generations(bucket_uri, gcloud)
     if all_versions_after:
         raise SystemExit("state object generations remain after all-version deletion")
-    run(["gcloud", "storage", "buckets", "delete", bucket_uri])
+    run([gcloud, "storage", "buckets", "delete", bucket_uri])
 
     pools = json.loads(
         run(
             [
-                "gcloud",
+                gcloud,
                 "iam",
                 "workload-identity-pools",
                 "list",
@@ -194,8 +278,10 @@ def main() -> int:
             ]
         ).stdout
     )
+    expected_pool = "fde-gh-" + hashlib.sha256(args.state_bucket.encode()).hexdigest()[:12]
     fde_pools = [
-        pool for pool in pools if str(pool.get("name", "")).endswith("/fde-github")
+        pool for pool in pools
+        if str(pool.get("name", "")).rsplit("/", 1)[-1] in {expected_pool, "fde-github"}
     ]
     expected_accounts = {
         f"fde-{name}@{args.project}.iam.gserviceaccount.com"
@@ -204,7 +290,7 @@ def main() -> int:
     service_accounts = json.loads(
         run(
             [
-                "gcloud",
+                gcloud,
                 "iam",
                 "service-accounts",
                 "list",
@@ -220,7 +306,7 @@ def main() -> int:
     ]
     policy = json.loads(
         run(
-            ["gcloud", "projects", "get-iam-policy", args.project, "--format=json"]
+            [gcloud, "projects", "get-iam-policy", args.project, "--format=json"]
         ).stdout
     )
     fde_bindings = []
@@ -238,7 +324,7 @@ def main() -> int:
         "state_bucket_before": {
             "location": bucket.get("location"),
             "labels": labels,
-            "versioning": bucket.get("versioning"),
+            "versioning": normalized_versioning(bucket),
             "softDeletePolicy": bucket.get("soft_delete_policy")
             or bucket.get("softDeletePolicy"),
         },
@@ -246,7 +332,7 @@ def main() -> int:
         "object_generations_after": all_versions_after,
         "bootstrap_state_before_bucket_retirement": state,
         "state_bucket_removed": run(
-            ["gcloud", "storage", "buckets", "describe", bucket_uri, "--format=json"],
+            [gcloud, "storage", "buckets", "describe", bucket_uri, "--format=json"],
             check=False,
         ).returncode
         != 0,
