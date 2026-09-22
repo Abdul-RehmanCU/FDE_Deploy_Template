@@ -24,8 +24,9 @@ This ledger records repository-owned commits and verifiable acceptance evidence.
 | 121–144 | `74dedc1` … `9fbe8f6` | Additive migration and restore drill, exact expiry costs, writable proxy, full mobile evidence, managed tests, PostgreSQL 16 alignment, deterministic disks, priced-plan gate, independent telemetry runtime, worker OTLP, runtime branding |
 | 145–166 | `eca0f34` … `b43b990` | Rollback recovery, immutable config parity, accepted application media, restore fixes, exact probe policies, signed image manifests, security scans, split kind jobs, paid/residue gates, expiry sentinel, deterministic release rendering, GKE business smoke |
 | 167–189 | `e949f4d` … `b7525a0` | Seeded identity/private-cost guard, partial-state cleanup, automatic trace/log/metric evidence, managed TLS, same-digest staging/demo-prod workflow, exact secret grants, run-once paid authorization, vulnerability remediation, phase-classified rolling evidence, owner-only bootstrap retirement |
+| 190–237 | `4341138` … `e71419e` | Current delivery docs, schema-compatible readiness, security remediation, Checkov controls, managed private TLS/egress handoff, exact-digest scans, safe all-generation teardown, valid Alloy pipelines, namespace alerts, live-GKE telemetry automation, passing kind observability evidence, and corrected dashboard gauges/panels |
 
-After this ledger update, the repository contains **190** new root-history commits and **187 substantive commits**. Mechanical formatting-only commits `d8fafda`, `5b7c03d`, and `3a8b85e` are excluded. All other entries implement a capability, test, fix, contract, evidence gate, or operational document.
+After this ledger and media update, the repository contains **247** new root-history commits and **244 substantive commits**. Mechanical formatting-only commits `d8fafda`, `5b7c03d`, and `3a8b85e` are excluded. All other entries implement a capability, test, fix, contract, evidence gate, or operational document.
 
 ## CI evidence
 
@@ -38,6 +39,10 @@ After this ledger update, the repository contains **190** new root-history commi
 | `8b9a5c7` | [35708056837](https://github.com/Abdul-RehmanCU/FDE_Deploy_Template/actions/runs/35708056837) | Failed | All non-kind jobs passed. App install/import/rollout passed; the isolated request probe exposed a missing exact egress policy, fixed in `d1d2bb0`. |
 | `cfce94c` | [35710341930](https://github.com/Abdul-RehmanCU/FDE_Deploy_Template/actions/runs/35710341930) | Failed | Repository, backend, frontend, browser, CLI, Terraform/Helm/managed tests, and application kind rehearsal passed. The independent telemetry job stopped before installing telemetry because Helm had not waited for its migration Job; `fbc1ba3` adds both Helm and explicit migration waits. |
 | `cfce94c` | [35710341995](https://github.com/Abdul-RehmanCU/FDE_Deploy_Template/actions/runs/35710341995) | Failed | The new security gate found fixed backend base/package CVEs and a Trivy Terraform-adapter crash; immutable slim bases, lock updates, per-image matrix scans, and pinned Checkov are in the next revision. |
+| `48b6efe` | [35717933275](https://github.com/Abdul-RehmanCU/FDE_Deploy_Template/actions/runs/35717933275) | Passed | All eight jobs passed: repository policy; frontend; browser; backend with 50 PostgreSQL/Redis tests and restore drill; CLI; Terraform/managed/Helm/Alloy validation; application kind import/rolling/rollback; and kind metrics/logs/traces/dashboard/alert evidence. |
+| `48b6efe` | [35717933305](https://github.com/Abdul-RehmanCU/FDE_Deploy_Template/actions/runs/35717933305) | Passed | Dependency and secret scan, backend and frontend image scans, and Terraform Checkov policy scan passed. The pull-request-only dependency review is correctly skipped on a push. |
+| `e71419e` | [35718898057](https://github.com/Abdul-RehmanCU/FDE_Deploy_Template/actions/runs/35718898057) | Passed | CI passed all eight jobs at this revision; artifact `10691161653` contains populated Grafana, correlated Tempo/Loki, and namespace-specific alert firing/resolved evidence. |
+| `e71419e` | [35718898011](https://github.com/Abdul-RehmanCU/FDE_Deploy_Template/actions/runs/35718898011) | Passed | Dependency, secret, backend/frontend image, and Terraform policy scans passed at this revision. |
 
 Commit count is calculated from this repository's root commit. The target is 128 substantive commits and the acceptance minimum is 120. Empty, cosmetic-only, inherited, or backdated commits do not qualify.
 
@@ -59,7 +64,7 @@ Commit count is calculated from this repository's root commit. The target is 128
 
 - [x] Validation CI passes on a standard GitHub-hosted Linux runner without deployment credentials at `eebc040`; pull-request execution remains to be observed on an actual PR.
 - [ ] Container images are built once and promoted by immutable digest.
-- [ ] Helm chart passes schema/render checks at `eebc040`; kind rehearsal is running at `a9b7c6d`.
+- [x] Helm schema/render, managed fixture, kubeconform, application kind, and isolated observability kind rehearsals pass at `48b6efe`.
 - [x] Demo Terraform profile passes format/init/validation and expiry contract tests; no apply is claimed.
 - [x] Managed profile passes static and mocked Terraform checks and is clearly labeled implemented but not live-tested.
 - [x] Deployment CLI validates customer, environment, project, profile, digest, region, and secret references before cloud commands.
@@ -68,10 +73,10 @@ Commit count is calculated from this repository's root commit. The target is 128
 
 ### Observability and resilience
 
-- [ ] API, SQL, Redis, and worker traces correlate without PII.
-- [ ] Bounded-cardinality metrics, structured redacted logs, dashboards, and alert rules are verified.
-- [ ] A controlled alert is captured firing and resolving.
-- [ ] Rolling-update request measurements and unhealthy-release recovery evidence are captured.
+- [x] API, SQL, Redis, publisher, and worker spans correlate on one trace in kind without PII at `e71419e`.
+- [x] Bounded-cardinality metrics, structured redacted logs, dashboards, and alert rules are verified in kind artifact `10691161653`.
+- [x] A namespace-specific controlled alert is captured firing and resolving in kind artifact `10691161653`.
+- [x] Rolling-update request measurements and unhealthy-release recovery evidence are captured in kind; the accepted measurement observed 43 rollout successes and 0 errors at `3e260c6`, and the current-head rehearsal also passes.
 - [x] Backup/restore into a disposable PostgreSQL 16 database is verified by record counts in job `106680560649` from run `35707717123`.
 
 ### Budget, live demonstration, and teardown
@@ -87,7 +92,7 @@ Commit count is calculated from this repository's root commit. The target is 128
 ### Publication and handover
 
 - [x] README includes branded navigation, architecture/release diagrams, evidence matrix, quickstarts, operations, cost controls, limitations, and acknowledgments; final live-GKE evidence links remain pending.
-- [x] Real working-screen screenshots and a short synthetic-data walkthrough are published with accurate CI captions; GKE/observability media remain pending.
+- [x] Real working-screen screenshots, a synthetic-data walkthrough, and kind Grafana/Tempo/Loki/alert evidence are published with accurate captions; GKE media remain pending.
 - [ ] Customer handover states what ran, what remains unverified, costs, and remaining resources.
 - [ ] Passing workflow URLs and immutable artifact digests are linked.
 - [ ] `v1.0.0` is tagged and released only after all required checks pass; sanitized evidence is attached.
@@ -99,6 +104,8 @@ Commit count is calculated from this repository's root commit. The target is 128
 | 2026-09-22 | Implementation authorized | Repository work and non-billable CI allowed; billable GCP remains gated |
 | 2026-09-22 | Public repository created | `Abdul-RehmanCU/FDE_Deploy_Template`, public, default branch `main` |
 | 2026-09-22 | Failed browser artifact removed | Artifact `10683032031` from run `35702996222` deleted because the old Playwright configuration retained traces; API readback returned zero artifacts |
+| 2026-09-22 | Repository published as reusable template | Public visibility confirmed; template mode enabled; accurate description/topics retained; merge branches auto-delete |
+| 2026-09-22 | Deployment environments configured | Autonomous demo environments are restricted to protected branches; real `production` requires the repository owner reviewer and remains unused |
 
 ## Evidence rules
 

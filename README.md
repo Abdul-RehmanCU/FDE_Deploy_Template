@@ -41,7 +41,7 @@ The product is a guided contact onboarding workflow. Administrators and operator
 | Delivery controls | Immutable customer configuration, cost and evidence gates, explicit plan/deploy/verify/rollback/evidence/destroy commands | CLI tests |
 | GCP demo profile | Montréal zonal GKE, fixed node, Artifact Registry, regional storage, Workload Identity, exact-resource expiry cleanup | Terraform validation; live proof pending |
 | Managed profile | Private regional GKE, HA Cloud SQL, HA Redis, regional storage, Secret Manager, deletion protection | Implemented, not live-tested |
-| Observability | OpenTelemetry, Prometheus, Loki, Tempo, Grafana, internal services, five alert classes | Helm/render validation; runtime screenshots pending |
+| Observability | OpenTelemetry, Prometheus, Loki, Tempo, Grafana, internal services, five alert classes | Correlated kind runtime and screenshot evidence; GKE repetition pending |
 
 ## Architecture
 
@@ -70,9 +70,7 @@ The detailed contracts live in [application workflow](docs/application.md), [dat
 
 The [implementation ledger](docs/implementation-ledger.md) separates real execution from static checks and pending work. It records tested SHAs, workflow URLs, commit accounting, external changes, and every acceptance criterion.
 
-The latest fully green pre-kind baseline is [CI run 35702605568](https://github.com/Abdul-RehmanCU/FDE_Deploy_Template/actions/runs/35702605568) at `eebc040`. It passed Python 3.14 lint/types, Alembic against PostgreSQL, real PostgreSQL/Redis tests, frontend lint/build, CLI tests, Terraform initialization/validation, Helm lint/render, and kubeconform.
-
-The first real-stack browser run at `a9b7c6d` passed all five setup/admin/operator/viewer/mobile journeys and produced synthetic screenshots and videos. The next current-head run adds container-image and kind rehearsal evidence; use the ledger for its terminal result rather than assuming it passed.
+The latest fully green acceptance run is [CI run 35718898057](https://github.com/Abdul-RehmanCU/FDE_Deploy_Template/actions/runs/35718898057) at `e71419e`. It passed Python 3.14 lint/types, 50 PostgreSQL/Redis tests, migration-aware readiness, disposable backup/restore, generated-client drift, browser journeys, CLI tests, Terraform validation and mocked managed plans, Helm/Alloy/kubeconform checks, the full application kind rehearsal, and the isolated telemetry rehearsal. [Security run 35718898011](https://github.com/Abdul-RehmanCU/FDE_Deploy_Template/actions/runs/35718898011) passed dependency, secret, backend/frontend image, and Terraform policy scans at the same revision.
 
 ## Working application gallery
 
@@ -96,7 +94,21 @@ These screenshots were captured by the real-stack Playwright job in [run 3570637
 
 [Watch the synthetic desktop import walkthrough](docs/media/browser-walkthrough.webm).
 
-Grafana, trace, alert, GKE rollout, backup/restore, and teardown media remain separate acceptance evidence and are not represented by these application screenshots.
+## Kind observability gallery
+
+These screenshots were captured from the real observability stack in the isolated kind job of [run 35718898057](https://github.com/Abdul-RehmanCU/FDE_Deploy_Template/actions/runs/35718898057) at `e71419e` (artifact `10691161653`). The synthetic validation job produced one correlated trace across `fde-api`, `fde-outbox-publisher`, and `fde-worker`; Loki returned API/publisher/worker log counts `1/1/3`; the alert fired for `fde-staging` and then resolved. This is GitHub-hosted kind evidence, not GKE or production evidence.
+
+| Populated Grafana dashboard | Correlated Tempo trace |
+| --- | --- |
+| ![Grafana FDE Operations Overview with request, import, worker, queue, and database panels populated](docs/media/screenshots/kind-grafana-dashboard.png) | ![Tempo trace view showing the synthetic import validation trace waterfall](docs/media/screenshots/kind-tempo-trace.png) |
+
+| Exact-trace Loki logs | Alert firing and resolved |
+| --- | --- |
+| ![Loki exact trace query returning redacted publisher and worker JSON logs](docs/media/screenshots/kind-loki-trace-logs.png) | ![Alertmanager FDE API unavailable alert firing for the isolated kind namespace](docs/media/screenshots/kind-alert-firing.png) |
+
+![Alertmanager with the controlled FDE API alert resolved](docs/media/screenshots/kind-alert-resolved.png)
+
+GKE rollout, live-cloud telemetry, cleanup, and teardown media remain separate acceptance evidence.
 
 ## Repository map
 
