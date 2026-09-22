@@ -25,6 +25,25 @@ def all_generation_delete_command(bucket_uri: str) -> list[str]:
     ]
 
 
+def list_bucket_generations(bucket_uri: str) -> list[dict[str, object]]:
+    result = run(
+        ["gcloud", "storage", "ls", "--all-versions", "--json", f"{bucket_uri}/**"],
+        check=False,
+    )
+    if result.returncode != 0 or not result.stdout.strip():
+        return []
+    rows = json.loads(result.stdout)
+    return [
+        {
+            "name": row.get("name") or row.get("url"),
+            "generation": row.get("generation"),
+            "temporaryHold": row.get("temporaryHold", False),
+            "eventBasedHold": row.get("eventBasedHold", False),
+        }
+        for row in rows
+    ]
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Owner-ADC final teardown immediately after runtime and expiry reconciliation"
@@ -118,6 +137,7 @@ def main() -> int:
     )
 
     authorization = f"{bucket_uri}/authorizations/single-paid-demo.json"
+    all_versions_before = list_bucket_generations(bucket_uri)
     run(
         [
             "gcloud",
@@ -130,6 +150,9 @@ def main() -> int:
         check=False,
     )
     run(all_generation_delete_command(bucket_uri))
+    all_versions_after = list_bucket_generations(bucket_uri)
+    if all_versions_after:
+        raise SystemExit("state object generations remain after all-version deletion")
     run(["gcloud", "storage", "buckets", "delete", bucket_uri])
 
     pools = json.loads(
@@ -186,6 +209,14 @@ def main() -> int:
     evidence = {
         "project": args.project,
         "state_bucket": args.state_bucket,
+        "state_bucket_before": {
+            "location": bucket.get("location"),
+            "labels": labels,
+            "versioning": bucket.get("versioning"),
+            "softDeletePolicy": bucket.get("softDeletePolicy"),
+        },
+        "object_generations_before": all_versions_before,
+        "object_generations_after": all_versions_after,
         "bootstrap_state_before_bucket_retirement": state,
         "state_bucket_removed": run(
             ["gcloud", "storage", "buckets", "describe", bucket_uri, "--format=json"],

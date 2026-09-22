@@ -1,5 +1,6 @@
 import importlib.util
 from pathlib import Path
+from types import SimpleNamespace
 
 MODULE_PATH = Path(__file__).parents[1] / "finalize_bootstrap.py"
 SPEC = importlib.util.spec_from_file_location("finalize_bootstrap", MODULE_PATH)
@@ -16,4 +17,31 @@ def test_state_bucket_deletion_includes_every_object_generation() -> None:
         "--recursive",
         "--all-versions",
         "gs://fde-state/**",
+    ]
+
+
+def test_generation_inventory_excludes_object_contents(monkeypatch) -> None:
+    def fake_run(command: list[str], *, check: bool = True):
+        assert command == [
+            "gcloud",
+            "storage",
+            "ls",
+            "--all-versions",
+            "--json",
+            "gs://fde-state/**",
+        ]
+        assert check is False
+        return SimpleNamespace(
+            returncode=0,
+            stdout='[{"name":"state/default.tfstate","generation":"7","temporaryHold":true,"sensitive":"excluded"}]',
+        )
+
+    monkeypatch.setattr(MODULE, "run", fake_run)
+    assert MODULE.list_bucket_generations("gs://fde-state") == [
+        {
+            "name": "state/default.tfstate",
+            "generation": "7",
+            "temporaryHold": True,
+            "eventBasedHold": False,
+        }
     ]
