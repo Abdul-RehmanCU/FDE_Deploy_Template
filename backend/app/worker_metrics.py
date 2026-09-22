@@ -44,7 +44,10 @@ class DurableJobCollector:
                 for state, value in (
                     ("checked_out", pool.checkedout()),  # type: ignore[attr-defined]
                     ("pool_size", pool.size()),  # type: ignore[attr-defined]
-                    ("overflow", pool.overflow()),  # type: ignore[attr-defined]
+                    # QueuePool represents unused base capacity as a negative
+                    # internal overflow count. Export only connections above
+                    # the configured pool size.
+                    ("overflow", max(0, pool.overflow())),  # type: ignore[attr-defined]
                 ):
                     connections.add_metric([state], value)
                 yield connections

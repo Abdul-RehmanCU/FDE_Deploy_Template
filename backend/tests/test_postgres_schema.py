@@ -55,3 +55,13 @@ def test_worker_metrics_are_collected_from_durable_postgres_state() -> None:
         if family.name == "fde_worker_metrics_collection_success"
     )
     assert health.samples[0].value == 1
+    connections = next(
+        family for family in families if family.name == "fde_database_connections"
+    )
+    assert all(sample.value >= 0 for sample in connections.samples)
+    overflow = next(
+        sample
+        for sample in connections.samples
+        if sample.labels.get("state") == "overflow"
+    )
+    assert overflow.value == 0
