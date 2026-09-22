@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="520" viewBox="0 0 1600 520" role="img" aria-labelledby="title desc">
+  <title id="title">FDE Deploy</title>
+  <desc id="desc">Customer scoped delivery, observability, and recovery on Google Cloud.</desc>
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#071a36"/>
+      <stop offset="1" stop-color="#0b5fc7"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#5eead4"/>
+      <stop offset="1" stop-color="#93c5fd"/>
+    </linearGradient>
+  </defs>
+  <rect width="1600" height="520" rx="36" fill="url(#background)"/>
+  <circle cx="1380" cy="80" r="220" fill="#ffffff" opacity=".04"/>
+  <circle cx="1470" cy="420" r="310" fill="#5eead4" opacity=".05"/>
+  <g transform="translate(110 108)">
+    <rect width="136" height="136" rx="34" fill="#ffffff" opacity=".98"/>
+    <ellipse cx="68" cy="43" rx="36" ry="15" fill="none" stroke="#0868cf" stroke-width="9"/>
+    <path d="M32 43v50c0 8 16 15 36 15s36-7 36-15V43M32 68c0 8 16 15 36 15s36-7 36-15" fill="none" stroke="#0868cf" stroke-width="9" stroke-linecap="round"/>
+    <path d="m79 84 14 14 25-29" fill="none" stroke="#0f9f85" stroke-width="9" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+  <text x="292" y="184" fill="#ffffff" font-family="Inter,Segoe UI,sans-serif" font-size="76" font-weight="700" letter-spacing="-2">FDE Deploy</text>
+  <text x="296" y="244" fill="#bfdbfe" font-family="Inter,Segoe UI,sans-serif" font-size="28">Customer-scoped delivery · observable releases · measured recovery</text>
+  <rect x="296" y="286" width="720" height="4" rx="2" fill="url(#accent)"/>
+  <g font-family="Inter,Segoe UI,sans-serif" font-size="22" font-weight="600">
+    <rect x="296" y="330" width="174" height="58" rx="29" fill="#ffffff" opacity=".12"/>
+    <text x="334" y="367" fill="#ffffff">FastAPI</text>
+    <rect x="490" y="330" width="174" height="58" rx="29" fill="#ffffff" opacity=".12"/>
+    <text x="537" y="367" fill="#ffffff">React</text>
+    <rect x="684" y="330" width="174" height="58" rx="29" fill="#ffffff" opacity=".12"/>
+    <text x="726" y="367" fill="#ffffff">GKE</text>
+    <rect x="878" y="330" width="250" height="58" rx="29" fill="#ffffff" opacity=".12"/>
+    <text x="921" y="367" fill="#ffffff">OpenTelemetry</text>
+  </g>
+  <g transform="translate(1230 185)" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M0 122h120M20 122V62l40-34 40 34v60M44 122V88h32v34" stroke="#ffffff" stroke-width="10" opacity=".9"/>
+    <path d="m109 24 28 28 54-54" stroke="#5eead4" stroke-width="12"/>
+  </g>
+</svg>
