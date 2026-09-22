@@ -29,6 +29,7 @@ public frontend proxy.
   `POST /users/me/password`.
 - Dashboard: `GET /dashboard`.
 - Imports: `POST /imports`, `GET /imports`, `GET /imports/{id}`,
+  `GET /imports/{id}/preview`,
   `PUT /imports/{id}/mapping`, `POST /imports/{id}/validate`,
   `POST /imports/{id}/confirm`, `POST /imports/{id}/retry`,
   `POST /imports/{id}/cancel`, `GET /imports/{id}/rows`, and
@@ -69,6 +70,7 @@ Entrypoints:
 - API: `fastapi run app/main.py --port 8000`
 - Worker: `celery -A app.worker.celery_app worker`
 - Transactional outbox publisher: `python -m app.outbox_publisher`
+- Seven-day local intermediate cleanup: `python -m app.cleanup_storage`
 - Database migration: `alembic upgrade head`
 
 Secrets support either direct variables for local/CI use or CSI-mounted files:
@@ -77,6 +79,14 @@ Secrets support either direct variables for local/CI use or CSI-mounted files:
 `BACKEND_CORS_ORIGINS`, `DB_POOL_SIZE`, `DB_MAX_OVERFLOW`,
 `STORAGE_BACKEND=local|gcs`, `STORAGE_LOCAL_ROOT`, `GCS_BUCKET`,
 `APP_ENVIRONMENT`, and `APP_VERSION`.
+
+The outbox publisher holds a claimed row lock only during one broker publication
+attempt. Redis connect timeout is 5 seconds, the configurable socket timeout is
+`OUTBOX_PUBLISH_TIMEOUT_SECONDS` (default 10), Celery publish retries are off,
+and the publisher retries from PostgreSQL on its next pass. It also reconciles
+stale running and queued jobs every `JOB_RECONCILE_INTERVAL_SECONDS` (default
+30). The worker serves internal Prometheus metrics at `/metrics` on
+`WORKER_METRICS_PORT` (default 9100).
 
 PostgreSQL is the durable authority for job state. Redis only transports Celery
 messages. Upload and report object names are server-generated; all downloads

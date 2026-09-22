@@ -14,6 +14,7 @@ from app.models import (
     ImportAction,
     ImportBatch,
     ImportPage,
+    ImportPreview,
     ImportPublic,
     ImportStatus,
     Job,
@@ -27,7 +28,12 @@ from app.models import (
     utc_now,
 )
 from app.services.audit import record_audit
-from app.services.csv_import import CsvValidationError, inspect_csv, validate_mapping
+from app.services.csv_import import (
+    CsvValidationError,
+    inspect_csv,
+    preview_csv,
+    validate_mapping,
+)
 from app.services.jobs import enqueue_job
 from app.services.storage import get_storage
 
@@ -67,7 +73,8 @@ async def upload_import(
         api_error(400, exc.code, exc.message)
     batch_id = uuid.uuid4()
     object_key = f"uploads/{batch_id}/source.csv"
-    get_storage().put(object_key, content, "text/csv")
+    storage = get_storage()
+    storage.put(object_key, content, "text/csv")
     batch = ImportBatch(
         id=batch_id,
         original_filename=filename[:255],
@@ -85,7 +92,12 @@ async def upload_import(
         resource_id=batch.id,
         metadata={"total_rows": inspection.total_rows},
     )
-    session.commit()
+    try:
+        session.commit()
+    except Exception:
+        session.rollback()
+        storage.delete(object_key)
+        raise
     session.refresh(batch)
     return batch
 
@@ -118,6 +130,19 @@ def list_imports(
 def get_import(import_id: uuid.UUID, session: SessionDep, current_user: ReadyUser) -> ImportBatch:
     del current_user
     return get_import_or_404(session, import_id)
+
+
+@router.get("/{import_id}/preview", response_model=ImportPreview)
+def preview_import(
+    import_id: uuid.UUID, session: SessionDep, current_user: ReadyUser
+) -> ImportPreview:
+    del current_user
+    batch = get_import_or_404(session, import_id)
+    try:
+        header, rows, truncated = preview_csv(get_storage().get(batch.upload_object_key))
+    except FileNotFoundError:
+        api_error(404, "upload_not_found", "The uploaded CSV is no longer available")
+    return ImportPreview(header=header, rows=rows, truncated=truncated)
 
 
 @router.put("/{import_id}/mapping", response_model=ImportPublic)

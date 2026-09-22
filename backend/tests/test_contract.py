@@ -7,6 +7,7 @@ def test_openapi_exposes_managed_identity_and_import_contract() -> None:
     assert "/api/v1/users/signup" not in paths
     assert "/api/v1/password-recovery/{email}" not in paths
     assert "/api/v1/imports" in paths
+    assert "/api/v1/imports/{import_id}/preview" in paths
     assert "/api/v1/imports/{import_id}/confirm" in paths
     assert "/api/v1/imports/{import_id}/reports/{report_name}" in paths
     assert "/internal/metrics" not in paths

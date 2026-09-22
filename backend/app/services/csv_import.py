@@ -1,7 +1,7 @@
 import csv
 import io
 import re
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 
 from email_validator import EmailNotValidError, validate_email
@@ -27,6 +27,7 @@ MAX_FIELD_LENGTHS = {
 }
 COUNTRY_CODE = re.compile(r"^[A-Z]{2}$")
 FORMULA_PREFIXES = ("=", "+", "-", "@", "\t", "\r")
+csv.field_size_limit(10 * 1024 * 1024)
 
 
 class CsvValidationError(ValueError):
@@ -91,6 +92,19 @@ def inspect_csv(content: bytes, max_rows: int) -> CsvInspection:
     return CsvInspection(header=cleaned, total_rows=count)
 
 
+def preview_csv(content: bytes, limit: int = 20) -> tuple[list[str], list[list[str]], bool]:
+    reader = _reader(content)
+    header = next(reader, None)
+    if not header:
+        raise CsvValidationError("missing_header", "The CSV must contain a header row")
+    rows: list[list[str]] = []
+    for row in reader:
+        rows.append(row)
+        if len(rows) > limit:
+            break
+    return [value.strip() for value in header], rows[:limit], len(rows) > limit
+
+
 def validate_mapping(mapping: dict[str, str], header: list[str]) -> dict[str, int]:
     unknown = sorted(set(mapping) - set(CANONICAL_FIELDS))
     missing = sorted(REQUIRED_FIELDS - set(mapping))
@@ -114,6 +128,7 @@ def validate_rows(
     header: list[str],
     mapping: dict[str, str],
     existing_emails: set[str],
+    progress: Callable[[int], None] | None = None,
 ) -> list[ValidatedRow]:
     indexes = validate_mapping(mapping, header)
     reader = _reader(content)
@@ -121,6 +136,8 @@ def validate_rows(
     seen: set[str] = set()
     results: list[ValidatedRow] = []
     for row_number, row in enumerate(reader, start=2):
+        if progress and (row_number - 1) % 500 == 0:
+            progress(row_number - 1)
         if len(row) != len(header):
             results.append(
                 ValidatedRow(

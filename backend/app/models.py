@@ -359,6 +359,12 @@ class ImportAction(SQLModel):
     job_id: uuid.UUID | None = None
 
 
+class ImportPreview(SQLModel):
+    header: list[str]
+    rows: list[list[str]]
+    truncated: bool
+
+
 class ImportPage(SQLModel):
     data: list[ImportPublic]
     next_cursor: str | None = None

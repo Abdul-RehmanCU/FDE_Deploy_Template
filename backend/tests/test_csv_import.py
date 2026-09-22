@@ -3,6 +3,7 @@ from app.services.csv_import import (
     CsvValidationError,
     build_report,
     inspect_csv,
+    preview_csv,
     validate_mapping,
     validate_rows,
 )
@@ -101,3 +102,30 @@ def test_mapping_requires_unique_known_columns() -> None:
             assert exc.code == code
         else:
             raise AssertionError(f"Expected {code}")
+
+
+def test_oversized_field_returns_actionable_field_error() -> None:
+    oversized = "x" * 256
+    content = (
+        "Email,First,Last,Company,Country,External\n"
+        f"long@example.com,First,Last,{oversized},CA,E-1\n"
+    ).encode()
+    inspection = inspect_csv(content, 10)
+    rows = validate_rows(
+        content,
+        header=inspection.header,
+        mapping=MAPPING,
+        existing_emails=set(),
+    )
+    assert rows[0].outcome == RowOutcome.INVALID
+    assert rows[0].errors == [
+        {"code": "too_long", "field": "company", "message": "Maximum length is 255"}
+    ]
+
+
+def test_preview_is_bounded() -> None:
+    content = b"A,B\n1,2\n3,4\n5,6\n"
+    header, rows, truncated = preview_csv(content, limit=2)
+    assert header == ["A", "B"]
+    assert rows == [["1", "2"], ["3", "4"]]
+    assert truncated is True

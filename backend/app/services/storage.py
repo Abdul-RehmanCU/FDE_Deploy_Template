@@ -1,6 +1,8 @@
+from datetime import datetime
 from pathlib import Path, PurePosixPath
 from typing import Protocol
 
+from google.api_core.exceptions import NotFound
 from google.cloud import storage as gcs  # type: ignore[import-untyped]
 
 from app.core.config import settings
@@ -10,6 +12,7 @@ class ObjectStorage(Protocol):
     def put(self, key: str, content: bytes, content_type: str) -> None: ...
     def get(self, key: str) -> bytes: ...
     def delete(self, key: str) -> None: ...
+    def list_older_than(self, prefix: str, cutoff: datetime) -> list[str]: ...
 
 
 def _safe_key(key: str) -> PurePosixPath:
@@ -44,6 +47,16 @@ class LocalObjectStorage:
     def delete(self, key: str) -> None:
         self._path(key).unlink(missing_ok=True)
 
+    def list_older_than(self, prefix: str, cutoff: datetime) -> list[str]:
+        root = self._path(prefix)
+        if not root.exists():
+            return []
+        return [
+            path.relative_to(self.root).as_posix()
+            for path in root.rglob("*")
+            if path.is_file() and datetime.fromtimestamp(path.stat().st_mtime, cutoff.tzinfo) < cutoff
+        ]
+
 
 class GCSObjectStorage:
     def __init__(self, bucket_name: str) -> None:
@@ -55,10 +68,23 @@ class GCSObjectStorage:
         )
 
     def get(self, key: str) -> bytes:
-        return self.bucket.blob(str(_safe_key(key))).download_as_bytes()
+        try:
+            return self.bucket.blob(str(_safe_key(key))).download_as_bytes()
+        except NotFound:
+            raise FileNotFoundError(key) from None
 
     def delete(self, key: str) -> None:
-        self.bucket.blob(str(_safe_key(key))).delete(if_generation_match=None)
+        try:
+            self.bucket.blob(str(_safe_key(key))).delete(if_generation_match=None)
+        except NotFound:
+            return
+
+    def list_older_than(self, prefix: str, cutoff: datetime) -> list[str]:
+        return [
+            blob.name
+            for blob in self.bucket.list_blobs(prefix=str(_safe_key(prefix)))
+            if blob.updated is not None and blob.updated < cutoff
+        ]
 
 
 def get_storage() -> ObjectStorage:
