@@ -27,6 +27,19 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
+  name: {{ include "fde.fullname" . }}-worker-metrics
+  labels:
+    {{- include "fde.labels" . | nindent 4 }}
+    app.kubernetes.io/component: worker-metrics
+spec:
+  type: ClusterIP
+  selector: { app.kubernetes.io/instance: {{ .Release.Name }}, app.kubernetes.io/component: worker }
+  ports:
+    - { name: metrics, port: 9100, targetPort: metrics }
+---
+apiVersion: v1
+kind: Service
+metadata:
   name: {{ include "fde.fullname" . }}-frontend
   labels:
     {{- include "fde.labels" . | nindent 4 }}

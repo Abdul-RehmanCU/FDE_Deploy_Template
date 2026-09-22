@@ -23,6 +23,8 @@ spec:
           image: {{ include "fde.backendImage" . }}
           imagePullPolicy: {{ .Values.images.backend.pullPolicy }}
           command: ["celery", "-A", "app.worker.celery_app", "worker", "--loglevel=INFO", "--concurrency=2"]
+          ports:
+            - { name: metrics, containerPort: 9100, protocol: TCP }
           env:
             {{- include "fde.backendEnv" . | nindent 12 }}
             - { name: OTEL_SERVICE_NAME, value: fde-worker }

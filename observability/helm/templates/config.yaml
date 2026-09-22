@@ -23,6 +23,14 @@ data:
           - { source_labels: [__meta_kubernetes_service_label_fde_dev_customer], target_label: customer }
           - { source_labels: [__meta_kubernetes_service_label_fde_dev_environment], target_label: environment }
         metrics_path: /internal/metrics
+      - job_name: fde-worker
+        kubernetes_sd_configs: [{ role: endpoints }]
+        relabel_configs:
+          - { source_labels: [__meta_kubernetes_service_label_app_kubernetes_io_component], regex: worker-metrics, action: keep }
+          - { source_labels: [__meta_kubernetes_namespace], target_label: namespace }
+          - { source_labels: [__meta_kubernetes_service_label_fde_dev_customer], target_label: customer }
+          - { source_labels: [__meta_kubernetes_service_label_fde_dev_environment], target_label: environment }
+        metrics_path: /metrics
       - job_name: otel-collector
         static_configs: [{ targets: ["fde-otel-collector:8889"] }]
   alerts.yml: |
@@ -30,7 +38,7 @@ data:
       - name: fde.application
         rules:
           - alert: FDEApiUnavailable
-            expr: sum(up{job="fde-api"}) by (namespace) < 1
+            expr: absent(up{job="fde-api"}) or sum(up{job="fde-api"}) by (namespace) < 1
             for: 2m
             labels: { severity: critical }
             annotations: { summary: "FDE API has no ready scrape target" }
@@ -40,16 +48,16 @@ data:
             labels: { severity: warning }
             annotations: { summary: "FDE API error ratio is above 5%" }
           - alert: FDEOldestQueuedJob
-            expr: fde_oldest_queued_job_age_seconds > 300
+            expr: fde_oldest_queued_job_seconds > 300
             for: 5m
             labels: { severity: warning }
             annotations: { summary: "Oldest FDE job has waited more than five minutes" }
           - alert: FDEFailedJobsIncreasing
-            expr: increase(fde_jobs_total{status="failed"}[10m]) > 0
+            expr: fde_jobs{status="failed"} > 0
             labels: { severity: warning }
             annotations: { summary: "FDE jobs have failed in the last ten minutes" }
           - alert: FDEWorkerHeartbeatMissing
-            expr: time() - fde_worker_last_heartbeat_timestamp_seconds > 120
+            expr: absent(fde_worker_up) or fde_worker_up == 0 or fde_worker_metrics_collection_success == 0
             for: 2m
             labels: { severity: critical }
             annotations: { summary: "FDE worker heartbeat is stale" }

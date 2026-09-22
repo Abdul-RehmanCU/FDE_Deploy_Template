@@ -71,15 +71,39 @@
           "demoDependencies": { "properties": { "enabled": { "const": false } } }
         }
       }
+    },
+    {
+      "if": { "properties": { "secretProvider": { "properties": { "enabled": { "const": false } } } } },
+      "then": {
+        "properties": {
+          "images": {
+            "properties": {
+              "backend": { "required": ["repository", "tag"] },
+              "frontend": { "required": ["repository", "tag"] }
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "images": {
+            "properties": {
+              "backend": { "required": ["repository", "digest"] },
+              "frontend": { "required": ["repository", "digest"] }
+            }
+          }
+        }
+      }
     }
   ],
   "definitions": {
     "image": {
       "type": "object",
-      "required": ["repository", "digest"],
+      "required": ["repository"],
       "properties": {
         "repository": { "type": "string", "minLength": 3 },
         "digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+        "tag": { "type": "string", "pattern": "^[A-Za-z0-9_][A-Za-z0-9_.-]{0,127}$" },
         "pullPolicy": { "type": "string", "enum": ["IfNotPresent", "Always", "Never"] }
       }
     },

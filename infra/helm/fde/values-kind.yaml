@@ -4,11 +4,11 @@ appVersion: ci
 images:
   backend:
     repository: localhost/fde-backend
-    digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    tag: ci
     pullPolicy: Never
   frontend:
     repository: localhost/fde-frontend
-    digest: sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+    tag: ci
     pullPolicy: Never
 serviceAccount:
   gcpServiceAccount: ci@fdetemplate.iam.gserviceaccount.com

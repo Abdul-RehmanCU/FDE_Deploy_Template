@@ -20,6 +20,8 @@ spec:
         - name: frontend
           image: {{ include "fde.frontendImage" . }}
           imagePullPolicy: {{ .Values.images.frontend.pullPolicy }}
+          env:
+            - { name: BACKEND_UPSTREAM, value: {{ printf "http://%s-api:8000" (include "fde.fullname" .) | quote }} }
           ports: [{ name: http, containerPort: {{ .Values.frontend.port }} }]
           readinessProbe: { httpGet: { path: /, port: http }, periodSeconds: 5 }
           livenessProbe: { httpGet: { path: /, port: http }, periodSeconds: 10 }

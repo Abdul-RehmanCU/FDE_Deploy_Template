@@ -8,8 +8,12 @@ app.kubernetes.io/managed-by: {{ .Release.Service }}
 fde.dev/customer: {{ .Values.customer | quote }}
 fde.dev/environment: {{ .Values.environment | quote }}
 {{- end -}}
-{{- define "fde.backendImage" -}}{{ printf "%s@%s" .Values.images.backend.repository .Values.images.backend.digest }}{{- end -}}
-{{- define "fde.frontendImage" -}}{{ printf "%s@%s" .Values.images.frontend.repository .Values.images.frontend.digest }}{{- end -}}
+{{- define "fde.backendImage" -}}
+{{- if .Values.secretProvider.enabled -}}{{ printf "%s@%s" .Values.images.backend.repository .Values.images.backend.digest }}{{- else -}}{{ printf "%s:%s" .Values.images.backend.repository .Values.images.backend.tag }}{{- end -}}
+{{- end -}}
+{{- define "fde.frontendImage" -}}
+{{- if .Values.secretProvider.enabled -}}{{ printf "%s@%s" .Values.images.frontend.repository .Values.images.frontend.digest }}{{- else -}}{{ printf "%s:%s" .Values.images.frontend.repository .Values.images.frontend.tag }}{{- end -}}
+{{- end -}}
 {{- define "fde.secretVolume" -}}
 - name: runtime-secrets
   {{- if .Values.secretProvider.enabled }}
