@@ -372,6 +372,7 @@ jobs:
           set -euo pipefail
           kubectl -n fde-staging run fde-rolling-probe \
             --image=curlimages/curl:8.16.0 \
+            --labels=fde.dev/probe=true \
             --restart=Never \
             --command -- sh -ec '
               while test ! -f /tmp/stop; do

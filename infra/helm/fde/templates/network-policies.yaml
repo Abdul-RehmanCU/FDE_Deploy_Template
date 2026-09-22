@@ -45,8 +45,9 @@ spec:
   podSelector: { matchLabels: { app.kubernetes.io/component: api } }
   policyTypes: [Ingress]
   ingress:
-    - from:
+      - from:
         - podSelector: { matchLabels: { app.kubernetes.io/component: frontend } }
+        - podSelector: { matchLabels: { fde.dev/probe: "true" } }
         - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: observability } }
       ports: [{ protocol: TCP, port: 8000 }]
 ---
