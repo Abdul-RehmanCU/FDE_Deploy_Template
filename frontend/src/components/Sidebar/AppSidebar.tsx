@@ -29,9 +29,8 @@ const baseItems: Item[] = [
 export function AppSidebar() {
   const { user: currentUser } = useAuth()
 
-  const role = (currentUser as { role?: string; is_superuser?: boolean } | null)
-    ?.role
-  const isAdmin = role === "admin" || currentUser?.is_superuser
+  const role = currentUser?.role
+  const isAdmin = role === "admin"
   const items = isAdmin
     ? [
         ...baseItems,

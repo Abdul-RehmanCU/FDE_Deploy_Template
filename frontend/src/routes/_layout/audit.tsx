@@ -14,8 +14,7 @@ export const Route = createFileRoute("/_layout/audit")({
   component: AuditPage,
   beforeLoad: async () => {
     const { data } = await UsersService.readUserMe()
-    const user = data as typeof data & { role?: string }
-    if (user.role !== "admin" && !user.is_superuser) {
+    if (data.role !== "admin") {
       throw redirect({ to: "/" })
     }
   },
