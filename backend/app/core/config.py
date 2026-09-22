@@ -5,6 +5,8 @@ from typing import Literal, Self
 from pydantic import HttpUrl, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+from app.core.database_urls import sqlalchemy_psycopg_url
+
 
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(
@@ -131,11 +133,7 @@ class Settings(BaseSettings):
     @property
     def sqlalchemy_database_url(self) -> str:
         assert self.DATABASE_URL
-        value = self.DATABASE_URL
-        for scheme in ("postgres://", "postgresql://"):
-            if value.startswith(scheme):
-                return value.replace(scheme, "postgresql+psycopg://", 1)
-        return value
+        return sqlalchemy_psycopg_url(self.DATABASE_URL)
 
     @property
     def database_connect_args(self) -> dict[str, str]:

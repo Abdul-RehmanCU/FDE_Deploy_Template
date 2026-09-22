@@ -11,13 +11,6 @@ for command in pg_dump pg_restore psql createdb dropdb; do
   }
 done
 
-source_major="$(psql "$DATABASE_URL" -Atqc "show server_version_num" | cut -c1-2)"
-client_major="$(pg_dump --version | sed -E 's/.* ([0-9]+).*/\1/')"
-if [[ "$source_major" != "$client_major" ]]; then
-  echo "pg_dump major $client_major must match PostgreSQL server major $source_major" >&2
-  exit 1
-fi
-
 run_component="${GITHUB_RUN_ID:-local}"
 run_component="${run_component//[^0-9]/}"
 target_db="fde_restore_${run_component:-0}_$RANDOM"
@@ -29,17 +22,25 @@ fi
 readarray -t urls < <(
   uv run --package app python - "$DATABASE_URL" "$target_db" <<'PY'
 import sys
-from sqlalchemy.engine import make_url
+from app.core.database_urls import libpq_url
 
-source = make_url(sys.argv[1])
-print(source.set(database="postgres").render_as_string(hide_password=False))
-print(source.set(database=sys.argv[2]).render_as_string(hide_password=False))
+print(libpq_url(sys.argv[1]))
+print(libpq_url(sys.argv[1], database="postgres"))
+print(libpq_url(sys.argv[1], database=sys.argv[2]))
 PY
 )
-admin_url="${urls[0]}"
-target_url="${urls[1]}"
+source_url="${urls[0]}"
+admin_url="${urls[1]}"
+target_url="${urls[2]}"
 
-source_db="$(psql "$DATABASE_URL" -Atqc "select current_database()")"
+source_major="$(psql "$source_url" -Atqc "show server_version_num" | cut -c1-2)"
+client_major="$(pg_dump --version | sed -E 's/.* ([0-9]+).*/\1/')"
+if [[ "$source_major" != "$client_major" ]]; then
+  echo "pg_dump major $client_major must match PostgreSQL server major $source_major" >&2
+  exit 1
+fi
+
+source_db="$(psql "$source_url" -Atqc "select current_database()")"
 if [[ "$source_db" == "$target_db" ]]; then
   echo "Disposable database must differ from source" >&2
   exit 1
@@ -59,20 +60,20 @@ cleanup() {
 trap cleanup EXIT
 
 # Ensure the restored database contains a deterministic non-PII evidence row.
-psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL' >/dev/null
+psql "$source_url" -v ON_ERROR_STOP=1 <<'SQL' >/dev/null
 INSERT INTO "user" (id, email, hashed_password, role, is_superuser, is_active, must_change_password, token_version)
 VALUES ('00000000-0000-4000-8000-000000000099', 'backup-evidence@example.com', 'not-a-login-hash', 'viewer', false, false, true, 0)
 ON CONFLICT (email) DO NOTHING;
 SQL
 
-pg_dump --format=custom --no-owner --no-acl --file="$backup_file" "$DATABASE_URL"
+pg_dump --format=custom --no-owner --no-acl --file="$backup_file" "$source_url"
 createdb --maintenance-db="$admin_url" "$target_db"
 pg_restore --exit-on-error --no-owner --no-acl --dbname="$target_url" "$backup_file"
 
 tables=(user item import_batch validation_row contact job job_attempt job_outbox audit_event alembic_version)
 for table in "${tables[@]}"; do
   quoted_table="\"$table\""
-  source_count="$(psql "$DATABASE_URL" -Atqc "select count(*) from $quoted_table")"
+  source_count="$(psql "$source_url" -Atqc "select count(*) from $quoted_table")"
   restored_count="$(psql "$target_url" -Atqc "select count(*) from $quoted_table")"
   if [[ "$source_count" != "$restored_count" ]]; then
     echo "Count mismatch for $table: source=$source_count restored=$restored_count" >&2

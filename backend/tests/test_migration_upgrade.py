@@ -9,12 +9,12 @@ import pytest
 from fastapi.testclient import TestClient
 from psycopg import sql
 from sqlalchemy import create_engine, text
-from sqlalchemy.engine import make_url
 from sqlmodel import Session
 
 from app.api.deps import get_db
 from app.api.routes import operations
 from app.core.config import settings
+from app.core.database_urls import libpq_url, sqlalchemy_psycopg_url
 from app.core.db import database_schema_is_compatible
 from app.main import app
 
@@ -28,11 +28,7 @@ BACKEND_DIR = Path(__file__).parents[1]
 
 def database_url(name: str) -> str:
     assert settings.DATABASE_URL
-    return (
-        make_url(settings.DATABASE_URL)
-        .set(database=name)
-        .render_as_string(hide_password=False)
-    )
+    return libpq_url(settings.DATABASE_URL, database=name)
 
 
 def run_migration(target_url: str, revision: str) -> None:
@@ -108,8 +104,7 @@ def test_readiness_requires_application_schema_but_allows_additive_revision(
     target_url = database_url(target_name)
     with psycopg.connect(admin_url, autocommit=True) as admin:
         admin.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(target_name)))
-    target_sqlalchemy_url = make_url(target_url).set(drivername="postgresql+psycopg")
-    target_engine = create_engine(target_sqlalchemy_url)
+    target_engine = create_engine(sqlalchemy_psycopg_url(target_url))
 
     class HealthyRedis:
         def ping(self) -> bool:
