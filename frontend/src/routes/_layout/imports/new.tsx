@@ -45,7 +45,9 @@ function NewImportPage() {
     }
     if (!selected.name.toLowerCase().endsWith(".csv")) {
       setFile(null)
-      setLocalError("Choose a CSV file. Spreadsheet and archive formats are not accepted.")
+      setLocalError(
+        "Choose a CSV file. Spreadsheet and archive formats are not accepted.",
+      )
       return
     }
     if (selected.size > MAX_FILE_BYTES) {
@@ -67,7 +69,8 @@ function NewImportPage() {
         <div className="surface-card flex items-start gap-3 border-amber-200 bg-amber-50 p-5 text-amber-900">
           <ShieldCheck className="mt-0.5 size-5 shrink-0" aria-hidden="true" />
           <p className="text-sm leading-6">
-            Ask an administrator to assign the operator role if you need to upload and confirm imports.
+            Ask an administrator to assign the operator role if you need to
+            upload and confirm imports.
           </p>
         </div>
       </div>
@@ -84,19 +87,26 @@ function NewImportPage() {
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_320px]">
         <section className="surface-card p-6" aria-labelledby="upload-heading">
-          <h2 id="upload-heading" className="text-lg font-semibold">Choose a CSV</h2>
+          <h2 id="upload-heading" className="text-lg font-semibold">
+            Choose a CSV
+          </h2>
           <label
             htmlFor={inputId}
             className="mt-5 flex min-h-64 cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-primary/30 bg-primary/[0.025] px-6 text-center transition hover:border-primary/60 hover:bg-primary/[0.045] focus-within:ring-2 focus-within:ring-ring"
           >
             <span className="grid size-14 place-items-center rounded-2xl bg-primary/10 text-primary">
-              {file ? <FileCheck2 className="size-7" /> : <FileUp className="size-7" />}
+              {file ? (
+                <FileCheck2 className="size-7" />
+              ) : (
+                <FileUp className="size-7" />
+              )}
             </span>
             <span className="mt-4 font-semibold">
               {file ? file.name : "Select a file to upload"}
             </span>
             <span className="mt-1 text-sm text-muted-foreground">
-              UTF-8 CSV with optional BOM · maximum 10 MiB · up to 10,000 data rows
+              UTF-8 CSV with optional BOM · maximum 10 MiB · up to 10,000 data
+              rows
             </span>
             {file && (
               <span className="mt-3 rounded-full bg-muted px-3 py-1 text-xs text-muted-foreground">
@@ -113,7 +123,10 @@ function NewImportPage() {
           </label>
 
           {(localError || upload.isError) && (
-            <div role="alert" className="mt-4 flex gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+            <div
+              role="alert"
+              className="mt-4 flex gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800"
+            >
               <AlertCircle className="mt-0.5 size-4 shrink-0" />
               <span>{localError || extractErrorMessage(upload.error)}</span>
             </div>
@@ -134,15 +147,22 @@ function NewImportPage() {
           <div className="surface-card p-5">
             <h2 className="font-semibold">Required columns</h2>
             <ul className="mt-3 space-y-2 text-sm text-muted-foreground">
-              <li><code className="text-foreground">email</code></li>
-              <li><code className="text-foreground">first_name</code></li>
-              <li><code className="text-foreground">last_name</code></li>
+              <li>
+                <code className="text-foreground">email</code>
+              </li>
+              <li>
+                <code className="text-foreground">first_name</code>
+              </li>
+              <li>
+                <code className="text-foreground">last_name</code>
+              </li>
             </ul>
           </div>
           <div className="surface-card p-5">
             <h2 className="font-semibold">Optional columns</h2>
             <p className="mt-2 text-sm leading-6 text-muted-foreground">
-              Company, two-letter country code, and an external ID can be mapped during the next step.
+              Company, two-letter country code, and an external ID can be mapped
+              during the next step.
             </p>
           </div>
         </aside>

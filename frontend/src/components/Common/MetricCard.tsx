@@ -29,7 +29,9 @@ export function MetricCard({
           <p className="text-sm font-medium text-muted-foreground">{label}</p>
           <p className="mt-2 text-3xl font-semibold tracking-tight">{value}</p>
         </div>
-        <span className={`grid size-10 place-items-center rounded-xl ${tones[tone]}`}>
+        <span
+          className={`grid size-10 place-items-center rounded-xl ${tones[tone]}`}
+        >
           <Icon className="size-5" aria-hidden="true" />
         </span>
       </div>

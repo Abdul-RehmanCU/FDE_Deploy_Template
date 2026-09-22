@@ -39,7 +39,7 @@ function Layout() {
       <SidebarInset>
         <header className="sticky top-0 z-20 flex h-16 shrink-0 items-center justify-between gap-3 border-b bg-background/95 px-4 backdrop-blur md:px-8">
           <div className="flex min-w-0 items-center gap-3">
-          <SidebarTrigger className="-ml-1 text-muted-foreground" />
+            <SidebarTrigger className="-ml-1 text-muted-foreground" />
             <div className="h-5 w-px bg-border" aria-hidden="true" />
             <p className="truncate text-sm font-medium capitalize">{section}</p>
           </div>

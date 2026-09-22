@@ -48,7 +48,8 @@ function JobDetailPage() {
               attempts.refetch()
             }}
           >
-            <RefreshCw className="size-4" />Retry
+            <RefreshCw className="size-4" />
+            Retry
           </Button>
         }
       />
@@ -65,27 +66,88 @@ function JobDetailPage() {
       />
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <div className="surface-card p-4"><p className="text-xs uppercase tracking-wide text-muted-foreground">Created</p><p className="mt-2 text-sm font-medium">{formatTime(job.data.created_at)}</p></div>
-        <div className="surface-card p-4"><p className="text-xs uppercase tracking-wide text-muted-foreground">Started</p><p className="mt-2 text-sm font-medium">{formatTime(job.data.started_at)}</p></div>
-        <div className="surface-card p-4"><p className="text-xs uppercase tracking-wide text-muted-foreground">Finished</p><p className="mt-2 text-sm font-medium">{formatTime(job.data.finished_at)}</p></div>
-        <div className="surface-card p-4"><p className="text-xs uppercase tracking-wide text-muted-foreground">Attempts</p><p className="mt-2 text-2xl font-semibold">{job.data.attempt_count}</p></div>
+        <div className="surface-card p-4">
+          <p className="text-xs uppercase tracking-wide text-muted-foreground">
+            Created
+          </p>
+          <p className="mt-2 text-sm font-medium">
+            {formatTime(job.data.created_at)}
+          </p>
+        </div>
+        <div className="surface-card p-4">
+          <p className="text-xs uppercase tracking-wide text-muted-foreground">
+            Started
+          </p>
+          <p className="mt-2 text-sm font-medium">
+            {formatTime(job.data.started_at)}
+          </p>
+        </div>
+        <div className="surface-card p-4">
+          <p className="text-xs uppercase tracking-wide text-muted-foreground">
+            Finished
+          </p>
+          <p className="mt-2 text-sm font-medium">
+            {formatTime(job.data.finished_at)}
+          </p>
+        </div>
+        <div className="surface-card p-4">
+          <p className="text-xs uppercase tracking-wide text-muted-foreground">
+            Attempts
+          </p>
+          <p className="mt-2 text-2xl font-semibold">
+            {job.data.attempt_count}
+          </p>
+        </div>
       </div>
 
       {job.data.error_message && (
         <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
-          <strong>{job.data.error_code || "Job failed"}:</strong> {job.data.error_message}
+          <strong>{job.data.error_code || "Job failed"}:</strong>{" "}
+          {job.data.error_message}
         </div>
       )}
 
-      <section className="surface-card overflow-hidden" aria-labelledby="attempts-heading">
-        <div className="border-b p-5"><h2 id="attempts-heading" className="font-semibold">Attempt history</h2><p className="text-sm text-muted-foreground">Bounded retries are recorded separately.</p></div>
+      <section
+        className="surface-card overflow-hidden"
+        aria-labelledby="attempts-heading"
+      >
+        <div className="border-b p-5">
+          <h2 id="attempts-heading" className="font-semibold">
+            Attempt history
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            Bounded retries are recorded separately.
+          </p>
+        </div>
         {attempts.data.data.length === 0 ? (
-          <div className="p-5"><EmptyState icon={Clock3} title="No attempt has started" description="The job is waiting to be claimed by a worker." /></div>
+          <div className="p-5">
+            <EmptyState
+              icon={Clock3}
+              title="No attempt has started"
+              description="The job is waiting to be claimed by a worker."
+            />
+          </div>
         ) : (
           <ol className="divide-y">
             {attempts.data.data.map((attempt) => (
-              <li key={attempt.attempt_number} className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between">
-                <div><p className="font-medium">Attempt {attempt.attempt_number}</p><p className="mt-1 text-sm text-muted-foreground">{formatTime(attempt.started_at)} → {formatTime(attempt.finished_at)}</p>{attempt.error_message && <p className="mt-2 text-sm text-red-700">{attempt.error_message}</p>}</div>
+              <li
+                key={attempt.attempt_number}
+                className="flex flex-col gap-3 p-5 sm:flex-row sm:items-center sm:justify-between"
+              >
+                <div>
+                  <p className="font-medium">
+                    Attempt {attempt.attempt_number}
+                  </p>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    {formatTime(attempt.started_at)} →{" "}
+                    {formatTime(attempt.finished_at)}
+                  </p>
+                  {attempt.error_message && (
+                    <p className="mt-2 text-sm text-red-700">
+                      {attempt.error_message}
+                    </p>
+                  )}
+                </div>
                 <StatusBadge status={attempt.status} />
               </li>
             ))}
@@ -95,7 +157,8 @@ function JobDetailPage() {
 
       <Button variant="outline" asChild>
         <Link to="/imports/$importId" params={{ importId: job.data.import_id }}>
-          <ArrowLeft className="size-4" />Back to import
+          <ArrowLeft className="size-4" />
+          Back to import
         </Link>
       </Button>
     </div>

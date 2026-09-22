@@ -27,8 +27,12 @@ export function Logo({
             <DatabaseZap className="size-5" aria-hidden="true" />
           </span>
           <span className="leading-tight">
-            <span className="block text-sm font-semibold tracking-tight">FDE Deploy</span>
-            <span className="block text-[11px] text-muted-foreground">Customer operations</span>
+            <span className="block text-sm font-semibold tracking-tight">
+              FDE Deploy
+            </span>
+            <span className="block text-[11px] text-muted-foreground">
+              Customer operations
+            </span>
           </span>
         </span>
         <span
@@ -46,7 +50,9 @@ export function Logo({
           <DatabaseZap className="size-5" aria-hidden="true" />
         </span>
         {variant === "full" && (
-          <span className="text-lg font-semibold tracking-tight">FDE Deploy</span>
+          <span className="text-lg font-semibold tracking-tight">
+            FDE Deploy
+          </span>
         )}
       </span>
     )

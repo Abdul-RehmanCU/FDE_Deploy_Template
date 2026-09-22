@@ -74,7 +74,10 @@ function ImportsPage() {
           }
         />
       ) : (
-        <section className="surface-card overflow-hidden" aria-label="Import history">
+        <section
+          className="surface-card overflow-hidden"
+          aria-label="Import history"
+        >
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-muted/45 text-left text-xs uppercase tracking-wide text-muted-foreground">
@@ -99,11 +102,19 @@ function ImportsPage() {
                         {item.original_filename}
                       </Link>
                     </td>
-                    <td className="px-5 py-4"><StatusBadge status={item.status} /></td>
-                    <td className="px-5 py-4 text-right tabular-nums">{item.total_rows}</td>
-                    <td className="px-5 py-4 text-right tabular-nums">{item.accepted_count}</td>
+                    <td className="px-5 py-4">
+                      <StatusBadge status={item.status} />
+                    </td>
                     <td className="px-5 py-4 text-right tabular-nums">
-                      {item.rejected_count + item.duplicate_count + item.existing_contact_count}
+                      {item.total_rows}
+                    </td>
+                    <td className="px-5 py-4 text-right tabular-nums">
+                      {item.accepted_count}
+                    </td>
+                    <td className="px-5 py-4 text-right tabular-nums">
+                      {item.rejected_count +
+                        item.duplicate_count +
+                        item.existing_contact_count}
                     </td>
                     <td className="whitespace-nowrap px-5 py-4 text-muted-foreground">
                       {new Intl.DateTimeFormat(undefined, {

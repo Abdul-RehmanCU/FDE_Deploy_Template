@@ -33,13 +33,22 @@ function JobsLookupPage() {
             }
           }}
         >
-          <label htmlFor="job-id" className="sr-only">Job ID</label>
+          <label htmlFor="job-id" className="sr-only">
+            Job ID
+          </label>
           <div className="relative flex-1">
             <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input id="job-id" value={jobId} onChange={(event) => setJobId(event.target.value)} placeholder="Paste a job ID" className="pl-9" />
+            <Input
+              id="job-id"
+              value={jobId}
+              onChange={(event) => setJobId(event.target.value)}
+              placeholder="Paste a job ID"
+              className="pl-9"
+            />
           </div>
           <Button type="submit" disabled={!jobId.trim()}>
-            Open job<ArrowRight className="size-4" />
+            Open job
+            <ArrowRight className="size-4" />
           </Button>
         </form>
       </div>

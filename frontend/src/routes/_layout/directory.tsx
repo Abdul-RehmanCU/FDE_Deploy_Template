@@ -1,6 +1,12 @@
 import { useInfiniteQuery } from "@tanstack/react-query"
 import { createFileRoute } from "@tanstack/react-router"
-import { AlertTriangle, ContactRound, Mail, RefreshCw, Search } from "lucide-react"
+import {
+  AlertTriangle,
+  ContactRound,
+  Mail,
+  RefreshCw,
+  Search,
+} from "lucide-react"
 import { useDeferredValue, useState } from "react"
 
 import { EmptyState } from "@/components/Common/EmptyState"
@@ -79,7 +85,9 @@ function DirectoryPage() {
       ) : rows.length === 0 ? (
         <EmptyState
           icon={ContactRound}
-          title={deferredSearch ? "No matching contacts" : "The directory is empty"}
+          title={
+            deferredSearch ? "No matching contacts" : "The directory is empty"
+          }
           description={
             deferredSearch
               ? "Try a broader name, email address, company, or external ID."
@@ -87,7 +95,10 @@ function DirectoryPage() {
           }
         />
       ) : (
-        <section className="surface-card overflow-hidden" aria-label="Contact results">
+        <section
+          className="surface-card overflow-hidden"
+          aria-label="Contact results"
+        >
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead className="bg-muted/45 text-left text-xs uppercase tracking-wide text-muted-foreground">
@@ -96,7 +107,9 @@ function DirectoryPage() {
                   <th className="px-5 py-3 font-medium">Email</th>
                   <th className="px-5 py-3 font-medium">Company</th>
                   <th className="px-5 py-3 font-medium">Country</th>
-                  <th className="px-5 py-3 font-medium"><span className="sr-only">Actions</span></th>
+                  <th className="px-5 py-3 font-medium">
+                    <span className="sr-only">Actions</span>
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y">
@@ -106,15 +119,26 @@ function DirectoryPage() {
                       {contact.first_name} {contact.last_name}
                     </td>
                     <td className="px-5 py-4">
-                      <a className="inline-flex items-center gap-1.5 text-primary hover:underline" href={`mailto:${contact.email}`}>
+                      <a
+                        className="inline-flex items-center gap-1.5 text-primary hover:underline"
+                        href={`mailto:${contact.email}`}
+                      >
                         <Mail className="size-3.5" aria-hidden="true" />
                         {contact.email}
                       </a>
                     </td>
-                    <td className="px-5 py-4 text-muted-foreground">{contact.company || "—"}</td>
-                    <td className="px-5 py-4 text-muted-foreground">{contact.country_code || "—"}</td>
+                    <td className="px-5 py-4 text-muted-foreground">
+                      {contact.company || "—"}
+                    </td>
+                    <td className="px-5 py-4 text-muted-foreground">
+                      {contact.country_code || "—"}
+                    </td>
                     <td className="px-5 py-4 text-right">
-                      <Button variant="ghost" size="sm" onClick={() => setSelected(contact)}>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setSelected(contact)}
+                      >
                         View details
                       </Button>
                     </td>
@@ -130,28 +154,61 @@ function DirectoryPage() {
                 disabled={contacts.isFetchingNextPage}
                 onClick={() => contacts.fetchNextPage()}
               >
-                {contacts.isFetchingNextPage ? "Loading…" : "Load more contacts"}
+                {contacts.isFetchingNextPage
+                  ? "Loading…"
+                  : "Load more contacts"}
               </Button>
             </div>
           )}
         </section>
       )}
 
-      <Dialog open={selected !== null} onOpenChange={(open) => !open && setSelected(null)}>
+      <Dialog
+        open={selected !== null}
+        onOpenChange={(open) => !open && setSelected(null)}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
               {selected?.first_name} {selected?.last_name}
             </DialogTitle>
-            <DialogDescription>Contact record in this installation</DialogDescription>
+            <DialogDescription>
+              Contact record in this installation
+            </DialogDescription>
           </DialogHeader>
           {selected && (
             <dl className="grid gap-4 py-2 text-sm sm:grid-cols-2">
-              <div><dt className="text-muted-foreground">Email</dt><dd className="mt-1 font-medium break-all">{selected.email}</dd></div>
-              <div><dt className="text-muted-foreground">Company</dt><dd className="mt-1 font-medium">{selected.company || "Not provided"}</dd></div>
-              <div><dt className="text-muted-foreground">Country</dt><dd className="mt-1 font-medium">{selected.country_code || "Not provided"}</dd></div>
-              <div><dt className="text-muted-foreground">External ID</dt><dd className="mt-1 font-medium">{selected.external_id || "Not provided"}</dd></div>
-              <div className="sm:col-span-2"><dt className="text-muted-foreground">Created</dt><dd className="mt-1 font-medium">{new Intl.DateTimeFormat(undefined, { dateStyle: "long", timeStyle: "short" }).format(new Date(selected.created_at))}</dd></div>
+              <div>
+                <dt className="text-muted-foreground">Email</dt>
+                <dd className="mt-1 font-medium break-all">{selected.email}</dd>
+              </div>
+              <div>
+                <dt className="text-muted-foreground">Company</dt>
+                <dd className="mt-1 font-medium">
+                  {selected.company || "Not provided"}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-muted-foreground">Country</dt>
+                <dd className="mt-1 font-medium">
+                  {selected.country_code || "Not provided"}
+                </dd>
+              </div>
+              <div>
+                <dt className="text-muted-foreground">External ID</dt>
+                <dd className="mt-1 font-medium">
+                  {selected.external_id || "Not provided"}
+                </dd>
+              </div>
+              <div className="sm:col-span-2">
+                <dt className="text-muted-foreground">Created</dt>
+                <dd className="mt-1 font-medium">
+                  {new Intl.DateTimeFormat(undefined, {
+                    dateStyle: "long",
+                    timeStyle: "short",
+                  }).format(new Date(selected.created_at))}
+                </dd>
+              </div>
             </dl>
           )}
         </DialogContent>

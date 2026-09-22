@@ -24,7 +24,9 @@ export function PageHeader({
         <h1 className="page-heading">{title}</h1>
         <p className="page-description">{description}</p>
       </div>
-      {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
+      {actions && (
+        <div className="flex shrink-0 items-center gap-2">{actions}</div>
+      )}
     </div>
   )
 }
