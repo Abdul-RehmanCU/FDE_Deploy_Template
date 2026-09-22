@@ -80,6 +80,18 @@ def _start_attempt(session: Session, job_id: uuid.UUID) -> tuple[Job, JobAttempt
             session.add(batch)
         session.commit()
         return None
+    if job.status == JobStatus.RUNNING:
+        return None
+    if job.status not in (JobStatus.QUEUED, JobStatus.FAILED):
+        return None
+    if job.attempt_count >= job.max_attempts:
+        job.status = JobStatus.FAILED
+        job.error_code = "attempts_exhausted"
+        job.error_message = "The job exhausted its retry limit"
+        job.finished_at = utc_now()
+        session.add(job)
+        session.commit()
+        return None
     job.attempt_count += 1
     job.status = JobStatus.RUNNING
     job.started_at = job.started_at or utc_now()
@@ -95,6 +107,28 @@ def _start_attempt(session: Session, job_id: uuid.UUID) -> tuple[Job, JobAttempt
     session.refresh(job)
     session.refresh(attempt)
     return job, attempt
+
+
+def _cancel_if_requested(
+    session: Session, *, job: Job, attempt: JobAttempt, batch: ImportBatch
+) -> bool:
+    locked_job = session.exec(
+        select(Job)
+        .where(Job.id == job.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    ).one()
+    if locked_job.status != JobStatus.CANCEL_REQUESTED:
+        return False
+    locked_job.status = JobStatus.CANCELLED
+    locked_job.finished_at = utc_now()
+    attempt.status = JobStatus.CANCELLED
+    attempt.finished_at = utc_now()
+    batch.status = ImportStatus.CANCELLED
+    batch.updated_at = utc_now()
+    session.add_all([locked_job, attempt, batch])
+    session.commit()
+    return True
 
 
 def _fail_attempt(
@@ -144,13 +178,34 @@ def run_validation(session: Session, job_id: uuid.UUID) -> None:
         session.commit()
 
         content = get_storage().get(batch.upload_object_key)
-        existing_emails = set(session.exec(select(Contact.normalized_email)).all())
+        preliminary = validate_rows(
+            content,
+            header=batch.header,
+            mapping=batch.mapping,
+            existing_emails=set(),
+        )
+        candidate_emails = sorted(
+            {row.normalized_email for row in preliminary if row.normalized_email}
+        )
+        existing_emails: set[str] = set()
+        for offset in range(0, len(candidate_emails), 1000):
+            chunk = candidate_emails[offset : offset + 1000]
+            existing_emails.update(
+                session.exec(
+                    select(Contact.normalized_email).where(
+                        col(Contact.normalized_email).in_(chunk)
+                    )
+                ).all()
+            )
         results = validate_rows(
             content,
             header=batch.header,
             mapping=batch.mapping,
             existing_emails=existing_emails,
         )
+
+        if _cancel_if_requested(session, job=job, attempt=attempt, batch=batch):
+            return
 
         session.exec(delete(ValidationRow).where(col(ValidationRow.import_id) == batch.id))
         session.add_all(
@@ -239,6 +294,8 @@ def run_confirmation(session: Session, job_id: uuid.UUID) -> None:
             .where(ImportBatch.id == job.import_id)
             .with_for_update()
         ).one()
+        if _cancel_if_requested(session, job=job, attempt=attempt, batch=batch):
+            return
         if batch.status == ImportStatus.COMPLETED:
             job.status = JobStatus.SUCCEEDED
             job.finished_at = utc_now()

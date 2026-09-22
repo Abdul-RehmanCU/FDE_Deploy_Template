@@ -1,4 +1,5 @@
 import os
+import threading
 import uuid
 from concurrent.futures import ThreadPoolExecutor
 from datetime import timedelta
@@ -26,6 +27,7 @@ from app.models import (
     UserRole,
     ValidationRow,
 )
+from app.services import jobs as jobs_service
 from app.services.jobs import run_confirmation, run_validation
 
 pytestmark = pytest.mark.skipif(
@@ -255,3 +257,96 @@ def test_concurrent_confirmation_accepts_exactly_one_idempotency_key() -> None:
             )
         ).all()
         assert len(confirmation_jobs) == 1
+
+
+def test_running_validation_cancels_cleanly_and_ignores_concurrent_redelivery(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    with Session(engine) as session:
+        clear_database(session)
+        operator = create_ready_user(
+            session,
+            "running-cancel@example.com",
+            UserRole.OPERATOR,
+            "A-strong-password-running-cancel",
+        )
+        headers = headers_for(operator)
+    content = (
+        b"Email,First,Last,Company,Country,External\n"
+        b"running@example.com,Running,Cancel,,CA,C-1\n"
+    )
+    with TestClient(app) as client:
+        import_id = upload_and_map(client, headers, content)
+        queued = client.post(f"/api/v1/imports/{import_id}/validate", headers=headers)
+        job_id = uuid.UUID(queued.json()["job_id"])
+
+        entered_validation = threading.Event()
+        release_validation = threading.Event()
+        original_validate = jobs_service.validate_rows
+        call_count = 0
+
+        def blocked_validate(*args: object, **kwargs: object) -> object:
+            nonlocal call_count
+            call_count += 1
+            if call_count == 1:
+                entered_validation.set()
+                assert release_validation.wait(timeout=5)
+            return original_validate(*args, **kwargs)  # type: ignore[arg-type]
+
+        monkeypatch.setattr(jobs_service, "validate_rows", blocked_validate)
+
+        def execute_job() -> None:
+            with Session(engine) as worker_session:
+                run_validation(worker_session, job_id)
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            first_delivery = pool.submit(execute_job)
+            assert entered_validation.wait(timeout=5)
+            replay_delivery = pool.submit(execute_job)
+            replay_delivery.result(timeout=5)
+            cancelled = client.post(
+                f"/api/v1/imports/{import_id}/cancel", headers=headers
+            )
+            assert cancelled.status_code == 200
+            release_validation.set()
+            first_delivery.result(timeout=5)
+
+    with Session(engine) as session:
+        attempts = session.exec(select(JobAttempt).where(JobAttempt.job_id == job_id)).all()
+        assert len(attempts) == 1
+        assert attempts[0].status == JobStatus.CANCELLED
+        assert session.exec(select(ValidationRow)).all() == []
+        job = session.get(Job, job_id)
+        assert job and job.status == JobStatus.CANCELLED
+
+
+def test_idempotency_key_is_scoped_to_the_import_resource() -> None:
+    with Session(engine) as session:
+        clear_database(session)
+        operator = create_ready_user(
+            session,
+            "idempotency-scope@example.com",
+            UserRole.OPERATOR,
+            "A-strong-password-idempotency",
+        )
+        headers = headers_for(operator)
+    content = (
+        b"Email,First,Last,Company,Country,External\n"
+        b"scope@example.com,Scope,One,,CA,S-1\n"
+    )
+    confirmation_jobs: list[str] = []
+    with TestClient(app) as client:
+        for _ in range(2):
+            import_id = upload_and_map(client, headers, content)
+            queued = client.post(
+                f"/api/v1/imports/{import_id}/validate", headers=headers
+            )
+            with Session(engine) as session:
+                run_validation(session, uuid.UUID(queued.json()["job_id"]))
+            confirmed = client.post(
+                f"/api/v1/imports/{import_id}/confirm",
+                headers={**headers, "Idempotency-Key": "same-client-key"},
+            )
+            assert confirmed.status_code == 202, confirmed.text
+            confirmation_jobs.append(confirmed.json()["job_id"])
+    assert len(set(confirmation_jobs)) == 2
