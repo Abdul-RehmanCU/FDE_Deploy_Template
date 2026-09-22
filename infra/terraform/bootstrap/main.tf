@@ -64,19 +64,27 @@ resource "google_iam_workload_identity_pool" "github" {
 }
 
 resource "google_iam_workload_identity_pool_provider" "github" {
+  for_each = {
+    build   = "assertion.repository == '${var.github_repository}' && assertion.repository_owner == 'Abdul-RehmanCU' && (assertion.ref == 'refs/heads/main' || assertion.event_name == 'pull_request')"
+    infra   = "assertion.repository == '${var.github_repository}' && assertion.repository_owner == 'Abdul-RehmanCU' && assertion.ref == 'refs/heads/main' && assertion.environment == 'demo-infrastructure'"
+    deploy  = "assertion.repository == '${var.github_repository}' && assertion.repository_owner == 'Abdul-RehmanCU' && assertion.ref == 'refs/heads/main' && assertion.environment in ['demo-staging', 'demo-prod']"
+    cleanup = "assertion.repository == '${var.github_repository}' && assertion.repository_owner == 'Abdul-RehmanCU' && assertion.ref == 'refs/heads/main' && assertion.environment == 'demo-cleanup'"
+  }
   project                            = var.project_id
   workload_identity_pool_id          = google_iam_workload_identity_pool.github.workload_identity_pool_id
-  workload_identity_pool_provider_id = "fde-repository"
-  display_name                       = "FDE repository"
+  workload_identity_pool_provider_id = "fde-${each.key}"
+  display_name                       = "FDE ${each.key} identity"
 
   attribute_mapping = {
     "google.subject"             = "assertion.sub"
+    "attribute.automation"       = "'${each.key}'"
     "attribute.repository"       = "assertion.repository"
     "attribute.ref"              = "assertion.ref"
-    "attribute.environment"      = "assertion.environment"
+    "attribute.environment"      = "has(assertion.environment) ? assertion.environment : ''"
+    "attribute.event_name"       = "assertion.event_name"
     "attribute.repository_owner" = "assertion.repository_owner"
   }
-  attribute_condition = "assertion.repository == '${var.github_repository}' && assertion.repository_owner == 'Abdul-RehmanCU'"
+  attribute_condition = each.value
 
   oidc { issuer_uri = "https://token.actions.githubusercontent.com" }
 }
@@ -85,7 +93,7 @@ resource "google_service_account_iam_member" "github_federation" {
   for_each           = google_service_account.automation
   service_account_id = each.value.name
   role               = "roles/iam.workloadIdentityUser"
-  member             = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.github.name}/attribute.repository/${var.github_repository}"
+  member             = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.github.name}/attribute.automation/${each.key}"
 }
 
 resource "google_storage_bucket_iam_member" "infra_state" {

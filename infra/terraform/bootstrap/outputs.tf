@@ -3,7 +3,7 @@ output "state_bucket" {
 }
 
 output "workload_identity_provider" {
-  value = google_iam_workload_identity_pool_provider.github.name
+  value = { for name, provider in google_iam_workload_identity_pool_provider.github : name => provider.name }
 }
 
 output "service_accounts" {

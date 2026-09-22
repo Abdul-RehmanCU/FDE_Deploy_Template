@@ -30,12 +30,16 @@ resource "google_project_iam_custom_role" "cleanup" {
   permissions = [
     "artifactregistry.repositories.delete",
     "artifactregistry.repositories.get",
+    "artifactregistry.operations.get",
     "compute.addresses.delete",
     "compute.addresses.get",
     "compute.disks.delete",
     "compute.disks.get",
+    "compute.regionOperations.get",
+    "compute.zoneOperations.get",
     "container.clusters.delete",
     "container.clusters.get",
+    "container.operations.get",
     "resourcemanager.projects.get",
     "storage.buckets.delete",
     "storage.buckets.get",
@@ -80,14 +84,23 @@ resource "google_project_iam_member" "scheduler_invoker" {
   project = var.project_id
   role    = "roles/workflows.invoker"
   member  = "serviceAccount:${google_service_account.scheduler.email}"
+  condition {
+    title       = "invoke_only_compiled_expiry_workflow"
+    description = "Limit scheduler invocation to this exact workflow resource"
+    expression  = "resource.name == '${google_workflows_workflow.cleanup.id}'"
+  }
 }
 
 resource "google_cloud_scheduler_job" "expiry" {
+  for_each = {
+    primary  = var.expires_at
+    recovery = timeadd(var.expires_at, "10m")
+  }
   project          = var.project_id
   region           = var.region
-  name             = "fde-expiry-${var.expiry_id}"
-  description      = "Independent maximum four-hour cleanup for one FDE demo"
-  schedule         = formatdate("m h D M *", var.expires_at)
+  name             = "fde-expiry-${var.expiry_id}-${each.key}"
+  description      = "Independent cleanup ${each.key} attempt for one exact FDE demo manifest"
+  schedule         = formatdate("m h D M *", each.value)
   time_zone        = "Etc/UTC"
   attempt_deadline = "320s"
 
@@ -111,4 +124,14 @@ resource "google_cloud_scheduler_job" "expiry" {
     }
   }
   depends_on = [google_project_iam_member.scheduler_invoker]
+
+  lifecycle {
+    precondition {
+      condition = (
+        timecmp(var.expires_at, timestamp()) > 0 &&
+        timecmp(var.expires_at, timeadd(timestamp(), "3h50m")) <= 0
+      )
+      error_message = "expires_at must be future and at most 3h50m away, reserving ten minutes for recovery before the four-hour limit."
+    }
+  }
 }
