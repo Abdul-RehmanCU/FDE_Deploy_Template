@@ -1,11 +1,7 @@
 import { Link } from "@tanstack/react-router"
+import { DatabaseZap } from "lucide-react"
 
-import { useTheme } from "@/components/theme-provider"
 import { cn } from "@/lib/utils"
-import icon from "/assets/images/fastapi-icon.svg"
-import iconLight from "/assets/images/fastapi-icon-light.svg"
-import logo from "/assets/images/fastapi-logo.svg"
-import logoLight from "/assets/images/fastapi-logo-light.svg"
 
 interface LogoProps {
   variant?: "full" | "icon" | "responsive"
@@ -18,38 +14,41 @@ export function Logo({
   className,
   asLink = true,
 }: LogoProps) {
-  const { resolvedTheme } = useTheme()
-  const isDark = resolvedTheme === "dark"
-
-  const fullLogo = isDark ? logoLight : logo
-  const iconLogo = isDark ? iconLight : icon
-
   const content =
     variant === "responsive" ? (
       <>
-        <img
-          src={fullLogo}
-          alt="FastAPI"
+        <span
           className={cn(
-            "h-6 w-auto group-data-[collapsible=icon]:hidden",
+            "flex items-center gap-3 group-data-[collapsible=icon]:hidden",
             className,
           )}
-        />
-        <img
-          src={iconLogo}
-          alt="FastAPI"
+        >
+          <span className="grid size-9 place-items-center rounded-xl bg-primary text-primary-foreground shadow-sm">
+            <DatabaseZap className="size-5" aria-hidden="true" />
+          </span>
+          <span className="leading-tight">
+            <span className="block text-sm font-semibold tracking-tight">FDE Deploy</span>
+            <span className="block text-[11px] text-muted-foreground">Customer operations</span>
+          </span>
+        </span>
+        <span
           className={cn(
-            "size-5 hidden group-data-[collapsible=icon]:block",
+            "hidden size-9 place-items-center rounded-xl bg-primary text-primary-foreground group-data-[collapsible=icon]:grid",
             className,
           )}
-        />
+        >
+          <DatabaseZap className="size-5" aria-label="FDE Deploy" />
+        </span>
       </>
     ) : (
-      <img
-        src={variant === "full" ? fullLogo : iconLogo}
-        alt="FastAPI"
-        className={cn(variant === "full" ? "h-6 w-auto" : "size-5", className)}
-      />
+      <span className={cn("flex items-center gap-3", className)}>
+        <span className="grid size-10 place-items-center rounded-xl bg-primary text-primary-foreground">
+          <DatabaseZap className="size-5" aria-hidden="true" />
+        </span>
+        {variant === "full" && (
+          <span className="text-lg font-semibold tracking-tight">FDE Deploy</span>
+        )}
+      </span>
     )
 
   if (!asLink) {
