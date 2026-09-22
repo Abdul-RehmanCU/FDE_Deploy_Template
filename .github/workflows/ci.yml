@@ -232,6 +232,7 @@ jobs:
             infra/terraform/bootstrap \
             infra/terraform/environments/demo \
             infra/terraform/environments/expiry \
+            infra/terraform/environments/managed \
             infra/terraform/modules/demo \
             infra/terraform/modules/expiry \
             infra/terraform/modules/managed
