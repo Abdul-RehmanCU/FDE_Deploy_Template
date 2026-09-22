@@ -12,23 +12,9 @@ from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from opentelemetry.trace import Span
-from prometheus_client import Counter, Gauge, Histogram
 
 from app.core.config import settings
 from app.core.db import engine
-
-IMPORT_ROWS = Counter(
-    "fde_import_rows_total", "Rows processed by outcome", labelnames=("outcome",)
-)
-JOB_RUNS = Counter(
-    "fde_job_runs_total", "Durable jobs by kind and outcome", labelnames=("kind", "outcome")
-)
-JOB_DURATION = Histogram(
-    "fde_job_duration_seconds", "Durable job execution duration", labelnames=("kind",)
-)
-OLDEST_QUEUED_JOB = Gauge(
-    "fde_oldest_queued_job_seconds", "Age of the oldest queued durable job"
-)
 
 
 class JsonFormatter(logging.Formatter):

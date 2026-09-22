@@ -5,6 +5,7 @@ from sqlalchemy import text
 from sqlmodel import Session
 
 from app.core.db import engine
+from app.worker_metrics import DurableJobCollector
 
 pytestmark = pytest.mark.skipif(
     os.getenv("RUN_POSTGRES_TESTS") != "1",
@@ -31,3 +32,22 @@ def test_postgres_constraints_and_indexes_exist() -> None:
         "ix_job_outbox_pending",
         "ix_validation_row_import_outcome_row",
     } <= indexes
+
+
+def test_worker_metrics_are_collected_from_durable_postgres_state() -> None:
+    families = list(DurableJobCollector().collect())
+    names = {family.name for family in families}
+    assert {
+        "fde_worker_up",
+        "fde_database_connections",
+        "fde_jobs",
+        "fde_oldest_queued_job_seconds",
+        "fde_job_attempts",
+        "fde_job_duration_seconds",
+        "fde_import_rows",
+        "fde_worker_metrics_collection_success",
+    } <= names
+    health = next(
+        family for family in families if family.name == "fde_worker_metrics_collection_success"
+    )
+    assert health.samples[0].value == 1

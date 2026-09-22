@@ -42,7 +42,10 @@ class Settings(BaseSettings):
     CELERY_TASK_MAX_RETRIES: int = 3
     CELERY_TASK_TIME_LIMIT_SECONDS: int = 600
     OUTBOX_POLL_SECONDS: float = 1.0
+    OUTBOX_PUBLISH_TIMEOUT_SECONDS: int = 10
     JOB_STALE_SECONDS: int = 900
+    JOB_RECONCILE_INTERVAL_SECONDS: int = 30
+    WORKER_METRICS_PORT: int = 9100
     SENTRY_DSN: HttpUrl | None = None
     OTEL_EXPORTER_OTLP_ENDPOINT: str | None = None
     OTEL_SERVICE_NAME: str = "fde-api"

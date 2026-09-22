@@ -1,11 +1,13 @@
 import logging
 import time
+from time import monotonic
 
 from sqlmodel import Session, col, select
 
 from app.core.config import settings
 from app.core.db import engine
 from app.models import JobOutbox, utc_now
+from app.services.jobs import reconcile_stalled_jobs
 from app.worker import celery_app
 
 logger = logging.getLogger(__name__)
@@ -35,6 +37,7 @@ def publish_batch() -> int:
                     },
                     task_id=str(row.job_id),
                     headers={"traceparent": row.payload.get("traceparent", "")},
+                    retry=False,
                 )
                 row.published_at = utc_now()
                 row.last_error = None
@@ -50,7 +53,15 @@ def publish_batch() -> int:
 
 def main() -> None:
     logging.basicConfig(level=logging.INFO)
+    last_reconcile = 0.0
     while True:
+        if monotonic() - last_reconcile >= settings.JOB_RECONCILE_INTERVAL_SECONDS:
+            try:
+                with Session(engine) as session:
+                    reconcile_stalled_jobs(session)
+            except Exception:
+                logger.error("Stalled job reconciliation failed")
+            last_reconcile = monotonic()
         try:
             count = publish_batch()
         except Exception:

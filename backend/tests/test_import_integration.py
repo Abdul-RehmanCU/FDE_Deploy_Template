@@ -350,3 +350,66 @@ def test_idempotency_key_is_scoped_to_the_import_resource() -> None:
             assert confirmed.status_code == 202, confirmed.text
             confirmation_jobs.append(confirmed.json()["job_id"])
     assert len(set(confirmation_jobs)) == 2
+
+
+def test_cancellation_wins_before_confirmation_transaction_begins(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    with Session(engine) as session:
+        clear_database(session)
+        operator = create_ready_user(
+            session,
+            "confirm-cancel@example.com",
+            UserRole.OPERATOR,
+            "A-strong-password-confirm-cancel",
+        )
+        headers = headers_for(operator)
+    content = (
+        b"Email,First,Last,Company,Country,External\n"
+        b"never-insert@example.com,Never,Insert,,CA,C-1\n"
+    )
+    with TestClient(app) as client:
+        import_id = upload_and_map(client, headers, content)
+        validation = client.post(
+            f"/api/v1/imports/{import_id}/validate", headers=headers
+        )
+        with Session(engine) as session:
+            run_validation(session, uuid.UUID(validation.json()["job_id"]))
+        confirmation = client.post(
+            f"/api/v1/imports/{import_id}/confirm",
+            headers={**headers, "Idempotency-Key": "cancel-before-commit"},
+        )
+        confirmation_job_id = uuid.UUID(confirmation.json()["job_id"])
+
+        reached_final_check = threading.Event()
+        release_final_check = threading.Event()
+        original_check = jobs_service._cancel_if_requested
+
+        def blocked_check(*args: object, **kwargs: object) -> bool:
+            reached_final_check.set()
+            assert release_final_check.wait(timeout=5)
+            return original_check(*args, **kwargs)  # type: ignore[arg-type]
+
+        monkeypatch.setattr(jobs_service, "_cancel_if_requested", blocked_check)
+
+        def execute_confirmation() -> None:
+            with Session(engine) as worker_session:
+                run_confirmation(worker_session, confirmation_job_id)
+
+        with ThreadPoolExecutor(max_workers=1) as pool:
+            worker = pool.submit(execute_confirmation)
+            assert reached_final_check.wait(timeout=5)
+            cancelled = client.post(
+                f"/api/v1/imports/{import_id}/cancel", headers=headers
+            )
+            assert cancelled.status_code == 200, cancelled.text
+            release_final_check.set()
+            worker.result(timeout=5)
+
+    with Session(engine) as session:
+        assert session.exec(select(Contact)).all() == []
+        job = session.get(Job, confirmation_job_id)
+        batch = session.get(ImportBatch, uuid.UUID(import_id))
+        assert job and job.status == JobStatus.CANCELLED
+        assert batch and batch.status.value == "cancelled"
+        assert batch.confirmation_started_at is None

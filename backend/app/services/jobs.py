@@ -1,13 +1,11 @@
 import uuid
 from datetime import timedelta
-from time import monotonic
 
-from sqlalchemy import delete
+from sqlalchemy import delete, or_
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlmodel import Session, col, select
 
 from app.core.config import settings
-from app.core.observability import IMPORT_ROWS, JOB_DURATION, JOB_RUNS
 from app.models import (
     Contact,
     ImportBatch,
@@ -163,7 +161,6 @@ def _report_key(import_id: uuid.UUID, report: str) -> str:
 
 
 def run_validation(session: Session, job_id: uuid.UUID) -> None:
-    started_at = monotonic()
     started = _start_attempt(session, job_id)
     if not started:
         return
@@ -178,11 +175,19 @@ def run_validation(session: Session, job_id: uuid.UUID) -> None:
         session.commit()
 
         content = get_storage().get(batch.upload_object_key)
+
+        def heartbeat(rows_processed: int) -> None:
+            del rows_processed
+            job.heartbeat_at = utc_now()
+            session.add(job)
+            session.commit()
+
         preliminary = validate_rows(
             content,
             header=batch.header,
             mapping=batch.mapping,
             existing_emails=set(),
+            progress=heartbeat,
         )
         candidate_emails = sorted(
             {row.normalized_email for row in preliminary if row.normalized_email}
@@ -197,11 +202,13 @@ def run_validation(session: Session, job_id: uuid.UUID) -> None:
                     )
                 ).all()
             )
+            heartbeat(offset + len(chunk))
         results = validate_rows(
             content,
             header=batch.header,
             mapping=batch.mapping,
             existing_emails=existing_emails,
+            progress=heartbeat,
         )
 
         if _cancel_if_requested(session, job=job, attempt=attempt, batch=batch):
@@ -262,9 +269,6 @@ def run_validation(session: Session, job_id: uuid.UUID) -> None:
             "text/csv; charset=utf-8",
         )
         session.commit()
-        for outcome, count in counts.items():
-            IMPORT_ROWS.labels(outcome=outcome.value).inc(count)
-        JOB_RUNS.labels(kind=JobKind.VALIDATE.value, outcome="succeeded").inc()
     except Exception:
         session.rollback()
         _fail_attempt(
@@ -274,16 +278,10 @@ def run_validation(session: Session, job_id: uuid.UUID) -> None:
             code="validation_failed",
             message="Validation could not be completed",
         )
-        JOB_RUNS.labels(kind=JobKind.VALIDATE.value, outcome="failed").inc()
         raise
-    finally:
-        JOB_DURATION.labels(kind=JobKind.VALIDATE.value).observe(
-            monotonic() - started_at
-        )
 
 
 def run_confirmation(session: Session, job_id: uuid.UUID) -> None:
-    started_at = monotonic()
     started = _start_attempt(session, job_id)
     if not started:
         return
@@ -359,7 +357,6 @@ def run_confirmation(session: Session, job_id: uuid.UUID) -> None:
             metadata={"inserted_count": inserted, "skipped_count": batch.skipped_count},
         )
         session.commit()
-        JOB_RUNS.labels(kind=JobKind.CONFIRM.value, outcome="succeeded").inc()
     except Exception:
         session.rollback()
         _fail_attempt(
@@ -369,27 +366,29 @@ def run_confirmation(session: Session, job_id: uuid.UUID) -> None:
             code="import_failed",
             message="The import transaction could not be completed",
         )
-        JOB_RUNS.labels(kind=JobKind.CONFIRM.value, outcome="failed").inc()
         raise
-    finally:
-        JOB_DURATION.labels(kind=JobKind.CONFIRM.value).observe(
-            monotonic() - started_at
-        )
 
 
 def reconcile_stalled_jobs(session: Session) -> int:
     cutoff = utc_now() - timedelta(seconds=settings.JOB_STALE_SECONDS)
     jobs = session.exec(
-        select(Job).where(
-            Job.status == JobStatus.RUNNING,
-            col(Job.heartbeat_at).is_not(None),
-            col(Job.heartbeat_at) < cutoff,
+        select(Job).join(JobOutbox).where(
+            or_(
+                (
+                    (col(Job.status) == JobStatus.RUNNING)
+                    & col(Job.heartbeat_at).is_not(None)
+                    & (col(Job.heartbeat_at) < cutoff)
+                ),
+                (col(Job.status) == JobStatus.QUEUED)
+                & col(JobOutbox.published_at).is_not(None)
+                & (col(JobOutbox.published_at) < cutoff),
+            )
         )
     ).all()
     for job in jobs:
         job.status = JobStatus.QUEUED
-        job.error_code = "worker_stalled"
-        job.error_message = "The worker stopped; the job was queued again"
+        job.error_code = "delivery_reconciled"
+        job.error_message = "The job was safely queued again after a stalled delivery"
         session.add(job)
         existing = session.exec(select(JobOutbox).where(JobOutbox.job_id == job.id)).first()
         if existing:

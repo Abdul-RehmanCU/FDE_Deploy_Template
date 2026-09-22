@@ -3,6 +3,7 @@ import threading
 import time
 import uuid
 from concurrent.futures import ThreadPoolExecutor
+from datetime import timedelta
 
 import pytest
 from sqlalchemy import delete
@@ -17,12 +18,14 @@ from app.models import (
     JobAttempt,
     JobKind,
     JobOutbox,
+    JobStatus,
     User,
     UserRole,
     ValidationRow,
     utc_now,
 )
 from app.outbox_publisher import publish_batch
+from app.services.jobs import reconcile_stalled_jobs
 from app.worker import celery_app
 
 pytestmark = pytest.mark.skipif(
@@ -129,3 +132,32 @@ def test_skip_locked_prevents_concurrent_duplicate_publication(
     assert sorted(results) == [0, 2]
     assert set(published) == job_ids
     assert len(published) == 2
+
+
+def test_reconciliation_recovers_lost_queued_and_running_deliveries() -> None:
+    job_ids = seed_outbox(2)
+    stale = utc_now() - timedelta(hours=1)
+    with Session(engine) as session:
+        queued = session.get(Job, job_ids[0])
+        running = session.get(Job, job_ids[1])
+        assert queued and running
+        queued.created_at = stale
+        running.status = JobStatus.RUNNING
+        running.heartbeat_at = stale
+        for job in (queued, running):
+            outbox = session.exec(
+                select(JobOutbox).where(JobOutbox.job_id == job.id)
+            ).one()
+            outbox.published_at = stale
+            session.add(outbox)
+            session.add(job)
+        session.commit()
+        assert reconcile_stalled_jobs(session) == 2
+        for job_id in job_ids:
+            job = session.get(Job, job_id)
+            outbox = session.exec(
+                select(JobOutbox).where(JobOutbox.job_id == job_id)
+            ).one()
+            assert job and job.status == JobStatus.QUEUED
+            assert job.error_code == "delivery_reconciled"
+            assert outbox.published_at is None
