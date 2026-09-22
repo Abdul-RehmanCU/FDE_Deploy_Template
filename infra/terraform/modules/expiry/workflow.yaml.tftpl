@@ -1,0 +1,164 @@
+main:
+  params: [args]
+  steps:
+    - load_manifest:
+        assign:
+          - manifest: ${manifest_json}
+          - expected_sha: $${sys.get_env("MANIFEST_SHA")}
+          - mode: $${default(map.get(args, "mode"), "sentinel")}
+          - supplied_sha: $${default(map.get(args, "manifest_sha"), "")}
+    - validate_target:
+        switch:
+          - condition: $${supplied_sha != expected_sha}
+            raise: "manifest fingerprint mismatch"
+          - condition: $${manifest.project_id != sys.get_env("GOOGLE_CLOUD_PROJECT_ID")}
+            raise: "compiled project does not match workflow project"
+          - condition: $${mode == "cleanup" and sys.now() < time.parse(manifest.expires_at)}
+            raise: "cleanup deadline has not arrived"
+          - condition: $${not(mode in ["sentinel", "dry-run", "cleanup"])}
+            raise: "unsupported cleanup mode"
+    - sentinel_project_read:
+        call: http.get
+        args:
+          url: $${"https://cloudresourcemanager.googleapis.com/v3/projects/" + manifest.project_id}
+          auth: { type: OAuth2 }
+        result: project_result
+    - log_sentinel:
+        call: sys.log
+        args:
+          severity: NOTICE
+          text: $${"FDE expiry sentinel target=" + manifest.project_id + " manifest=" + expected_sha + " mode=" + mode}
+    - stop_dry_run:
+        switch:
+          - condition: $${mode != "cleanup"}
+            return:
+              status: "sentinel-ok"
+              manifest_sha: $${expected_sha}
+              project_number: $${project_result.body.name}
+    - delete_cluster:
+        try:
+          call: http.delete
+          args:
+            url: $${"https://container.googleapis.com/v1/projects/" + manifest.project_id + "/zones/" + manifest.zone + "/clusters/" + manifest.cluster_name}
+            auth: { type: OAuth2 }
+          result: cluster_delete
+        except:
+          as: e
+          steps:
+            - tolerate_missing_cluster:
+                switch:
+                  - condition: $${e.code != 404}
+                    raise: $${e}
+    - delete_disks:
+        for:
+          value: disk
+          in: $${manifest.disk_names}
+          steps:
+            - delete_one_disk:
+                try:
+                  call: http.delete
+                  args:
+                    url: $${"https://compute.googleapis.com/compute/v1/projects/" + manifest.project_id + "/zones/" + manifest.zone + "/disks/" + disk}
+                    auth: { type: OAuth2 }
+                except:
+                  as: e
+                  steps:
+                    - tolerate_missing_disk:
+                        switch:
+                          - condition: $${e.code != 404}
+                            raise: $${e}
+    - delete_addresses:
+        for:
+          value: address
+          in: $${manifest.address_names}
+          steps:
+            - delete_one_address:
+                try:
+                  call: http.delete
+                  args:
+                    url: $${"https://compute.googleapis.com/compute/v1/projects/" + manifest.project_id + "/regions/" + manifest.region + "/addresses/" + address}
+                    auth: { type: OAuth2 }
+                except:
+                  as: e
+                  steps:
+                    - tolerate_missing_address:
+                        switch:
+                          - condition: $${e.code != 404}
+                            raise: $${e}
+    - empty_buckets:
+        for:
+          value: bucket
+          in: $${manifest.bucket_names}
+          steps:
+            - empty_one_bucket:
+                call: empty_bucket
+                args:
+                  bucket: $${bucket}
+    - delete_artifact_repository:
+        try:
+          call: http.delete
+          args:
+            url: $${"https://artifactregistry.googleapis.com/v1/projects/" + manifest.project_id + "/locations/" + manifest.region + "/repositories/" + manifest.artifact_repository}
+            auth: { type: OAuth2 }
+          result: repository_delete
+        except:
+          as: e
+          steps:
+            - tolerate_missing_repository:
+                switch:
+                  - condition: $${e.code != 404}
+                    raise: $${e}
+    - complete:
+        return:
+          status: "cleanup-requested"
+          manifest_sha: $${expected_sha}
+
+empty_bucket:
+  params: [bucket]
+  steps:
+    - initialise_page:
+        assign:
+          - page_token: ""
+    - list_objects:
+        try:
+          call: http.get
+          args:
+            url: $${"https://storage.googleapis.com/storage/v1/b/" + bucket + "/o"}
+            query:
+              maxResults: 1000
+              pageToken: $${page_token}
+            auth: { type: OAuth2 }
+          result: listed
+        except:
+          as: e
+          steps:
+            - missing_bucket_is_done:
+                switch:
+                  - condition: $${e.code == 404}
+                    return: "already-absent"
+                  - condition: true
+                    raise: $${e}
+    - delete_objects:
+        for:
+          value: object
+          in: $${default(map.get(listed.body, "items"), [])}
+          steps:
+            - delete_one_object:
+                call: http.delete
+                args:
+                  url: $${"https://storage.googleapis.com/storage/v1/b/" + bucket + "/o/" + text.url_encode(object.name)}
+                  auth: { type: OAuth2 }
+    - continue_pages:
+        assign:
+          - page_token: $${default(map.get(listed.body, "nextPageToken"), "")}
+    - more_pages:
+        switch:
+          - condition: $${page_token != ""}
+            next: list_objects
+    - delete_bucket:
+        call: http.delete
+        args:
+          url: $${"https://storage.googleapis.com/storage/v1/b/" + bucket}
+          auth: { type: OAuth2 }
+    - done:
+        return: "deleted"
