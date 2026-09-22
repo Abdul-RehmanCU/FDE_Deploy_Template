@@ -24,7 +24,7 @@ spec:
         spec:
           restartPolicy: Never
           serviceAccountName: {{ .Values.serviceAccount.name }}
-          securityContext: { runAsNonRoot: true, seccompProfile: { type: RuntimeDefault } }
+          securityContext: { runAsNonRoot: true, fsGroup: 10001, seccompProfile: { type: RuntimeDefault } }
           containers:
             - name: cleanup
               image: {{ include "fde.backendImage" . }}
@@ -34,7 +34,7 @@ spec:
                 {{- include "fde.backendEnv" . | nindent 16 }}
                 - { name: OTEL_SERVICE_NAME, value: fde-storage-cleanup }
               volumeMounts:
-                {{- include "fde.secretMount" . | nindent 16 }}
+                {{- include "fde.backendMounts" . | nindent 16 }}
               resources:
                 requests: { cpu: 25m, memory: 64Mi }
                 limits: { cpu: 150m, memory: 192Mi }

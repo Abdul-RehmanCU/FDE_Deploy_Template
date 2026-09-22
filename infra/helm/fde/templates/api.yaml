@@ -23,7 +23,7 @@ spec:
         prometheus.io/port: {{ .Values.backend.port | quote }}
     spec:
       serviceAccountName: {{ .Values.serviceAccount.name }}
-      securityContext: { runAsNonRoot: true, seccompProfile: { type: RuntimeDefault } }
+      securityContext: { runAsNonRoot: true, fsGroup: 10001, seccompProfile: { type: RuntimeDefault } }
       terminationGracePeriodSeconds: 30
       containers:
         - name: api
@@ -36,7 +36,7 @@ spec:
             {{- include "fde.backendEnv" . | nindent 12 }}
             - { name: OTEL_SERVICE_NAME, value: fde-api }
           volumeMounts:
-            {{- include "fde.secretMount" . | nindent 12 }}
+            {{- include "fde.backendMounts" . | nindent 12 }}
           startupProbe:
             httpGet: { path: /api/v1/health/live, port: http }
             failureThreshold: 30

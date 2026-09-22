@@ -40,6 +40,9 @@ fde.dev/environment: {{ .Values.environment | quote }}
 - name: runtime-secrets
   mountPath: /var/run/secrets/fde
   readOnly: true
+{{- end -}}
+{{- define "fde.backendMounts" -}}
+{{- include "fde.secretMount" . }}
 - name: runtime-tmp
   mountPath: /tmp
 - name: local-storage
