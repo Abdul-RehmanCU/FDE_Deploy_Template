@@ -60,8 +60,8 @@ trap cleanup EXIT
 
 # Ensure the restored database contains a deterministic non-PII evidence row.
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL' >/dev/null
-INSERT INTO "user" (id, email, hashed_password, role, is_active, must_change_password, token_version)
-VALUES ('00000000-0000-4000-8000-000000000099', 'backup-evidence@example.com', 'not-a-login-hash', 'viewer', false, true, 0)
+INSERT INTO "user" (id, email, hashed_password, role, is_superuser, is_active, must_change_password, token_version)
+VALUES ('00000000-0000-4000-8000-000000000099', 'backup-evidence@example.com', 'not-a-login-hash', 'viewer', false, false, true, 0)
 ON CONFLICT (email) DO NOTHING;
 SQL
 
