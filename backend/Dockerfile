@@ -62,4 +62,13 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 
 WORKDIR /app/backend/
 
-CMD ["fastapi", "run", "--workers", "4"]
+RUN groupadd --gid 10001 app && \
+    useradd --uid 10001 --gid 10001 --no-create-home --shell /usr/sbin/nologin app && \
+    mkdir -p /app/backend/.data/storage && \
+    chown -R 10001:10001 /app
+
+USER 10001:10001
+
+EXPOSE 8000
+
+CMD ["fastapi", "run", "app/main.py", "--port", "8000", "--workers", "1"]
