@@ -69,7 +69,7 @@ pg_dump --format=custom --no-owner --no-acl --file="$backup_file" "$DATABASE_URL
 createdb --maintenance-db="$admin_url" "$target_db"
 pg_restore --exit-on-error --no-owner --no-acl --dbname="$target_url" "$backup_file"
 
-tables=(user import_batch validation_row contact job job_attempt job_outbox audit_event alembic_version)
+tables=(user item import_batch validation_row contact job job_attempt job_outbox audit_event alembic_version)
 for table in "${tables[@]}"; do
   quoted_table="\"$table\""
   source_count="$(psql "$DATABASE_URL" -Atqc "select count(*) from $quoted_table")"
@@ -88,6 +88,7 @@ select
   (select count(*) from job_attempt a left join job j on j.id=a.job_id where j.id is null) +
   (select count(*) from job_outbox o left join job j on j.id=o.job_id where j.id is null) +
   (select count(*) from audit_event a left join \"user\" u on u.id=a.actor_id where a.actor_id is not null and u.id is null) +
+  (select count(*) from item i left join \"user\" u on u.id=i.owner_id where u.id is null) +
   (select count(*) from (select normalized_email from contact group by normalized_email having count(*) > 1) duplicates)
 ")"
 if [[ "$integrity_failures" != "0" ]]; then
