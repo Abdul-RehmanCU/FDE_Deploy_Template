@@ -159,7 +159,7 @@ jobs:
             --query="labels.expiry-id=$EXPIRY_ID" --format=json > cleanup-evidence/final-owned-assets.json
           test "$(jq 'length' cleanup-evidence/final-owned-assets.json)" -eq 0
           jq -n --arg project "$PROJECT_ID" --arg customer "$CUSTOMER" --arg expiry_id "$EXPIRY_ID" \
-            '{project:$project,customer:$customer,expiry_id:$expiry_id,runtime_residue:0,expiry_guard_removed:true,bootstrap_state_retained_for_billing_reconciliation:true}' \
+            '{project:$project,customer:$customer,expiry_id:$expiry_id,runtime_residue:0,expiry_guard_removed:true,owner_bootstrap_teardown_required:true}' \
             > cleanup-evidence/cleanup-summary.json
       - name: Upload sanitized cleanup evidence
         if: always()

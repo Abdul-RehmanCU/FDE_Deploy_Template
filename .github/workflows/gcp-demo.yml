@@ -11,8 +11,6 @@ on:
       ci_run_id: { description: Successful CI run for this exact revision, required: true, type: string }
       independent_review_accepted: { description: Independent cleanup and release review accepted, required: true, type: boolean }
       confirm_paid_run: { description: Start the single bounded paid rehearsal, required: true, type: boolean }
-  schedule:
-    - cron: "17 5 * * *"
 
 permissions:
   contents: read
@@ -25,7 +23,6 @@ concurrency:
 jobs:
   preflight:
     name: Authorize exact revision and budget
-    if: github.event_name == 'workflow_dispatch' || vars.OVERNIGHT_DEMO_ENABLED == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     environment: demo-infrastructure
@@ -46,11 +43,6 @@ jobs:
       DISPATCH_CI_RUN_ID: ${{ inputs.ci_run_id }}
       DISPATCH_REVIEW_ACCEPTED: ${{ inputs.independent_review_accepted }}
       DISPATCH_PAID_CONFIRMATION: ${{ inputs.confirm_paid_run }}
-      SCHEDULED_PROJECT: ${{ vars.DEMO_PROJECT_ID }}
-      SCHEDULED_CUSTOMER: ${{ vars.DEMO_CUSTOMER }}
-      SCHEDULED_STATE_BUCKET: ${{ vars.DEMO_STATE_BUCKET }}
-      SCHEDULED_ENABLED: ${{ vars.OVERNIGHT_DEMO_ENABLED }}
-      SCHEDULED_REVIEW_ACCEPTED: ${{ vars.DEMO_REVIEW_ACCEPTED }}
       COST_EVIDENCE_JSON: ${{ secrets.DEMO_COST_EVIDENCE_JSON }}
     steps:
       - name: Check out selected main revision
@@ -71,26 +63,15 @@ jobs:
         run: |
           set -euo pipefail
           test "$GITHUB_REF_NAME" = main
-          if test "$GITHUB_EVENT_NAME" = schedule; then
-            test "$SCHEDULED_ENABLED" = true
-            test "$SCHEDULED_REVIEW_ACCEPTED" = true
-            project_id=$SCHEDULED_PROJECT
-            customer=${SCHEDULED_CUSTOMER:-demo}
-            state_bucket=$SCHEDULED_STATE_BUCKET
-            expiry_id="${customer}-$(date -u +%Y%m%d%H%M)-${GITHUB_RUN_ID}"
-            expires_at=$(date -u -d '+2 hours' +'%Y-%m-%dT%H:%M:00Z')
-            ci_run_id=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?branch=main&status=success&per_page=20" \
-              --jq ".workflow_runs[] | select(.head_sha == \"$GITHUB_SHA\") | .id" | head -1)
-          else
-            test "$DISPATCH_PAID_CONFIRMATION" = true
-            test "$DISPATCH_REVIEW_ACCEPTED" = true
-            project_id=$DISPATCH_PROJECT
-            customer=$DISPATCH_CUSTOMER
-            state_bucket=$DISPATCH_STATE_BUCKET
-            expiry_id=$DISPATCH_EXPIRY_ID
-            expires_at=$DISPATCH_EXPIRES_AT
-            ci_run_id=$DISPATCH_CI_RUN_ID
-          fi
+          test "$GITHUB_EVENT_NAME" = workflow_dispatch
+          test "$DISPATCH_PAID_CONFIRMATION" = true
+          test "$DISPATCH_REVIEW_ACCEPTED" = true
+          project_id=$DISPATCH_PROJECT
+          customer=$DISPATCH_CUSTOMER
+          state_bucket=$DISPATCH_STATE_BUCKET
+          expiry_id=$DISPATCH_EXPIRY_ID
+          expires_at=$DISPATCH_EXPIRES_AT
+          ci_run_id=$DISPATCH_CI_RUN_ID
           test -n "$project_id" && test -n "$customer" && test -n "$state_bucket" && test -n "$ci_run_id"
           ci=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$ci_run_id")
           test "$(jq -r .head_sha <<<"$ci")" = "$GITHUB_SHA"
@@ -157,7 +138,6 @@ jobs:
       customer: ${{ needs.preflight.outputs.customer }}
       state_bucket: ${{ needs.preflight.outputs.state_bucket }}
       expiry_id: ${{ needs.preflight.outputs.expiry_id }}
-      expires_at: ${{ needs.preflight.outputs.expires_at }}
       expires_at: ${{ needs.preflight.outputs.expires_at }}
 
   provision:
@@ -460,17 +440,23 @@ jobs:
           release="fde-${CUSTOMER}-production-demo"
           kubectl -n production-demo run fde-rolling-probe --image=curlimages/curl:8.16.0@sha256:463eaf6072688fe96ac64fa623fe73e1dbe25d8ad6c34404a669ad3ce1f104b6 \
             --labels=fde.dev/probe=true --restart=Never --command -- sh -ec \
-            'while test ! -f /tmp/stop; do curl --fail --silent --max-time 2 http://'"$release"'-api:8000/api/v1/health/live >/dev/null && echo success || echo error; sleep 0.2; done'
+            'while test ! -f /tmp/stop; do phase=warmup; test -f /tmp/rollout && phase=rollout; code=$(curl --silent --output /dev/null --write-out "%{http_code}" --max-time 2 http://'"$release"'-api:8000/api/v1/health/live || true); status=error; test "$code" = 200 && status=success; echo "$(date -u +%s) $phase $status ${code:-000}"; sleep 0.2; done'
           kubectl -n production-demo wait --for=condition=Ready pod/fde-rolling-probe --timeout=120s
+          sleep 3
+          kubectl -n production-demo exec fde-rolling-probe -- touch /tmp/rollout
+          rollout_started=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
           kubectl -n production-demo patch "deployment/${release}-api" --type merge \
             --patch "{\"spec\":{\"template\":{\"metadata\":{\"annotations\":{\"fde.dev/gke-rollout\":\"$(date +%s)\"}}}}}"
           kubectl -n production-demo rollout status "deployment/${release}-api" --timeout=180s
+          rollout_finished=$(date -u +'%Y-%m-%dT%H:%M:%SZ')
           kubectl -n production-demo exec fde-rolling-probe -- touch /tmp/stop
           kubectl -n production-demo wait --for=jsonpath='{.status.phase}'=Succeeded pod/fde-rolling-probe --timeout=30s
           kubectl -n production-demo logs fde-rolling-probe > release-bundle/gke-rolling-probe.txt
-          successes=$(grep -c '^success$' release-bundle/gke-rolling-probe.txt || true)
-          errors=$(grep -c '^error$' release-bundle/gke-rolling-probe.txt || true)
-          test "$successes" -gt 0
+          warmup_successes=$(awk '$2=="warmup" && $3=="success" {count++} END {print count+0}' release-bundle/gke-rolling-probe.txt)
+          warmup_errors=$(awk '$2=="warmup" && $3=="error" {count++} END {print count+0}' release-bundle/gke-rolling-probe.txt)
+          rollout_successes=$(awk '$2=="rollout" && $3=="success" {count++} END {print count+0}' release-bundle/gke-rolling-probe.txt)
+          rollout_errors=$(awk '$2=="rollout" && $3=="error" {count++} END {print count+0}' release-bundle/gke-rolling-probe.txt)
+          test "$rollout_successes" -gt 0
           set +e
           helm upgrade "$release" infra/helm/fde --namespace production-demo \
             --values release-bundle/production-demo-values.yaml \
@@ -482,8 +468,10 @@ jobs:
           uv run --project tooling/fde fde rollback \
             --config release-bundle/production-demo-config.yaml --customer "$CUSTOMER" --environment production-demo --project "$PROJECT_ID" \
             > release-bundle/rollback-result.json
-          jq -n --argjson successes "$successes" --argjson errors "$errors" \
-            '{successful_requests:$successes,failed_requests:$errors,unhealthy_release_rejected:true,previous_release_restored:true,database_migration_reversed:false}' \
+          jq -n --argjson warmup_successes "$warmup_successes" --argjson warmup_errors "$warmup_errors" \
+            --argjson rollout_successes "$rollout_successes" --argjson rollout_errors "$rollout_errors" \
+            --arg rollout_started "$rollout_started" --arg rollout_finished "$rollout_finished" \
+            '{warmup:{successful_requests:$warmup_successes,failed_requests:$warmup_errors},rollout:{successful_requests:$rollout_successes,failed_requests:$rollout_errors,started_at:$rollout_started,finished_at:$rollout_finished},unhealthy_release_rejected:true,previous_release_restored:true,database_migration_reversed:false}' \
             > release-bundle/release-recovery.json
       - name: Upload promotion and recovery evidence
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -584,7 +572,7 @@ jobs:
 
   cleanup:
     name: Unconditional exact cleanup
-    if: always() && needs.preflight.result == 'success' && needs.authorize-run.result == 'success'
+    if: always() && needs.preflight.result == 'success'
     needs: [preflight, authorize-run, expiry, provision, build-images, deploy-staging, promote-demo-prod, rollback-report]
     uses: ./.github/workflows/gcp-cleanup.yml
     with:
@@ -592,3 +580,4 @@ jobs:
       customer: ${{ needs.preflight.outputs.customer }}
       state_bucket: ${{ needs.preflight.outputs.state_bucket }}
       expiry_id: ${{ needs.preflight.outputs.expiry_id }}
+      expires_at: ${{ needs.preflight.outputs.expires_at }}
