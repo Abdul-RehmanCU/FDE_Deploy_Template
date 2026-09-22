@@ -25,6 +25,10 @@ spec:
       serviceAccountName: {{ .Values.serviceAccount.name }}
       securityContext: { runAsNonRoot: true, fsGroup: 10001, seccompProfile: { type: RuntimeDefault } }
       terminationGracePeriodSeconds: 30
+      {{- if eq .Values.profile "managed" }}
+      initContainers:
+        {{- include "fde.managedTlsInit" . | nindent 8 }}
+      {{- end }}
       containers:
         - name: api
           image: {{ include "fde.backendImage" . }}

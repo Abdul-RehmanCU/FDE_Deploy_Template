@@ -24,6 +24,10 @@ spec:
       restartPolicy: Never
       serviceAccountName: {{ .Values.serviceAccount.name }}
       securityContext: { runAsNonRoot: true, fsGroup: 10001, seccompProfile: { type: RuntimeDefault } }
+      {{- if eq .Values.profile "managed" }}
+      initContainers:
+        {{- include "fde.managedTlsInit" . | nindent 8 }}
+      {{- end }}
       containers:
         - name: migrate
           image: {{ include "fde.backendImage" . }}
