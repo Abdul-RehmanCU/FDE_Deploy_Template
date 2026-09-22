@@ -1,0 +1,115 @@
+schema_version: 1
+currency: USD
+prepared_at: "2026-09-22T07:50:00Z"
+project: fdetemplate
+region: northamerica-northeast1
+zone: northamerica-northeast1-a
+maximum_runtime_hours: 4
+reported_cost_baseline:
+  amount: 0.00
+  display_currency: CAD
+  period: "2026-09-01 through 2026-09-22"
+  observed_at: "2026-09-22T07:47:00Z"
+  evidence: "Authenticated Google Cloud Billing report showed CA$0.00 actual and forecast, with no result rows. Billing data can be delayed."
+authorization:
+  demo_estimate_cap_usd: 10.00
+  total_authorization_usd: 25.00
+  delayed_charge_reserve_usd: 15.00
+items:
+  - id: compute-e2-standard-4
+    quantity: 4
+    unit: node-hour
+    unit_price_usd: 0.14754408
+    estimated_usd: 0.59017632
+    basis: "4 vCPU x $0.02401338 plus 16 GiB x $0.00321816 per hour; Cloud Billing Catalog SKUs F362-BA10-04D7 and 699E-FF84-4093."
+  - id: gke-zonal-control-plane
+    quantity: 4
+    unit: cluster-hour
+    unit_price_usd: 0.10
+    estimated_usd: 0.40
+    basis: "Zonal GKE management fee, deliberately ignoring possible monthly free-tier credit."
+  - id: persistent-disk
+    quantity: 600
+    unit: GiB-hour
+    unit_price_usd: 0.000054795
+    estimated_usd: 0.032877
+    basis: "Conservative 150 GiB aggregate for four hours at Montréal standard PD rate; configuration is expected to use less."
+  - id: external-ip
+    quantity: 4
+    unit: address-hour
+    unit_price_usd: 0.005
+    estimated_usd: 0.02
+    basis: "One in-use node IPv4 for four hours; no load-balancer address."
+  - id: artifact-registry
+    quantity: 20
+    unit: GiB-hour
+    unit_price_usd: 0.000136986
+    estimated_usd: 0.00273972
+    basis: "Five GiB for four hours; ignores the 0.5 GiB free tier."
+  - id: gcs
+    quantity: 8
+    unit: GiB-hour
+    unit_price_usd: 0.00005
+    estimated_usd: 0.0004
+    basis: "Two GiB for four hours using a rate above the regional Standard storage hourly equivalent."
+  - id: secret-manager
+    quantity: 6
+    unit: active-version-month
+    unit_price_usd: 0.06
+    estimated_usd: 0.36
+    basis: "Six regional secret versions, charged conservatively as a full month."
+  - id: cloud-logging
+    quantity: 2
+    unit: GiB-ingested
+    unit_price_usd: 0.50
+    estimated_usd: 1.00
+    basis: "Two-GiB telemetry ceiling; ignores included allotments. In-cluster Loki remains the primary demo log store."
+  - id: network-egress
+    quantity: 2
+    unit: GiB
+    unit_price_usd: 0.12
+    estimated_usd: 0.24
+    basis: "Conservative two-GiB internet egress allowance; normal port-forwarded demo traffic should be lower."
+  - id: cloud-scheduler
+    quantity: 1
+    unit: job-month
+    unit_price_usd: 0.10
+    estimated_usd: 0.10
+    basis: "One expiry job for a full month; ignores free jobs and early teardown."
+  - id: cloud-workflows
+    quantity: 1
+    unit: 1000-internal-step-increment
+    unit_price_usd: 0.01
+    estimated_usd: 0.01
+    basis: "One billed increment; ignores 5,000 free internal steps."
+  - id: operations-and-requests
+    quantity: 1
+    unit: allowance
+    unit_price_usd: 0.25
+    estimated_usd: 0.25
+    basis: "Storage, registry, Secret Manager, monitoring, and API request allowance."
+  - id: estimate-contingency
+    quantity: 1
+    unit: allowance
+    unit_price_usd: 1.50
+    estimated_usd: 1.50
+    basis: "Rounding, price drift, cleanup latency, and usage-estimation uncertainty."
+estimated_total_usd: 4.50619304
+gate:
+  passes_estimate_cap: true
+  paid_provisioning_allowed: false
+  blocked_until:
+    - final CI and kind checks pass at the deployment revision
+    - expiry infrastructure is applied before GKE and sentinel execution succeeds
+    - exact post-provision disk and address names are added to the expiry manifest
+    - independent review accepts cleanup targeting and failure behavior
+notes:
+  - "The estimate is a planning ceiling, not a provider-enforced hard cap."
+  - "Billing reports can lag; CA$0.00 does not prove that unreported charges are impossible."
+  - "No free credit is used to justify a larger or longer demo."
+sources:
+  - "https://cloud.google.com/kubernetes-engine/pricing"
+  - "https://cloud.google.com/compute/disks-image-pricing"
+  - "https://cloud.google.com/artifact-registry/pricing"
+  - "https://cloud.google.com/workflows/pricing"
+  - "https://cloud.google.com/billing/docs/how-to/budgets-spend-caps"
