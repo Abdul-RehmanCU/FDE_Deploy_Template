@@ -30,6 +30,7 @@ def list_contacts(
                 col(Contact.first_name).ilike(pattern, escape="\\"),
                 col(Contact.last_name).ilike(pattern, escape="\\"),
                 col(Contact.company).ilike(pattern, escape="\\"),
+                col(Contact.external_id).ilike(pattern, escape="\\"),
             )
         )
     if cursor:

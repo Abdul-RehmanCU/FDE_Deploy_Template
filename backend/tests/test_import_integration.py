@@ -181,6 +181,14 @@ def test_real_import_flow_is_authorized_atomic_and_replay_safe() -> None:
             job = session.get(Job, confirmation_job_id)
             assert job and job.status == JobStatus.SUCCEEDED
 
+        external_id_search = client.get(
+            "/api/v1/contacts", params={"q": "13"}, headers=viewer_headers
+        )
+        assert external_id_search.status_code == 200
+        assert [row["external_id"] for row in external_id_search.json()["data"]] == [
+            "13"
+        ]
+
         conflict = client.post(
             f"/api/v1/imports/{import_id}/confirm",
             headers={**operator_headers, "Idempotency-Key": "different-123456"},
