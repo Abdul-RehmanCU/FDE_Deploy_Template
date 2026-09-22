@@ -21,12 +21,11 @@ into the Helm release instead of copying addresses by hand. Helm then runs the
 migration Job:
 
 ```bash
-terraform output -json helm_managed_network_policy > managed-network-policy.json
 helm upgrade --install fde ../../../helm/fde \
   --namespace production --create-namespace \
   --values ../../../helm/fde/values-managed.example.yaml \
   --values customer-values.yaml \
-  --set-json networkPolicy.managedServices="$(cat managed-network-policy.json)"
+  --set-json networkPolicy.managedServices="$(terraform output -json helm_managed_network_policy)"
 ```
 
 The emitted map contains the provisioned Cloud SQL private address as a `/32`,
