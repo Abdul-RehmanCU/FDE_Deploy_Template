@@ -18,6 +18,7 @@ from fde_cli.operations import (
     validate_helm_values,
     validate_paid_cost_gate,
     validate_demo_cost_drivers,
+    validate_cleanup_manifest,
 )
 from test_config import VALID, write
 
@@ -199,6 +200,48 @@ def test_paid_cost_gate_requires_fresh_explicit_authorization() -> None:
     stale = {**base, "baseline_observed_at": now - timedelta(minutes=31)}
     with pytest.raises(OperationError, match="older than"):
         validate_paid_cost_gate(CostGate(**stale, paid_provisioning_allowed=True), now=now)
+
+
+def cleanup_manifest() -> dict[str, object]:
+    prefix = "fde-acme"
+    return {
+        "project_id": "fdetemplate",
+        "expiry_id": "demo-test-run",
+        "cluster_name": f"{prefix}-demo",
+        "artifact_repository": f"{prefix}-images",
+        "bucket_names": ["fdetemplate-fde-acme-production-demo", "fdetemplate-fde-acme-staging"],
+        "disk_resources": [
+            {"name": name}
+            for name in sorted(
+                [
+                    f"{prefix}-observability-loki",
+                    f"{prefix}-observability-prometheus",
+                    f"{prefix}-observability-tempo",
+                    f"{prefix}-production-demo-postgres",
+                    f"{prefix}-production-demo-redis",
+                    f"{prefix}-staging-postgres",
+                    f"{prefix}-staging-redis",
+                ]
+            )
+        ],
+    }
+
+
+def test_cleanup_manifest_fallback_is_exact_and_fail_closed(tmp_path: Path) -> None:
+    cfg = config(tmp_path)
+    manifest = cleanup_manifest()
+    validate_cleanup_manifest(cfg, "demo-test-run", manifest)
+    for field, value in (
+        ("project_id", "other-project"),
+        ("expiry_id", "other-run"),
+        ("cluster_name", "other-cluster"),
+        ("artifact_repository", "other-repo"),
+        ("bucket_names", []),
+        ("disk_resources", []),
+    ):
+        drifted = {**manifest, field: value}
+        with pytest.raises(OperationError, match="does not match"):
+            validate_cleanup_manifest(cfg, "demo-test-run", drifted)
 
 
 def valid_helm_values(tmp_path: Path) -> tuple[object, Path, dict[str, object]]:

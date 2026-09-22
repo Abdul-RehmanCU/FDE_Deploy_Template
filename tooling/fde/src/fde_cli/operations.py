@@ -29,6 +29,38 @@ def validate_paid_cost_gate(cost: CostGate, *, now: datetime | None = None) -> N
         raise OperationError("billing/resource cost baseline is older than 30 minutes")
 
 
+def validate_cleanup_manifest(
+    config: InstallationConfig, expiry_id: str, manifest: dict[str, object]
+) -> None:
+    prefix = f"fde-{config.customer}"
+    expected = {
+        "project_id": config.project,
+        "expiry_id": expiry_id,
+        "cluster_name": f"{prefix}-demo",
+        "artifact_repository": f"{prefix}-images",
+        "bucket_names": sorted([f"{config.project}-{prefix}-production-demo", f"{config.project}-{prefix}-staging"]),
+        "disk_names": sorted([
+            f"{prefix}-observability-loki",
+            f"{prefix}-observability-prometheus",
+            f"{prefix}-observability-tempo",
+            f"{prefix}-production-demo-postgres",
+            f"{prefix}-production-demo-redis",
+            f"{prefix}-staging-postgres",
+            f"{prefix}-staging-redis",
+        ]),
+    }
+    actual = {
+        "project_id": manifest.get("project_id"),
+        "expiry_id": manifest.get("expiry_id"),
+        "cluster_name": manifest.get("cluster_name"),
+        "artifact_repository": manifest.get("artifact_repository"),
+        "bucket_names": sorted(manifest.get("bucket_names", [])),
+        "disk_names": sorted(item.get("name") for item in manifest.get("disk_resources", [])),
+    }
+    if actual != expected:
+        raise OperationError("cleanup manifest does not match deterministic project/customer/run ownership")
+
+
 def validate_helm_values(config: InstallationConfig, path: Path) -> None:
     try:
         values = yaml.safe_load(path.read_text(encoding="utf-8"))
@@ -538,11 +570,22 @@ def destroy_demo(
     confirm_customer: str,
     expiry_id: str,
     expiry_terraform_dir: Path,
+    manifest_file: Path | None = None,
 ) -> list[dict[str, object]]:
     if confirm_customer != config.customer:
         raise OperationError("--confirm-customer must exactly match the configured customer")
     terraform = executable("terraform")
-    manifest = json.loads(run([terraform, "output", "-json", "compiled_manifest"], cwd=expiry_terraform_dir).stdout)
+    manifest_output = run([terraform, "output", "-json", "compiled_manifest"], cwd=expiry_terraform_dir, check=False)
+    if manifest_output.returncode == 0:
+        manifest = json.loads(manifest_output.stdout)
+    elif manifest_file is not None:
+        try:
+            manifest = json.loads(manifest_file.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as exc:
+            raise OperationError(f"cannot read cleanup manifest fallback: {exc}") from exc
+    else:
+        raise OperationError("expiry state is unavailable and no cleanup manifest fallback was supplied")
+    validate_cleanup_manifest(config, expiry_id, manifest)
     run([terraform, "destroy", "-input=false", "-auto-approve", "-lock-timeout=60s", f"-var=project_id={config.project}", f"-var=customer={config.customer}", f"-var=cluster_name=fde-{config.customer}-demo", f"-var=expiry_id={expiry_id}"], cwd=terraform_dir)
     gcloud = executable("gcloud")
     inventory_commands: Iterable[tuple[str, list[str]]] = (

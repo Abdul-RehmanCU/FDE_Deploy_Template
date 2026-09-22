@@ -89,6 +89,7 @@ def parser() -> argparse.ArgumentParser:
     destroy.add_argument("--confirm-customer", required=True)
     destroy.add_argument("--expiry-id", required=True)
     destroy.add_argument("--expiry-terraform-dir", required=True)
+    destroy.add_argument("--manifest-file")
     return result
 
 
@@ -160,7 +161,19 @@ def main(argv: list[str] | None = None) -> int:
             print(collect_evidence(config, Path(args.output_dir)))
             return 0
         if args.command == "destroy":
-            print(json.dumps(destroy_demo(config, Path(args.terraform_dir), args.confirm_customer, args.expiry_id, Path(args.expiry_terraform_dir)), indent=2))
+            print(
+                json.dumps(
+                    destroy_demo(
+                        config,
+                        Path(args.terraform_dir),
+                        args.confirm_customer,
+                        args.expiry_id,
+                        Path(args.expiry_terraform_dir),
+                        Path(args.manifest_file) if args.manifest_file else None,
+                    ),
+                    indent=2,
+                )
+            )
             return 0
     except (ConfigurationError, OperationError, RuntimeError) as exc:
         print(json.dumps({"error": str(exc)}, indent=2), file=sys.stderr)
