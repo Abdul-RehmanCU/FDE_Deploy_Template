@@ -7,6 +7,11 @@ metadata:
     app.kubernetes.io/component: publisher
 spec:
   replicas: 1
+  # The publisher owns a durable outbox. Recreate prevents an old pod that
+  # started before an observability upgrade from publishing during the new
+  # pod's rollout window with a no-op tracer.
+  strategy:
+    type: Recreate
   selector:
     matchLabels: { app.kubernetes.io/instance: {{ .Release.Name }}, app.kubernetes.io/component: publisher }
   template:

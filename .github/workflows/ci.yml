@@ -524,6 +524,8 @@ jobs:
             --namespace fde-staging \
             --values infra/helm/fde/values-kind.yaml \
             --set-string branding.name='CI Customer Directory' \
+            --set observability.enabled=true \
+            --set observability.otlpEndpoint=http://fde-otel-collector.observability.svc.cluster.local:4317 \
             --wait \
             --wait-for-jobs \
             --timeout 12m
@@ -581,14 +583,8 @@ jobs:
           done
           kubectl -n observability rollout status daemonset/fde-alloy --timeout=30s
           kubectl -n observability rollout status deployment/fde-otel-collector --timeout=180s
-          helm upgrade fde infra/helm/fde \
-            --namespace fde-staging \
-            --values infra/helm/fde/values-kind.yaml \
-            --set-string branding.name='CI Customer Directory' \
-            --set observability.enabled=true \
-            --set observability.otlpEndpoint=http://fde-otel-collector.observability.svc.cluster.local:4317 \
-            --wait \
-            --timeout 5m
+          # Every app process started with OTLP enabled. Do not introduce a
+          # mixed old/no-op publisher generation immediately before tracing.
           kubectl -n fde-staging rollout status deployment/fde-ci-demo-staging-api --timeout=180s
           kubectl -n fde-staging rollout status deployment/fde-ci-demo-staging-worker --timeout=180s
           kubectl -n fde-staging rollout status deployment/fde-ci-demo-staging-publisher --timeout=180s

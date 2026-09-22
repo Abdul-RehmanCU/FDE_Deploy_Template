@@ -1,0 +1,49 @@
+from pathlib import Path
+
+ROOT = Path(__file__).parents[3]
+
+
+def terraform_block(text: str, header: str) -> str:
+    start = text.index(header)
+    opening = text.index("{", start)
+    depth = 0
+    for index in range(opening, len(text)):
+        character = text[index]
+        if character == "{":
+            depth += 1
+        elif character == "}":
+            depth -= 1
+            if depth == 0:
+                return text[start : index + 1]
+    raise AssertionError(f"unterminated Terraform block: {header}")
+
+
+def test_bootstrap_enables_cloud_resource_manager_before_project_resources() -> None:
+    text = (ROOT / "infra" / "terraform" / "bootstrap" / "main.tf").read_text(
+        encoding="utf-8"
+    )
+    start = text.index("required_services = toset([")
+    end = text.index("])\n", start) + 2
+    services = text[start:end]
+    assert '"cloudresourcemanager.googleapis.com"' in services
+    assert 'resource "google_project_service" "required"' in text
+
+    for header in (
+        'resource "google_storage_bucket" "terraform_state"',
+        'resource "google_service_account" "automation"',
+        'resource "google_iam_workload_identity_pool" "github"',
+        'resource "google_iam_workload_identity_pool_provider" "github"',
+        'resource "google_service_account_iam_member" "github_federation"',
+        'resource "google_storage_bucket_iam_member" "infra_state"',
+        'resource "google_project_iam_member" "automation_roles"',
+    ):
+        assert "depends_on = [google_project_service.required]" in terraform_block(
+            text, header
+        ), header
+
+
+def test_publisher_recreate_prevents_old_observability_configuration_overlap() -> None:
+    text = (ROOT / "infra" / "helm" / "fde" / "templates" / "publisher.yaml").read_text(
+        encoding="utf-8"
+    )
+    assert "  strategy:\n    type: Recreate" in text
