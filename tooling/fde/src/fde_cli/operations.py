@@ -351,21 +351,18 @@ def terraform_plan(
     )
 
 
-def deploy_demo(
+def deploy_demo_infrastructure(
     config: InstallationConfig,
     *,
     gate_path: Path,
     cost_path: Path,
     terraform_dir: Path,
     plan_path: Path,
-    chart: Path,
-    values: Path,
     expiry_terraform_dir: Path,
     expiry_evidence_path: Path,
 ) -> None:
     if config.profile != "demo":
         raise OperationError("managed profile deployment is forbidden under the USD 25 demo authorization")
-    validate_helm_values(config, values)
     cost = load_cost_gate(cost_path)
     gate = load_release_gate(gate_path)
     validate_paid_cost_gate(cost)
@@ -432,11 +429,42 @@ def deploy_demo(
     if plan_path.stat().st_mtime > gate_path.stat().st_mtime:
         raise OperationError("release gate must be issued after the final Terraform plan")
     run([terraform, "apply", "-input=false", "-lock-timeout=60s", str(plan_path.resolve())], cwd=terraform_dir)
+
+
+def deploy_release(config: InstallationConfig, *, chart: Path, values: Path) -> None:
+    if config.profile != "demo":
+        raise OperationError("managed profile deployment is forbidden under the USD 25 demo authorization")
+    validate_helm_values(config, values)
+    gcloud = executable("gcloud")
     run([gcloud, "container", "clusters", "get-credentials", f"fde-{config.customer}-demo", f"--zone={config.zone}", f"--project={config.project}"])
     helm = executable("helm")
     run(
         [helm, "upgrade", "--install", config.release, str(chart.resolve()), "--namespace", config.namespace, "--create-namespace", "--values", str(values.resolve()), "--atomic", "--wait", "--wait-for-jobs", "--timeout", "12m"],
     )
+
+
+def deploy_demo(
+    config: InstallationConfig,
+    *,
+    gate_path: Path,
+    cost_path: Path,
+    terraform_dir: Path,
+    plan_path: Path,
+    chart: Path,
+    values: Path,
+    expiry_terraform_dir: Path,
+    expiry_evidence_path: Path,
+) -> None:
+    deploy_demo_infrastructure(
+        config,
+        gate_path=gate_path,
+        cost_path=cost_path,
+        terraform_dir=terraform_dir,
+        plan_path=plan_path,
+        expiry_terraform_dir=expiry_terraform_dir,
+        expiry_evidence_path=expiry_evidence_path,
+    )
+    deploy_release(config, chart=chart, values=values)
 
 
 def verify_release(config: InstallationConfig, *, local_port: int = 18080) -> dict[str, object]:

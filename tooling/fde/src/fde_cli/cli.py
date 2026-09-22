@@ -13,6 +13,8 @@ from .operations import (
     bootstrap_gcp,
     collect_evidence,
     deploy_demo,
+    deploy_demo_infrastructure,
+    deploy_release,
     destroy_demo,
     rollback_release,
     terraform_plan,
@@ -61,6 +63,18 @@ def parser() -> argparse.ArgumentParser:
     deploy.add_argument("--values", required=True)
     deploy.add_argument("--expiry-terraform-dir", required=True)
     deploy.add_argument("--expiry-evidence", required=True)
+
+    deploy_infra = cloud_command("deploy-infrastructure", "Apply an approved demo infrastructure plan only")
+    deploy_infra.add_argument("--gate", required=True)
+    deploy_infra.add_argument("--cost", required=True)
+    deploy_infra.add_argument("--terraform-dir", required=True)
+    deploy_infra.add_argument("--plan", required=True)
+    deploy_infra.add_argument("--expiry-terraform-dir", required=True)
+    deploy_infra.add_argument("--expiry-evidence", required=True)
+
+    deploy_app = cloud_command("deploy-release", "Deploy rendered Helm values after infrastructure outputs exist")
+    deploy_app.add_argument("--chart", required=True)
+    deploy_app.add_argument("--values", required=True)
 
     verify = cloud_command("verify", "Verify rollout and dependency-aware health")
     verify.add_argument("--local-port", type=int, default=18080)
@@ -121,6 +135,20 @@ def main(argv: list[str] | None = None) -> int:
                 expiry_terraform_dir=Path(args.expiry_terraform_dir),
                 expiry_evidence_path=Path(args.expiry_evidence),
             )
+            return 0
+        if args.command == "deploy-infrastructure":
+            deploy_demo_infrastructure(
+                config,
+                gate_path=Path(args.gate),
+                cost_path=Path(args.cost),
+                terraform_dir=Path(args.terraform_dir),
+                plan_path=Path(args.plan),
+                expiry_terraform_dir=Path(args.expiry_terraform_dir),
+                expiry_evidence_path=Path(args.expiry_evidence),
+            )
+            return 0
+        if args.command == "deploy-release":
+            deploy_release(config, chart=Path(args.chart), values=Path(args.values))
             return 0
         if args.command == "verify":
             print(json.dumps(verify_release(config, local_port=args.local_port), indent=2))
