@@ -207,7 +207,8 @@ jobs:
           name: browser-evidence-${{ github.sha }}
           path: |
             frontend/playwright-report
-            frontend/test-results
+            frontend/test-results/evidence/*.png
+            frontend/test-results/**/*.webm
           if-no-files-found: warn
           retention-days: 14
 

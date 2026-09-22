@@ -17,7 +17,7 @@ export default defineConfig({
   use: {
     baseURL,
     screenshot: "only-on-failure",
-    trace: "retain-on-failure",
+    trace: "off",
     video: process.env.CI ? "on" : "retain-on-failure",
   },
   projects: [
