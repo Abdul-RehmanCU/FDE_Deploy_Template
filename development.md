@@ -1,138 +1,121 @@
-# FastAPI Project - Development
+# Development guide
 
-## Local Development
+GitHub-hosted CI is the canonical integration environment. Local processes are optional conveniences and should use synthetic data only.
 
-For local development, run PostgreSQL and Mailpit with Docker Compose, and run the FastAPI and Vite development servers locally.
+## Toolchain
 
-Start the supporting services:
+- Python 3.14 and `uv`;
+- Bun 1.3.10;
+- PostgreSQL 17 and Redis 8 for service-backed behavior;
+- Docker, Helm, `kubectl`, kind, and Terraform 1.15.8 for delivery work.
+
+Install locked dependencies from the repository root:
 
 ```bash
-docker compose up -d db mailpit
+uv sync --locked --all-groups
+bun install --frozen-lockfile
 ```
 
-Then, from the `backend` directory, install the dependencies and prepare the database:
+Copy `.env.example` to `.env` and replace every generated placeholder. The file is ignored by Git. SMTP is intentionally disabled.
+
+## Start the local services
+
+The Compose files are developer conveniences, not the production deployment model.
 
 ```bash
-uv sync
-uv run bash scripts/prestart.sh
+docker compose up -d db redis
 ```
 
-Start the FastAPI development server:
+Apply migrations and create the first administrator:
 
 ```bash
-uv run fastapi dev
+cd backend
+uv run alembic upgrade head
+uv run python -m app.bootstrap_admin admin@example.com --full-name "Local Administrator"
 ```
 
-In another terminal, from the project root, install the frontend dependencies and start the Vite development server:
+Store the printed one-time password temporarily, sign in, and change it. Do not place it in a fixture or documentation.
+
+## Start application processes
+
+Use separate terminals:
 
 ```bash
-bun install
-bun run dev
+cd backend
+uv run fastapi run app/main.py --port 8000
 ```
 
-Now you can open these URLs:
-
-Frontend development server: <http://localhost:5173>
-
-Backend API: <http://localhost:8000>
-
-Automatic interactive API documentation with Swagger UI: <http://localhost:8000/docs>
-
-Mailpit: <http://localhost:8025>
-
-The frontend development server uses the backend at `http://localhost:8000`, as configured in `frontend/.env`.
-
-### Frontend Served by FastAPI
-
-Build the frontend from the `frontend` directory:
+```bash
+cd backend
+uv run python -m app.outbox_publisher
+```
 
 ```bash
+cd backend
+uv run celery -A app.worker.celery_app worker --loglevel=info --concurrency=1
+```
+
+```bash
+bun run --filter frontend dev
+```
+
+Open `http://localhost:5173`. The public API is under `http://localhost:8000/api/v1`; internal metrics are not proxied by the frontend.
+
+## Generate the API client
+
+After an API schema change, export the FastAPI OpenAPI document and run the pinned generator. The committed client must match the final backend revision.
+
+```bash
+./scripts/generate-client.sh
+```
+
+Run the frontend build after generation. The compile-time assertions in `frontend/src/features/api/generated-contract.ts` fail when critical generated response shapes no longer satisfy the UI contract.
+
+## Backend tests
+
+```bash
+uv run --package app ruff check backend/app backend/tests
+uv run --package app ruff format --check backend
+uv run --package app mypy backend/app backend/tests
+uv run --package app pytest -q backend/tests
+```
+
+Tests marked for PostgreSQL skip when no service is available. In CI, migrations run first and `RUN_POSTGRES_TESTS=1` turns those scenarios into required checks. They cover role changes, token invalidation, replay, cancellation, outbox locking, schema constraints, formula-safe reports, confirmation idempotency, and migration upgrades.
+
+## Frontend tests
+
+```bash
+cd frontend
+bunx biome ci --no-errors-on-unmatched --files-ignore-unknown=true .
 bun run build
+bunx playwright test --list
 ```
 
-The build is written to `backend/app/frontend` and served by FastAPI at <http://localhost:8000>. Rebuild the frontend after making frontend changes.
+The full Playwright suite expects the API, PostgreSQL, Redis, worker, publisher, and Vite server. CI creates deterministic admin/operator/viewer sessions and publishes only sanitized PNG/WebM/report artifacts. Raw traces and authentication storage are excluded.
 
-## Full Stack with Docker Compose
-
-To run the backend and built frontend in Docker Compose:
+## Deployment tooling
 
 ```bash
-docker compose run --rm backend bash scripts/prestart.sh
-docker compose watch
+uv run --project tooling/fde --with pytest pytest -q tooling/fde/tests
+uv run --project tooling/fde fde validate-config infra/config/customers/demo.example.yaml
+uv run --project tooling/fde fde doctor infra/config/customers/demo.example.yaml
 ```
 
-Now you can open these URLs:
+Commands that call Terraform, Helm, `kubectl`, or `gcloud` validate customer/environment/project identity before execution and redact secret-bearing output.
 
-Application, with the frontend and API served by FastAPI: <http://localhost:8000>
+## Kubernetes and Terraform
 
-Automatic interactive API documentation with Swagger UI: <http://localhost:8000/docs>
+Use GitHub CI for the authoritative image build and kind rehearsal. It loads separate API and frontend images, installs the chart with test-only Kubernetes secrets, completes an import through the frontend proxy, restarts the worker, measures requests during an API rollout, and verifies recovery from an unhealthy release.
 
-Adminer, database web administration: <http://localhost:8080>
-
-Traefik UI, to see how the routes are being handled by the proxy: <http://localhost:8090>
-
-Mailpit: <http://localhost:8025>
-
-Stop a locally running FastAPI server before starting the Compose backend because both use port `8000`.
-
-**Note**: The first time you start the stack, it might take a minute for all the services to be ready. To monitor it, use `docker compose logs`, or `docker compose logs backend` for the backend service.
-
-## Mailpit
-
-[Mailpit](https://mailpit.axllent.org) captures emails sent during local development instead of delivering them. The local backend connects to it at `localhost:1025`, and the Compose backend connects to the `mailpit` service. Captured emails are available at <http://localhost:8025>.
-
-## Docker Compose Files and Environment Variables
-
-The main `compose.yml` file contains the configuration shared by the whole stack. Docker Compose loads it automatically.
-
-The `compose.override.yml` file adds local development settings, such as mounting the source code as a volume. Docker Compose also loads it automatically and applies it on top of `compose.yml`.
-
-The `compose.deploy.yml` file contains the deployment-specific settings, including HTTPS and automatic certificate handling. It is explicitly combined with `compose.yml` when deploying the application.
-
-The backend reads local settings from the `.env` file. Docker Compose also uses it for variable interpolation and passes the settings each container needs.
-
-After changing variables, make sure you restart the stack:
+Terraform directories have committed Linux/Windows provider locks. Validate without remote state:
 
 ```bash
-docker compose watch
+terraform -chdir=infra/terraform/environments/demo init -backend=false -input=false -lockfile=readonly
+terraform -chdir=infra/terraform/environments/demo validate
 ```
 
-## The `.env` File
+Never apply the demo or managed roots merely to test syntax.
 
-The tracked `.env` file contains local development defaults, passwords, and other configuration. Its hostnames use `localhost` for processes running on your machine. Docker Compose overrides hostnames such as the database and SMTP server with their Compose service names.
+## Formatting and generated files
 
-Do not store deployment secrets in `.env`. Configure them as described in the [FastAPI Cloud deployment guide](./deployment.md) or the [Docker Compose deployment guide](./deployment-docker-compose.md).
-
-## Pre-commit Hooks and Code Linting
-
-The project uses [prek](https://prek.j178.dev/), a modern alternative to [pre-commit](https://pre-commit.com/), for code linting and formatting.
-
-You can find a file `.pre-commit-config.yaml` with configurations at the root of the project.
-
-### Install `prek` to Run Automatically
-
-`prek` is already part of the dependencies of the project.
-
-From the project root, install the Git hook so that `prek` runs automatically before each commit:
-
-```bash
-uv run prek install -f
-```
-
-The `-f` flag forces the installation, in case there was already a `pre-commit` hook previously installed.
-
-Now whenever you try to commit, for example with:
-
-```bash
-git commit
-```
-
-`prek` will check and format the code you are about to commit. If it modifies any files, add those files to Git again before committing.
-
-### Run `prek` Manually
-
-You can also run `prek` manually on all files from the project root:
-
-```bash
-uv run prek run --all-files
-```
+Use Ruff for Python and Biome for TypeScript. Generated client and route-tree files are committed because type checking runs before runtime generation in clean CI. Review generated diffs for removed operations, unexpected optional fields, and unsafe response changes.
