@@ -15,7 +15,7 @@ spec:
         {{- include "fde.labels" . | nindent 8 }}
         app.kubernetes.io/component: frontend
     spec:
-      securityContext: { runAsNonRoot: true, seccompProfile: { type: RuntimeDefault } }
+      securityContext: { runAsNonRoot: true, fsGroup: 101, seccompProfile: { type: RuntimeDefault } }
       containers:
         - name: frontend
           image: {{ include "fde.frontendImage" . }}
@@ -26,7 +26,15 @@ spec:
           readinessProbe: { httpGet: { path: /, port: http }, periodSeconds: 5 }
           livenessProbe: { httpGet: { path: /, port: http }, periodSeconds: 10 }
           resources: {{- toYaml .Values.frontend.resources | nindent 12 }}
+          volumeMounts:
+            - { name: nginx-config, mountPath: /etc/nginx/conf.d }
+            - { name: nginx-tmp, mountPath: /tmp }
+            - { name: nginx-cache, mountPath: /var/cache/nginx }
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
             capabilities: { drop: ["ALL"] }
+      volumes:
+        - { name: nginx-config, emptyDir: {} }
+        - { name: nginx-tmp, emptyDir: {} }
+        - { name: nginx-cache, emptyDir: {} }
