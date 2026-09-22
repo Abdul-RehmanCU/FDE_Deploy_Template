@@ -7,6 +7,7 @@ from sqlalchemy import delete
 from sqlmodel import Session, select
 
 from app import crud
+from app.api.routes import users as users_route
 from app.core.db import engine
 from app.core.security import create_access_token
 from app.main import app
@@ -127,3 +128,41 @@ def test_admin_user_lifecycle_and_role_matrix() -> None:
             "user.temporary_password_issued",
             "user.updated",
         } <= actions
+
+
+def test_user_create_rolls_back_when_audit_write_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    with Session(engine) as session:
+        for model in (
+            AuditEvent,
+            JobOutbox,
+            JobAttempt,
+            Job,
+            Contact,
+            ValidationRow,
+            ImportBatch,
+            User,
+        ):
+            session.execute(delete(model))
+        session.commit()
+        admin = seed_user(session, "rollback-admin@example.com", UserRole.ADMIN)
+        headers = auth(admin)
+
+    def fail_audit(*args: object, **kwargs: object) -> None:
+        del args, kwargs
+        raise RuntimeError("simulated audit failure")
+
+    monkeypatch.setattr(users_route, "record_audit", fail_audit)
+    with TestClient(app) as client:
+        with pytest.raises(RuntimeError, match="simulated audit failure"):
+            client.post(
+                "/api/v1/users",
+                headers=headers,
+                json={"email": "must-rollback@example.com", "role": "viewer"},
+            )
+    with Session(engine) as session:
+        assert (
+            crud.get_user_by_email(session=session, email="must-rollback@example.com")
+            is None
+        )
