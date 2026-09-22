@@ -1,5 +1,6 @@
 import path from "node:path"
 import { expect, test } from "@playwright/test"
+import { captureMainContent } from "./evidence"
 
 test.describe.configure({ retries: 0 })
 
@@ -22,9 +23,7 @@ test("operator completes upload mapping validation confirmation and search", asy
   await page.getByLabel(/^Company/).selectOption("Company")
   await page.getByLabel(/^Country code/).selectOption("Country")
   await page.getByLabel(/^External ID/).selectOption("External ID")
-  await page.locator("#main-content > div").screenshot({
-    path: "test-results/evidence/column-mapping.png",
-  })
+  await captureMainContent(page, "test-results/evidence/column-mapping.png")
   await page.getByRole("button", { name: "Save mapping" }).click()
   await expect(
     page.getByRole("button", { name: "Validate rows" }),
@@ -37,9 +36,7 @@ test("operator completes upload mapping validation confirmation and search", asy
   await expect(
     page.getByRole("heading", { name: "Validation results" }),
   ).toBeVisible()
-  await page.locator("#main-content > div").screenshot({
-    path: "test-results/evidence/validation-results.png",
-  })
+  await captureMainContent(page, "test-results/evidence/validation-results.png")
 
   await page.getByRole("button", { name: "Import 3 valid rows" }).click()
   await expect(page.getByText("completed", { exact: true })).toBeVisible({

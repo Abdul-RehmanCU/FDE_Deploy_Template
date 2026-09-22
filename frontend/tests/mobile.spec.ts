@@ -1,5 +1,6 @@
 import path from "node:path"
 import { expect, test } from "@playwright/test"
+import { captureMainContent } from "./evidence"
 
 test("operator overview and directory remain usable on mobile", async ({
   page,
@@ -36,9 +37,10 @@ test("operator overview and directory remain usable on mobile", async ({
     await expect(select).toHaveValue(expected)
   }
 
-  await page.locator("#main-content > div").screenshot({
-    path: "test-results/evidence/mobile-column-mapping.png",
-  })
+  await captureMainContent(
+    page,
+    "test-results/evidence/mobile-column-mapping.png",
+  )
 
   const save = page.getByRole("button", { name: "Save mapping" })
   await save.focus()
@@ -51,9 +53,7 @@ test("operator overview and directory remain usable on mobile", async ({
   await expect(page.getByText("validated", { exact: true })).toBeVisible({
     timeout: 30_000,
   })
-  await page.locator("#main-content > div").screenshot({
-    path: "test-results/evidence/mobile-validation.png",
-  })
+  await captureMainContent(page, "test-results/evidence/mobile-validation.png")
 
   const confirm = page.getByRole("button", { name: "Import 1 valid rows" })
   await confirm.focus()
