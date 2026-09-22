@@ -1,95 +1,62 @@
-import { defineConfig, devices } from '@playwright/test';
-import 'dotenv/config'
+import { defineConfig, devices } from "@playwright/test"
 
-const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? 'http://localhost:5173'
+const baseURL = process.env.PLAYWRIGHT_BASE_URL ?? "http://127.0.0.1:5173"
 
-/**
- * Read environment variables from file.
- * https://github.com/motdotla/dotenv
- */
-
-/**
- * See https://playwright.dev/docs/test-configuration.
- */
 export default defineConfig({
-  testDir: './tests',
-  /* Run tests in files in parallel */
-  fullyParallel: true,
-  /* Fail the build on CI if you accidentally left test.only in the source code. */
-  forbidOnly: !!process.env.CI,
-  /* Retry on CI only */
-  retries: process.env.CI ? 2 : 0,
-  /* Opt out of parallel tests on CI. */
-  workers: process.env.CI ? 1 : undefined,
-  /* Reporter to use. See https://playwright.dev/docs/test-reporters */
-  reporter: process.env.CI ? 'blob' : 'html',
-  /* Shared settings for all the projects below. See https://playwright.dev/docs/api/class-testoptions. */
+  testDir: "./tests",
+  fullyParallel: false,
+  forbidOnly: Boolean(process.env.CI),
+  retries: process.env.CI ? 1 : 0,
+  workers: 1,
+  reporter: process.env.CI
+    ? [
+        ["github"],
+        ["html", { open: "never", outputFolder: "playwright-report" }],
+      ]
+    : "html",
   use: {
-    /* Base URL to use in actions like `await page.goto('/')`. */
     baseURL,
-
-    /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
-    trace: 'on-first-retry',
+    screenshot: "only-on-failure",
+    trace: "retain-on-failure",
+    video: process.env.CI ? "on" : "retain-on-failure",
   },
-
-  /* Configure projects for major browsers */
   projects: [
-    { name: 'setup', testMatch: /.*\.setup\.ts/ },
-
+    { name: "setup", testMatch: /e2e\.setup\.ts/ },
     {
-      name: 'chromium',
+      name: "admin-desktop",
+      testMatch: /admin\.spec\.ts/,
       use: {
-        ...devices['Desktop Chrome'],
-        storageState: 'playwright/.auth/user.json',
+        ...devices["Desktop Chrome"],
+        storageState: "playwright/.auth/admin.json",
       },
-      dependencies: ['setup'],
+      dependencies: ["setup"],
     },
-
-    // {
-    //   name: 'firefox',
-    //   use: {
-    //     ...devices['Desktop Firefox'],
-    //     storageState: 'playwright/.auth/user.json',
-    //   },
-    //   dependencies: ['setup'],
-    // },
-
-    // {
-    //   name: 'webkit',
-    //   use: {
-    //     ...devices['Desktop Safari'],
-    //     storageState: 'playwright/.auth/user.json',
-    //   },
-    //   dependencies: ['setup'],
-    // },
-
-    /* Test against mobile viewports. */
-    // {
-    //   name: 'Mobile Chrome',
-    //   use: { ...devices['Pixel 5'] },
-    // },
-    // {
-    //   name: 'Mobile Safari',
-    //   use: { ...devices['iPhone 12'] },
-    // },
-
-    /* Test against branded browsers. */
-    // {
-    //   name: 'Microsoft Edge',
-    //   use: { ...devices['Desktop Edge'], channel: 'msedge' },
-    // },
-    // {
-    //   name: 'Google Chrome',
-    //   use: { ...devices['Desktop Chrome'], channel: 'chrome' },
-    // },
-  ],
-
-  /* Run your local dev server before starting the tests */
-  webServer: process.env.PLAYWRIGHT_BASE_URL
-    ? undefined
-    : {
-        command: 'bun run dev',
-        url: baseURL,
-        reuseExistingServer: !process.env.CI,
+    {
+      name: "operator-desktop",
+      testMatch: /operator\.spec\.ts/,
+      use: {
+        ...devices["Desktop Chrome"],
+        storageState: "playwright/.auth/operator.json",
       },
-});
+      dependencies: ["setup"],
+    },
+    {
+      name: "viewer-desktop",
+      testMatch: /viewer\.spec\.ts/,
+      use: {
+        ...devices["Desktop Chrome"],
+        storageState: "playwright/.auth/viewer.json",
+      },
+      dependencies: ["setup"],
+    },
+    {
+      name: "operator-mobile",
+      testMatch: /mobile\.spec\.ts/,
+      use: {
+        ...devices["Pixel 7"],
+        storageState: "playwright/.auth/operator.json",
+      },
+      dependencies: ["setup"],
+    },
+  ],
+})
