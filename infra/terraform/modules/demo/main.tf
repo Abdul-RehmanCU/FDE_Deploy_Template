@@ -196,7 +196,7 @@ resource "google_service_account_iam_member" "gke_runtime" {
 
 resource "google_secret_manager_secret" "runtime" {
   for_each = toset([
-    for pair in setproduct(var.namespaces, ["database-url", "redis-url", "secret-key"]) :
+    for pair in setproduct(var.namespaces, ["database-url", "postgres-password", "redis-password", "redis-url", "secret-key"]) :
     "${pair[0]}-${pair[1]}"
   ])
   project   = var.project_id
