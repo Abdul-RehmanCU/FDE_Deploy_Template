@@ -12,16 +12,29 @@ fde.dev/environment: {{ .Values.environment | quote }}
 {{- define "fde.frontendImage" -}}{{ printf "%s@%s" .Values.images.frontend.repository .Values.images.frontend.digest }}{{- end -}}
 {{- define "fde.secretVolume" -}}
 - name: runtime-secrets
+  {{- if .Values.secretProvider.enabled }}
   csi:
     driver: secrets-store-gke.csi.k8s.io
     readOnly: true
     volumeAttributes:
       secretProviderClass: {{ include "fde.fullname" . }}
+  {{- else }}
+  secret:
+    secretName: {{ .Values.secretProvider.kubernetesSecretName }}
+  {{- end }}
+- name: runtime-tmp
+  emptyDir: {}
+- name: local-storage
+  emptyDir: {}
 {{- end -}}
 {{- define "fde.secretMount" -}}
 - name: runtime-secrets
   mountPath: /var/run/secrets/fde
   readOnly: true
+- name: runtime-tmp
+  mountPath: /tmp
+- name: local-storage
+  mountPath: {{ .Values.storage.localRoot }}
 {{- end -}}
 {{- define "fde.backendEnv" -}}
 - { name: DATABASE_URL_FILE, value: /var/run/secrets/fde/database-url }
@@ -35,6 +48,7 @@ fde.dev/environment: {{ .Values.environment | quote }}
 - { name: GCS_BUCKET, value: {{ .Values.storage.gcsBucket | quote }} }
 - { name: APP_ENVIRONMENT, value: {{ .Values.environment | quote }} }
 - { name: APP_VERSION, value: {{ .Values.appVersion | quote }} }
+- { name: TMPDIR, value: /tmp }
 {{- if .Values.observability.enabled }}
 - { name: OTEL_EXPORTER_OTLP_ENDPOINT, value: {{ .Values.observability.otlpEndpoint | quote }} }
 - { name: OTEL_EXPORTER_OTLP_PROTOCOL, value: grpc }
