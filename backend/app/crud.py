@@ -20,7 +20,7 @@ def create_user(
         update={"hashed_password": get_password_hash(password), "must_change_password": True},
     )
     session.add(db_obj)
-    session.commit()
+    session.flush()
     session.refresh(db_obj)
     return db_obj, password
 
@@ -33,7 +33,7 @@ def update_user(*, session: Session, db_user: User, user_in: UserUpdate) -> User
         if "is_active" in changes or "role" in changes:
             db_user.token_version += 1
         session.add(db_user)
-        session.commit()
+        session.flush()
         session.refresh(db_user)
     return db_user
 
@@ -45,7 +45,7 @@ def set_temporary_password(*, session: Session, db_user: User) -> str:
     db_user.token_version += 1
     db_user.updated_at = utc_now()
     session.add(db_user)
-    session.commit()
+    session.flush()
     return password
 
 

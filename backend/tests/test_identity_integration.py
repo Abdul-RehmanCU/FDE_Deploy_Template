@@ -4,7 +4,7 @@ from datetime import timedelta
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import delete
-from sqlmodel import Session
+from sqlmodel import Session, select
 
 from app import crud
 from app.core.db import engine
@@ -119,3 +119,11 @@ def test_admin_user_lifecycle_and_role_matrix() -> None:
         )
         assert self_disable.status_code == 409
         assert self_disable.json()["detail"]["code"] == "self_disable_forbidden"
+
+    with Session(engine) as session:
+        actions = {event.action for event in session.exec(select(AuditEvent)).all()}
+        assert {
+            "user.created",
+            "user.temporary_password_issued",
+            "user.updated",
+        } <= actions
