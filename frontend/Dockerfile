@@ -11,7 +11,7 @@ WORKDIR /app/frontend
 ARG VITE_API_URL=
 RUN bun run build
 
-FROM nginxinc/nginx-unprivileged:1.29.1-alpine@sha256:27985295bdb22a1ef8f712863210bd5877c0f3006494a593e86b3fe0fa55467e
+FROM nginxinc/nginx-unprivileged:1.30.5-alpine@sha256:04a3275f25d766cff8926d2e57b2ff34a783d6b12a702dc98bb82226d2d9a508
 
 ENV BACKEND_UPSTREAM=http://fde-api:8000
 ENV FDE_BRAND_NAME="FDE Deploy"
