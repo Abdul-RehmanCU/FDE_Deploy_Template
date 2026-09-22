@@ -101,6 +101,8 @@ def load_config(path: str | Path) -> InstallationConfig:
         raise ConfigurationError("profile must be demo or managed")
     if profile == "demo" and (region != _ALLOWED_DEMO_REGION or zone != _ALLOWED_DEMO_ZONE):
         raise ConfigurationError("demo is fixed to Montréal northamerica-northeast1/a")
+    if profile == "managed" and environment != "production":
+        raise ConfigurationError("managed profile requires environment=production")
     if not _DIGEST.fullmatch(image_digest):
         raise ConfigurationError("image_digest must be an immutable sha256 digest")
     expected_prefix = f"{region}-docker.pkg.dev/{project}/"
