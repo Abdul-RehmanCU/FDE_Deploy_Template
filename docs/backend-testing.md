@@ -36,6 +36,12 @@ new FDE schema survive. The backup drill uses real version-matched PostgreSQL
 client tools and a disposable database; a fresh Alembic migration alone does
 not satisfy recovery evidence.
 
+The service-backed readiness test also creates a disposable database. It proves
+that an empty or partially migrated database is unready, while an additive
+column and a newer migration revision marker remain ready for the older
+compatible API. Cleanup terminates connections and drops only the exact
+generated test database.
+
 Published evidence at commit `eebc040e130b10d28c10dff0f339f0399364c78a`
 is [GitHub Actions run 35702605568](https://github.com/Abdul-RehmanCU/FDE_Deploy_Template/actions/runs/35702605568):
 Ruff, Mypy, Alembic, PostgreSQL, Redis, and its then-current backend suite

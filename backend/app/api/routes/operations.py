@@ -3,10 +3,10 @@ from pathlib import Path
 from fastapi import APIRouter, Response
 from redis import Redis
 from redis.exceptions import RedisError
-from sqlalchemy import text
 
 from app.api.deps import SessionDep
 from app.core.config import settings
+from app.core.db import database_schema_is_compatible
 from app.models import HealthPublic, VersionPublic
 
 router = APIRouter(tags=["operations"])
@@ -20,9 +20,7 @@ def liveness() -> HealthPublic:
 @router.get("/health/ready", response_model=HealthPublic)
 def readiness(session: SessionDep, response: Response) -> HealthPublic:
     failures: list[str] = []
-    try:
-        session.execute(text("SELECT 1"))
-    except Exception:
+    if not database_schema_is_compatible(session):
         failures.append("database")
     try:
         assert settings.REDIS_URL

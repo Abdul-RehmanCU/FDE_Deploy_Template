@@ -63,6 +63,14 @@ The API serves liveness at `/api/v1/health/live`, dependency readiness at
 at `/internal/metrics`. The worker serves internal metrics at `/metrics` on port
 9100. Neither metrics endpoint belongs on the public frontend route.
 
+Readiness requires PostgreSQL connectivity and every table and column used by
+the running image, Redis connectivity, and writable local storage when that
+adapter is selected. It deliberately does not require the Alembic revision
+string to equal the image's head revision, so a newer additive schema remains
+compatible with an older API during a rolling deployment. Install and upgrade
+commands must still wait for the migration Job before declaring the release
+successful.
+
 Uploads and reports expire after seven days. GCS deployments use bucket
 lifecycle policy; shared-filesystem deployments run `app.cleanup_storage`
 daily. Contacts remain until the installation owner deliberately removes data.
