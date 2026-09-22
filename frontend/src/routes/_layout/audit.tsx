@@ -103,9 +103,7 @@ function AuditPage() {
                   }).format(new Date(event.created_at))}
                 </time>
                 <div>
-                  <p className="font-semibold">
-                    {event.action.replaceAll("_", " ")}
-                  </p>
+                  <p className="font-semibold">{humanizeEvent(event.action)}</p>
                   <p className="mt-1 text-muted-foreground">
                     {event.resource_type}
                     {event.resource_id ? ` · ${event.resource_id}` : ""}
@@ -152,4 +150,9 @@ function AuditPage() {
       )}
     </div>
   )
+}
+
+function humanizeEvent(value: string) {
+  const label = value.replace(/[._-]+/g, " ")
+  return `${label.charAt(0).toUpperCase()}${label.slice(1)}`
 }
