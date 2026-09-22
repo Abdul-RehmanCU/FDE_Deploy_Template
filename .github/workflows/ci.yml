@@ -428,6 +428,136 @@ jobs:
         run: |
           kubectl -n fde-staging delete pod --selector=app.kubernetes.io/component=worker
           kubectl -n fde-staging rollout status deployment/fde-ci-demo-staging-worker --timeout=120s
+      - name: Install compact observability stack
+        shell: bash
+        run: |
+          set -euo pipefail
+          kubectl create namespace observability
+          grafana_password=kind-grafana-password-2026
+          echo "::add-mask::$grafana_password"
+          kubectl -n observability create secret generic fde-grafana-admin \
+            --from-literal=username=admin \
+            --from-literal=password="$grafana_password"
+          helm upgrade --install fde-observability observability/helm \
+            --namespace observability \
+            --values observability/helm/values-kind.yaml \
+            --wait \
+            --timeout 8m
+          helm upgrade fde infra/helm/fde \
+            --namespace fde-staging \
+            --values infra/helm/fde/values-kind.yaml \
+            --set observability.enabled=true \
+            --set observability.otlpEndpoint=http://fde-otel-collector.observability.svc.cluster.local:4317 \
+            --wait \
+            --timeout 5m
+      - name: Verify metrics logs traces dashboard and alert lifecycle
+        shell: bash
+        run: |
+          set -euo pipefail
+          evidence_dir="$RUNNER_TEMP/observability-evidence"
+          mkdir -p "$evidence_dir"
+          kubectl -n observability rollout status statefulset/fde-prometheus --timeout=180s
+          kubectl -n observability rollout status statefulset/fde-loki --timeout=180s
+          kubectl -n observability rollout status statefulset/fde-tempo --timeout=180s
+          kubectl -n observability rollout status deployment/fde-grafana --timeout=180s
+          kubectl -n observability rollout status deployment/fde-alertmanager --timeout=180s
+          kubectl -n observability rollout status deployment/fde-otel-collector --timeout=180s
+          kubectl -n observability rollout status daemonset/fde-alloy --timeout=180s
+
+          kubectl -n observability port-forward service/fde-prometheus 19090:9090 > "$RUNNER_TEMP/prometheus-forward.log" 2>&1 &
+          kubectl -n observability port-forward service/fde-loki 13100:3100 > "$RUNNER_TEMP/loki-forward.log" 2>&1 &
+          kubectl -n observability port-forward service/fde-tempo 13200:3200 > "$RUNNER_TEMP/tempo-forward.log" 2>&1 &
+          kubectl -n observability port-forward service/fde-grafana 13000:3000 > "$RUNNER_TEMP/grafana-forward.log" 2>&1 &
+          kubectl -n observability port-forward service/fde-alertmanager 19093:9093 > "$RUNNER_TEMP/alertmanager-forward.log" 2>&1 &
+          kubectl -n fde-staging port-forward service/fde-ci-demo-staging-frontend 18083:8080 > "$RUNNER_TEMP/observed-app-forward.log" 2>&1 &
+
+          for attempt in {1..60}; do
+            if curl --fail --silent http://127.0.0.1:19090/-/ready >/dev/null && \
+               curl --fail --silent http://127.0.0.1:13100/ready >/dev/null && \
+               curl --fail --silent http://127.0.0.1:13200/ready >/dev/null && \
+               curl --fail --silent http://127.0.0.1:13000/api/health >/dev/null && \
+               curl --fail --silent http://127.0.0.1:18083/api/v1/health/ready >/dev/null; then
+              break
+            fi
+            sleep 2
+          done
+
+          for attempt in {1..60}; do
+            api_targets=$(curl --fail --silent --get --data-urlencode 'query=up{job="fde-api"}' http://127.0.0.1:19090/api/v1/query | jq '.data.result | map(select(.["value"][1] == "1")) | length')
+            worker_up=$(curl --fail --silent --get --data-urlencode 'query=fde_worker_up' http://127.0.0.1:19090/api/v1/query | jq '.data.result | map(select(.["value"][1] == "1")) | length')
+            if test "$api_targets" -ge 2 && test "$worker_up" -ge 1; then break; fi
+            sleep 2
+          done
+          test "$api_targets" -ge 2
+          test "$worker_up" -ge 1
+          printf '{"api_targets":%s,"worker_up":%s}\n' "$api_targets" "$worker_up" > "$evidence_dir/metrics-summary.json"
+
+          loki_streams=$(curl --fail --silent --get \
+            --data-urlencode 'query={namespace="fde-staging"}' \
+            --data-urlencode "start=$(date -u -d '10 minutes ago' +%s)000000000" \
+            http://127.0.0.1:13100/loki/api/v1/query_range | jq '.data.result | length')
+          test "$loki_streams" -gt 0
+          printf '{"fde_staging_streams":%s}\n' "$loki_streams" > "$evidence_dir/loki-summary.json"
+
+          grafana_password=kind-grafana-password-2026
+          curl --fail --silent --user "admin:$grafana_password" \
+            'http://127.0.0.1:13000/api/search?query=FDE' > "$evidence_dir/grafana-search.json"
+          jq -e 'any(.[]; .uid == "fde-operations-overview")' "$evidence_dir/grafana-search.json" >/dev/null
+
+          token=$(curl --fail --silent --request POST \
+            --data-urlencode username=kind-admin@example.com \
+            --data-urlencode password=Kind-Admin-Password-2026! \
+            http://127.0.0.1:18083/api/v1/login/access-token | jq --raw-output .access_token)
+          trace_id=4bf92f3577b34da6a3ce929d0e0e4736
+          import_id=$(curl --fail --silent \
+            --header "Authorization: Bearer $token" \
+            --form file=@fixtures/customer-data/formula-like.csv \
+            http://127.0.0.1:18083/api/v1/imports | jq --raw-output .id)
+          curl --fail --silent --request PUT \
+            --header "Authorization: Bearer $token" \
+            --header "Content-Type: application/json" \
+            --data '{"mapping":{"email":"Email","first_name":"First Name","last_name":"Last Name","company":"Company","country_code":"Country","external_id":"External ID"}}' \
+            "http://127.0.0.1:18083/api/v1/imports/$import_id/mapping" >/dev/null
+          curl --fail --silent --request POST \
+            --header "Authorization: Bearer $token" \
+            --header "traceparent: 00-$trace_id-00f067aa0ba902b7-01" \
+            "http://127.0.0.1:18083/api/v1/imports/$import_id/validate" >/dev/null
+          for attempt in {1..60}; do
+            status=$(curl --fail --silent --header "Authorization: Bearer $token" "http://127.0.0.1:18083/api/v1/imports/$import_id" | jq --raw-output .status)
+            test "$status" = validated && break
+            sleep 2
+          done
+          test "$status" = validated
+          for attempt in {1..60}; do
+            services=$(curl --fail --silent "http://127.0.0.1:13200/api/traces/$trace_id" | jq -r '.. | objects | select(.key? == "service.name") | .value.stringValue? // empty' | sort -u || true)
+            if grep -qx fde-api <<<"$services" && grep -qx fde-worker <<<"$services"; then break; fi
+            sleep 2
+          done
+          grep -qx fde-api <<<"$services"
+          grep -qx fde-worker <<<"$services"
+          printf '%s\n' "$services" > "$evidence_dir/trace-services.txt"
+
+          kubectl -n fde-staging scale deployment/fde-ci-demo-staging-api --replicas=0
+          sleep 150
+          curl --fail --silent http://127.0.0.1:19093/api/v2/alerts > "$evidence_dir/alert-firing.json"
+          jq -e 'any(.[]; .labels.alertname == "FDEApiUnavailable")' "$evidence_dir/alert-firing.json" >/dev/null
+          kubectl -n fde-staging scale deployment/fde-ci-demo-staging-api --replicas=2
+          kubectl -n fde-staging rollout status deployment/fde-ci-demo-staging-api --timeout=180s
+          for attempt in {1..60}; do
+            curl --fail --silent http://127.0.0.1:19093/api/v2/alerts > "$evidence_dir/alert-resolved.json"
+            if ! jq -e 'any(.[]; .labels.alertname == "FDEApiUnavailable")' "$evidence_dir/alert-resolved.json" >/dev/null; then break; fi
+            sleep 3
+          done
+          ! jq -e 'any(.[]; .labels.alertname == "FDEApiUnavailable")' "$evidence_dir/alert-resolved.json" >/dev/null
+          kubectl get all -A -o wide > "$evidence_dir/kubernetes-inventory.txt"
+      - name: Upload sanitized kind observability evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: kind-observability-evidence-${{ github.sha }}
+          path: ${{ runner.temp }}/observability-evidence
+          if-no-files-found: warn
+          retention-days: 14
       - name: Collect failure diagnostics
         if: failure()
         run: |
