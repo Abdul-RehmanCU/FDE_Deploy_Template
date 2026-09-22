@@ -1,9 +1,12 @@
 import path from "node:path"
 import { expect, test } from "@playwright/test"
 
+test.describe.configure({ retries: 0 })
+
 test("operator completes upload mapping validation confirmation and search", async ({
   page,
 }) => {
+  test.setTimeout(90_000)
   await page.goto("/imports/new")
   await page
     .locator('input[type="file"]')

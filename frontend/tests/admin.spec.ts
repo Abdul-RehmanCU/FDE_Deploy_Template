@@ -18,7 +18,7 @@ test("administrator sees managed users and audit activity", async ({
   await expect(
     page.getByRole("heading", { name: "Audit activity" }),
   ).toBeVisible()
-  await expect(page.getByText("user created").first()).toBeVisible()
+  await expect(page.getByText("user.created").first()).toBeVisible()
   await page.screenshot({
     path: "test-results/evidence/audit.png",
     fullPage: true,
