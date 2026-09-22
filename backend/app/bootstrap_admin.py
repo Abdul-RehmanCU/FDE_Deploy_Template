@@ -10,12 +10,16 @@ from app.services.audit import record_audit
 cli = typer.Typer(help="Protected one-time administrator bootstrap.")
 
 
-@cli.command()
-def create(email: str, full_name: str | None = None) -> None:
+def validate_admin_email(email: str) -> EmailStr:
     try:
-        validated_email = TypeAdapter(EmailStr).validate_python(email)
+        return TypeAdapter(EmailStr).validate_python(email)
     except ValidationError:
         raise typer.BadParameter("A valid email address is required") from None
+
+
+@cli.command()
+def create(email: str, full_name: str | None = None) -> None:
+    validated_email = validate_admin_email(email)
     with Session(engine) as session:
         if crud.get_user_by_email(session=session, email=validated_email):
             raise typer.BadParameter("A user with this email already exists")

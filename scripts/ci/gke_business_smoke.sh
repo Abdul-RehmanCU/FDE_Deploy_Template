@@ -6,7 +6,7 @@ release=${2:?release is required}
 local_port=${3:?local port is required}
 evidence_path=${4:?evidence path is required}
 run_id=${GITHUB_RUN_ID:-local}
-admin_email="smoke-${run_id}-${namespace}@example.invalid"
+admin_email="smoke-${run_id}-${namespace}@example.com"
 new_password="Smoke-$(openssl rand -hex 18)!"
 forward_log=$(mktemp)
 
