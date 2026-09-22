@@ -61,7 +61,7 @@ gcloud services enable cloudresourcemanager.googleapis.com --project=PROJECT_ID
 
 Terraform resource dependencies order creation; they cannot enable an API before Terraform refreshes existing project/IAM state. The bootstrap preflight prevents that `403 SERVICE_DISABLED` failure.
 
-Use a new globally unique state-bucket name for each installation after full teardown. Its name determines the federation-pool ID; deleted GCP federation IDs remain reserved temporarily, so a fresh bucket avoids reusing a deleted identity. The owner bootstrap grants the infrastructure and cleanup identities the project-scoped API, federation, and disk permissions required to manage their Terraform resources.
+Use a new globally unique state-bucket name for each installation after full teardown. Its name determines the federation-pool ID; deleted GCP federation IDs remain reserved temporarily, so a fresh bucket avoids reusing a deleted identity. The owner bootstrap grants the infrastructure and cleanup identities the project-scoped API, federation, and disk permissions required to manage their Terraform resources. The deploy identity receives read-only state access; monitoring discovery RBAC is created by the infrastructure identity before release installation.
 
 ```bash
 uv run --project tooling/fde fde bootstrap \
@@ -141,3 +141,9 @@ python scripts/finalize_bootstrap.py \
 ```
 
 This command targets only bootstrap-managed IAM/WIF/service-state resources, confirms that only the labeled state bucket remains in Terraform state, removes all state-object generations, deletes that exact bucket last, and fails if the FDE WIF pool, four automation service accounts, or their project IAM bindings remain. The selected Google APIs intentionally remain enabled because the Terraform resources set `disable_on_destroy=false`; enabled APIs alone have no runtime charge and disabling them could affect unrelated project defaults.
+
+## GKE-specific identity and network contracts
+
+The managed Secret Manager CSI add-on authenticates the namespace-specific Kubernetes service account directly. Terraform grants that principal access only to its environment secrets; the annotated Google service account remains the application identity for GCS. See [Google's managed CSI authentication contract](https://docs.cloud.google.com/secret-manager/docs/secret-manager-managed-csi-component#configure-applications-to-authenticate-to-the-secret-manager-api).
+
+Both Standard GKE profiles explicitly select Calico and enable the network-policy add-on. GKE rejects enabled network policy without a provider; [the provider requirement is documented here](https://docs.cloud.google.com/kubernetes-engine/docs/how-to/network-policy). GitHub cloud jobs install `gke-gcloud-auth-plugin` before connecting.

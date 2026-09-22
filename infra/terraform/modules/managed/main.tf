@@ -1,3 +1,7 @@
+data "google_project" "current" {
+  project_id = var.project_id
+}
+
 locals {
   prefix = "fde-${var.customer}-prod"
   labels = merge(var.labels, {
@@ -155,13 +159,14 @@ resource "google_container_cluster" "managed" {
     services_secondary_range_name = "services"
   }
   addons_config {
+    network_policy_config { disabled = false }
     http_load_balancing { disabled = false }
     gce_persistent_disk_csi_driver_config { enabled = true }
   }
   secret_manager_config { enabled = true }
   network_policy {
     enabled  = true
-    provider = "PROVIDER_UNSPECIFIED"
+    provider = "CALICO"
   }
   logging_config { enable_components = ["SYSTEM_COMPONENTS", "WORKLOADS", "APISERVER"] }
   monitoring_config { enable_components = ["SYSTEM_COMPONENTS", "APISERVER", "SCHEDULER", "CONTROLLER_MANAGER"] }
@@ -387,5 +392,8 @@ resource "google_secret_manager_secret_iam_member" "runtime" {
   project   = var.project_id
   secret_id = each.value.secret_id
   role      = "roles/secretmanager.secretAccessor"
-  member    = "serviceAccount:${google_service_account.runtime.email}"
+  member    = "principal://iam.googleapis.com/projects/${data.google_project.current.number}/locations/global/workloadIdentityPools/${var.project_id}.svc.id.goog/subject/ns/production/sa/fde-runtime"
+
+  # The managed CSI add-on authenticates the Kubernetes principal directly.
+  depends_on = [google_container_cluster.managed]
 }
