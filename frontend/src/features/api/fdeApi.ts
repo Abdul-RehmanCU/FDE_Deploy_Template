@@ -1,6 +1,12 @@
-import { client } from "@/client/client.gen"
+import {
+  AuditService,
+  ContactsService,
+  DashboardService,
+  ImportsService,
+  JobsService,
+  UsersService,
+} from "@/client"
 import type {
-  ApiErrorEnvelope,
   AuditEventPublic,
   ContactPublic,
   CursorPage,
@@ -14,131 +20,108 @@ import type {
   UserPublic,
 } from "./types"
 
-const security = [{ scheme: "bearer", type: "http" }] as const
-type Errors = {
-  400: ApiErrorEnvelope
-  401: ApiErrorEnvelope
-  403: ApiErrorEnvelope
-}
-
-async function get<T>(
-  url: string,
-  query?: Record<string, unknown>,
-): Promise<T> {
-  const response = await client.get<{ 200: T }, Errors, true>({
-    responseType: "json",
-    security,
-    throwOnError: true,
-    url,
-    query,
-  })
-  return response.data
-}
-
-async function post<T>(
-  url: string,
-  body?: unknown,
-  headers?: Record<string, string>,
-): Promise<T> {
-  const response = await client.post<{ 200: T; 201: T; 202: T }, Errors, true>({
-    body,
-    headers,
-    responseType: "json",
-    security,
-    throwOnError: true,
-    url,
-  })
-  return response.data
-}
-
 export const fdeApi = {
-  dashboard: () => get<DashboardPublic>("/api/v1/dashboard"),
+  dashboard: async () =>
+    (await DashboardService.dashboard()).data as DashboardPublic,
 
-  listImports: (cursor?: string) =>
-    get<CursorPage<ImportPublic>>("/api/v1/imports", {
-      cursor,
-      limit: 50,
-    }),
+  listImports: async (cursor?: string) =>
+    (
+      await ImportsService.listImports({
+        query: { cursor, limit: 50 },
+      })
+    ).data as CursorPage<ImportPublic>,
 
-  getImport: (id: string) => get<ImportPublic>(`/api/v1/imports/${id}`),
+  getImport: async (id: string) =>
+    (await ImportsService.getImport({ path: { import_id: id } }))
+      .data as ImportPublic,
 
-  uploadImport: (file: File) => {
-    const body = new FormData()
-    body.append("file", file)
-    return post<ImportPublic>("/api/v1/imports", body)
-  },
+  uploadImport: async (file: File) =>
+    (await ImportsService.uploadImport({ body: { file } }))
+      .data as ImportPublic,
 
-  saveMapping: async (id: string, mapping: Record<string, string>) => {
-    const response = await client.put<{ 200: ImportPublic }, Errors, true>({
-      body: { mapping },
-      headers: { "Content-Type": "application/json" },
-      responseType: "json",
-      security,
-      throwOnError: true,
-      url: `/api/v1/imports/${id}/mapping`,
-    })
-    return response.data
-  },
+  saveMapping: async (id: string, mapping: Record<string, string>) =>
+    (
+      await ImportsService.setMapping({
+        body: { mapping },
+        path: { import_id: id },
+      })
+    ).data as ImportPublic,
 
-  validateImport: (id: string) =>
-    post<ImportActionPublic>(`/api/v1/imports/${id}/validate`),
+  validateImport: async (id: string) =>
+    (await ImportsService.validateImport({ path: { import_id: id } }))
+      .data as ImportActionPublic,
 
-  confirmImport: (id: string, idempotencyKey: string) =>
-    post<ImportActionPublic>(`/api/v1/imports/${id}/confirm`, undefined, {
-      "Idempotency-Key": idempotencyKey,
-    }),
+  confirmImport: async (id: string, idempotencyKey: string) =>
+    (
+      await ImportsService.confirmImport({
+        headers: { "Idempotency-Key": idempotencyKey },
+        path: { import_id: id },
+      })
+    ).data as ImportActionPublic,
 
-  retryImport: (id: string) =>
-    post<ImportActionPublic>(`/api/v1/imports/${id}/retry`),
+  retryImport: async (id: string) =>
+    (await ImportsService.retryImport({ path: { import_id: id } }))
+      .data as ImportActionPublic,
 
-  cancelImport: (id: string) =>
-    post<ImportActionPublic>(`/api/v1/imports/${id}/cancel`),
+  cancelImport: async (id: string) =>
+    (await ImportsService.cancelImport({ path: { import_id: id } }))
+      .data as ImportActionPublic,
 
-  listImportRows: (id: string, outcome?: string, cursor?: string) =>
-    get<CursorPage<ImportRowPublic>>(`/api/v1/imports/${id}/rows`, {
-      cursor,
-      limit: 50,
-      outcome,
-    }),
+  listImportRows: async (id: string, outcome?: string, cursor?: string) =>
+    (
+      await ImportsService.listValidationRows({
+        path: { import_id: id },
+        query: {
+          cursor,
+          limit: 50,
+          outcome: outcome as
+            | "accepted"
+            | "invalid"
+            | "file_duplicate"
+            | "existing_contact"
+            | undefined,
+        },
+      })
+    ).data as unknown as CursorPage<ImportRowPublic>,
 
   downloadImportReport: async (
     id: string,
     report: "accepted" | "errors" | "duplicates",
-  ) => {
-    const response = await client.get<{ 200: Blob }, Errors, true>({
-      responseType: "blob",
-      security,
-      throwOnError: true,
-      url: `/api/v1/imports/${id}/reports/${report}`,
-    })
-    return response.data
-  },
+  ) =>
+    (
+      await ImportsService.downloadReport({
+        path: { import_id: id, report_name: report },
+        responseType: "blob",
+      })
+    ).data as Blob,
 
-  getJob: (id: string) => get<JobPublic>(`/api/v1/jobs/${id}`),
+  getJob: async (id: string) =>
+    (await JobsService.getJob({ path: { job_id: id } })).data as JobPublic,
 
-  listJobAttempts: (id: string) =>
-    get<CursorPage<JobAttemptPublic>>(`/api/v1/jobs/${id}/attempts`, {
-      limit: 50,
-    }),
+  listJobAttempts: async (id: string) =>
+    (
+      await JobsService.listAttempts({
+        path: { job_id: id },
+        query: { limit: 50 },
+      })
+    ).data as CursorPage<JobAttemptPublic>,
 
-  listContacts: (q?: string, cursor?: string) =>
-    get<CursorPage<ContactPublic>>("/api/v1/contacts", {
-      cursor,
-      limit: 50,
-      q: q || undefined,
-    }),
+  listContacts: async (q?: string, cursor?: string) =>
+    (
+      await ContactsService.listContacts({
+        query: { cursor, limit: 50, q: q || undefined },
+      })
+    ).data as CursorPage<ContactPublic>,
 
-  listUsers: (cursor?: string) =>
-    get<CursorPage<UserPublic>>("/api/v1/users", { cursor, limit: 50 }),
+  listUsers: async (cursor?: string) =>
+    (await UsersService.listUsers({ query: { cursor, limit: 50 } }))
+      .data as CursorPage<UserPublic>,
 
-  createUser: (body: {
+  createUser: async (body: {
     email: string
     full_name?: string | null
     role: "admin" | "operator" | "viewer"
-  }) =>
-    post<UserCreatedPublic>("/api/v1/users", body, {
-      "Content-Type": "application/json",
-    }),
+  }) => (await UsersService.createUser({ body })).data as UserCreatedPublic,
 
   updateUser: async (
     id: string,
@@ -148,27 +131,21 @@ export const fdeApi = {
       role: "admin" | "operator" | "viewer"
       is_active: boolean
     }>,
-  ) => {
-    const response = await client.patch<{ 200: UserPublic }, Errors, true>({
-      body,
-      headers: { "Content-Type": "application/json" },
-      responseType: "json",
-      security,
-      throwOnError: true,
-      url: `/api/v1/users/${id}`,
-    })
-    return response.data
-  },
+  ) =>
+    (
+      await UsersService.updateUser({
+        body,
+        path: { user_id: id },
+      })
+    ).data as UserPublic,
 
-  issueTemporaryPassword: (id: string) =>
-    post<{ temporary_password: string }>(
-      `/api/v1/users/${id}/temporary-password`,
-    ),
+  issueTemporaryPassword: async (id: string) =>
+    (await UsersService.issueTemporaryPassword({ path: { user_id: id } })).data,
 
-  listAuditEvents: (action?: string, cursor?: string) =>
-    get<CursorPage<AuditEventPublic>>("/api/v1/audit-events", {
-      action: action || undefined,
-      cursor,
-      limit: 50,
-    }),
+  listAuditEvents: async (action?: string, cursor?: string) =>
+    (
+      await AuditService.listAuditEvents({
+        query: { action: action || undefined, cursor, limit: 50 },
+      })
+    ).data as CursorPage<AuditEventPublic>,
 }
