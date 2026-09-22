@@ -92,6 +92,7 @@ def upgrade() -> None:
         sa.CheckConstraint("country_code IS NULL OR country_code ~ '^[A-Z]{2}$'", name="ck_contact_country_code"),
     )
     op.create_index("ix_contact_name_id", "contact", ["last_name", "first_name", "id"])
+    op.create_index("ix_contact_created_id", "contact", ["created_at", "id"])
     op.create_index("ix_contact_import_id", "contact", ["source_import_id"])
 
     op.create_table(

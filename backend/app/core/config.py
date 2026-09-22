@@ -44,6 +44,8 @@ class Settings(BaseSettings):
     OUTBOX_POLL_SECONDS: float = 1.0
     JOB_STALE_SECONDS: int = 900
     SENTRY_DSN: HttpUrl | None = None
+    OTEL_EXPORTER_OTLP_ENDPOINT: str | None = None
+    OTEL_SERVICE_NAME: str = "fde-api"
 
     @field_validator("BACKEND_CORS_ORIGINS", mode="before")
     @classmethod

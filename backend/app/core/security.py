@@ -24,6 +24,7 @@ def create_access_token(
 ) -> str:
     expire = datetime.now(UTC) + expires_delta
     to_encode = {"exp": expire, "sub": str(subject), "ver": token_version}
+    assert settings.SECRET_KEY
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt
 

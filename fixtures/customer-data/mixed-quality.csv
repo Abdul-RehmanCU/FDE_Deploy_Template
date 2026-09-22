@@ -1,0 +1,7 @@
+Email,First Name,Last Name,Company,Country,External ID
+valid.person@example.com,Valid,Person,Example Co,ca,M-1
+not-an-email,Bad,Email,Example Co,CA,M-2
+,Missing,Email,,CA,M-3
+duplicate@example.com,First,Copy,,US,M-4
+ DUPLICATE@example.com ,Second,Copy,,US,M-5
+existing@example.com,Existing,Contact,,CA,M-6
