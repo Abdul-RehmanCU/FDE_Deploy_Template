@@ -293,6 +293,7 @@ jobs:
             --values infra/helm/fde/values-kind.yaml \
             --set-string branding.name='CI Customer Directory' \
             --wait \
+            --wait-for-jobs \
             --timeout 12m
       - name: Verify probes, migration, and frontend proxy
         shell: bash
@@ -509,7 +510,10 @@ jobs:
             --values infra/helm/fde/values-kind.yaml \
             --set-string branding.name='CI Customer Directory' \
             --wait \
+            --wait-for-jobs \
             --timeout 12m
+          kubectl -n fde-staging wait --for=condition=complete job/fde-ci-demo-staging-migrate-1 --timeout=180s
+          kubectl -n fde-staging rollout status deployment/fde-ci-demo-staging-api --timeout=180s
           kubectl -n fde-staging port-forward service/fde-ci-demo-staging-frontend 18085:8080 > "$RUNNER_TEMP/observability-bootstrap-forward.log" 2>&1 &
           for attempt in {1..30}; do
             curl --fail --silent http://127.0.0.1:18085/api/v1/health/ready >/dev/null && break
