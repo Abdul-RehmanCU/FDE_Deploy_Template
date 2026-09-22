@@ -1,6 +1,6 @@
 # FDE Deployment Template — implementation plan
 
-Status: agreed product and platform decisions consolidated; implementation has not started.
+Status: implementation authorized on 2026-09-22; execution in progress. All cost, safety, evidence, and acceptance constraints below remain binding.
 
 ## 1. Outcome and fixed decisions
 
@@ -44,7 +44,7 @@ Only one worker at a time is designated as the integration/commit worker. That d
 
 Every worker handoff states the assigned scope, paths changed or inspected, decisions and assumptions, commands/checks run with outcomes, generated evidence locations, unresolved risks, dependencies, and whether any cloud or external state changed. When a change crosses application, infrastructure, security, release, cost, or public-documentation boundaries, the root schedules an independent GPT-5.6 Sol / Medium review after the implementation handoff is ready. That review uses an available worker slot, does not wait for a nonexistent extra slot, and returns findings to the root; the root then delegates any correction and revalidation.
 
-Subagents do not make local orchestration continue while the host session is suspended. GitHub Actions or other cloud jobs may continue after a worker dispatches them, but observing results, making the next decision, and coordinating follow-up work still require an active orchestration session. During the current planning-only phase, this model is documentation only: do not initialize Git, implement features, create repositories or cloud resources, run deployment work, or make commits.
+Subagents do not make local orchestration continue while the host session is suspended. GitHub Actions or other cloud jobs may continue after a worker dispatches them, but observing results, making the next decision, and coordinating follow-up work still require an active orchestration session. Implementation is authorized. Workers may initialize Git, implement features, create the public GitHub repository, run non-billable CI, and make commits within the ownership rules above. Billable GCP provisioning remains blocked until every budget and independent-cleanup gate in this plan passes.
 
 ## 2. Application, interfaces, and behavior
 
@@ -201,4 +201,4 @@ Delegated workers run the development/test loop in GitHub-hosted runners and ret
 
 Build and prove the app in CI first, then rehearse the chart in kind, then run the bounded GKE demonstration, collect evidence, verify teardown, and finish the README/release. Successful tests must correspond to the final code, and evidence must identify the tested revision and deployed image digests.
 
-Implementation begins on the user's implementation request. This planning document does not itself provision resources, create the GitHub repository, or begin the overnight build.
+Implementation began with the user's explicit authorization on 2026-09-22. This document still does not itself provision resources; actual external changes and evidence are recorded in the implementation ledger.
