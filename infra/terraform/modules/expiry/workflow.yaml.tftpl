@@ -156,7 +156,7 @@ delete_gke_cluster:
                     raise: $${e}
     - verify_owner:
         switch:
-          - condition: $${map.get(default(map.get(existing.body, "resourceLabels"), {}), "expiry-id") != expiry_id}
+          - condition: $${map.get(existing.body, ["resourceLabels", "expiry-id"]) != expiry_id}
             return: "ownership-mismatch"
     - request_delete:
         try:
@@ -225,7 +225,7 @@ delete_compute_resource:
                     raise: $${e}
     - verify_fingerprint:
         switch:
-          - condition: $${expected_expiry_id != null and map.get(default(map.get(existing.body, "labels"), {}), "expiry-id") != expected_expiry_id}
+          - condition: $${expected_expiry_id != null and map.get(existing.body, ["labels", "expiry-id"]) != expected_expiry_id}
             return: "ownership-mismatch"
           - condition: $${creation_timestamp != null and existing.body.creationTimestamp != creation_timestamp}
             return: "ownership-mismatch"
@@ -296,7 +296,7 @@ empty_bucket:
                     raise: $${e}
     - verify_bucket_owner:
         switch:
-          - condition: $${map.get(default(map.get(existing_bucket.body, "labels"), {}), "expiry-id") != expiry_id}
+          - condition: $${map.get(existing_bucket.body, ["labels", "expiry-id"]) != expiry_id}
             return: "ownership-mismatch"
     - initialise:
         assign:
@@ -411,7 +411,7 @@ delete_repository:
                     raise: $${e}
     - verify_repository_owner:
         switch:
-          - condition: $${map.get(default(map.get(existing_repository.body, "labels"), {}), "expiry-id") != expiry_id}
+          - condition: $${map.get(existing_repository.body, ["labels", "expiry-id"]) != expiry_id}
             return: "ownership-mismatch"
     - request_delete:
         try:

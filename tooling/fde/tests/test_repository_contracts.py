@@ -79,3 +79,15 @@ def test_expiry_custom_role_uses_supported_artifact_registry_permissions() -> No
     assert '"artifactregistry.repositories.get"' in block
     assert '"artifactregistry.repositories.delete"' in block
     assert 'artifactregistry.operations.get' not in block
+
+
+def test_expiry_ownership_checks_use_safe_nested_workflows_lookups() -> None:
+    text = (
+        ROOT / "infra" / "terraform" / "modules" / "expiry" / "workflow.yaml.tftpl"
+    ).read_text(encoding="utf-8")
+    assert 'map.get(existing.body, ["resourceLabels", "expiry-id"])' in text
+    assert 'map.get(existing.body, ["labels", "expiry-id"])' in text
+    assert 'map.get(existing_bucket.body, ["labels", "expiry-id"])' in text
+    assert 'map.get(existing_repository.body, ["labels", "expiry-id"])' in text
+    assert 'default(map.get(existing.body, "resourceLabels"), {})' not in text
+    assert 'default(map.get(existing.body, "labels"), {})' not in text
