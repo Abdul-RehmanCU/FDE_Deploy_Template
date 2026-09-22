@@ -1,6 +1,26 @@
 name: Build immutable cloud images
 
 on:
+  workflow_call:
+    inputs:
+      project_id:
+        description: Dedicated GCP project ID
+        required: true
+        type: string
+      artifact_repository:
+        description: Montréal Artifact Registry repository ID
+        required: true
+        type: string
+    outputs:
+      backend_digest:
+        description: Immutable backend image digest
+        value: ${{ jobs.build.outputs.backend_digest }}
+      frontend_digest:
+        description: Immutable frontend image digest
+        value: ${{ jobs.build.outputs.frontend_digest }}
+      manifest_sha256:
+        description: SHA-256 of the signed digest manifest
+        value: ${{ jobs.build.outputs.manifest_sha256 }}
   workflow_dispatch:
     inputs:
       project_id:
@@ -15,7 +35,6 @@ on:
 
 permissions:
   contents: read
-  id-token: write
 
 concurrency:
   group: build-images-${{ github.repository }}-${{ github.ref }}
@@ -24,6 +43,13 @@ concurrency:
 jobs:
   build:
     name: Build and publish by digest
+    outputs:
+      backend_digest: ${{ steps.backend.outputs.digest }}
+      frontend_digest: ${{ steps.frontend.outputs.digest }}
+      manifest_sha256: ${{ steps.manifest.outputs.sha256 }}
+    permissions:
+      contents: read # required to check out the selected revision
+      id-token: write # required for keyless GCP Workload Identity Federation
     if: github.ref_name == 'main'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
@@ -34,6 +60,8 @@ jobs:
     steps:
       - name: Check out selected main revision
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
       - name: Authenticate with Workload Identity Federation
         uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
         with:
@@ -65,12 +93,41 @@ jobs:
           tags: ${{ env.REGISTRY }}/${{ inputs.project_id }}/${{ inputs.artifact_repository }}/frontend:${{ github.sha }}
           provenance: mode=max
           sbom: true
-      - name: Record immutable outputs
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+      - name: Create signed digest manifest
+        id: manifest
+        env:
+          BACKEND_DIGEST: ${{ steps.backend.outputs.digest }}
+          FRONTEND_DIGEST: ${{ steps.frontend.outputs.digest }}
+          IMAGE_REPOSITORY: ${{ env.REGISTRY }}/${{ inputs.project_id }}/${{ inputs.artifact_repository }}
         run: |
+          set -euo pipefail
+          jq -n \
+            --arg commit "$GITHUB_SHA" \
+            --arg region "$REGION" \
+            --arg repository "$IMAGE_REPOSITORY" \
+            --arg backend_digest "$BACKEND_DIGEST" \
+            --arg frontend_digest "$FRONTEND_DIGEST" \
+            '{schema_version:1, commit:$commit, region:$region, repository:$repository, images:{backend:{name:"backend",digest:$backend_digest},frontend:{name:"frontend",digest:$frontend_digest}}}' \
+            > image-digests.json
+          sha256=$(sha256sum image-digests.json | cut -d' ' -f1)
+          echo "sha256=$sha256" >> "$GITHUB_OUTPUT"
+          cosign sign-blob --yes --bundle image-digests.sigstore.json image-digests.json
           {
             echo "### Immutable image outputs"
             echo "- Commit: \`${GITHUB_SHA}\`"
-            echo "- Backend: \`${{ steps.backend.outputs.digest }}\`"
-            echo "- Frontend: \`${{ steps.frontend.outputs.digest }}\`"
+            echo "- Backend: \`$BACKEND_DIGEST\`"
+            echo "- Frontend: \`$FRONTEND_DIGEST\`"
+            echo "- Manifest SHA-256: \`$sha256\`"
             echo "- Region: \`${REGION}\`"
           } >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload signed digest manifest
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: image-digests-${{ github.sha }}
+          path: |
+            image-digests.json
+            image-digests.sigstore.json
+          if-no-files-found: error
+          retention-days: 30
