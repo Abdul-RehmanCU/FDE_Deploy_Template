@@ -67,10 +67,13 @@ function ImportDetailPage() {
   const importQuery = useQuery({
     queryKey: ["import", importId],
     queryFn: () => fdeApi.getImport(importId),
-    refetchInterval: (query) =>
-      ["validating", "importing"].includes(query.state.data?.status ?? "")
-        ? 3_000
-        : false,
+    refetchInterval: (query) => {
+      const status = query.state.data?.status ?? ""
+      if (["completed", "failed", "cancelled"].includes(status)) return false
+      return jobId || ["validating", "importing"].includes(status)
+        ? 2_000
+        : false
+    },
   })
   const showRows = ["validated", "importing", "completed", "failed"].includes(
     importQuery.data?.status ?? "",
