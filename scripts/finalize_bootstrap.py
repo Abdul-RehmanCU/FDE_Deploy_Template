@@ -30,7 +30,9 @@ def list_bucket_generations(bucket_uri: str) -> list[dict[str, object]]:
         ["gcloud", "storage", "ls", "--all-versions", "--json", f"{bucket_uri}/**"],
         check=False,
     )
-    if result.returncode != 0 or not result.stdout.strip():
+    if result.returncode != 0:
+        raise RuntimeError("cannot verify all state bucket object generations")
+    if not result.stdout.strip():
         return []
     rows = json.loads(result.stdout)
     return [
@@ -42,6 +44,16 @@ def list_bucket_generations(bucket_uri: str) -> list[dict[str, object]]:
         }
         for row in rows
     ]
+
+
+def require_soft_delete_disabled(bucket: dict[str, object]) -> None:
+    policy = bucket.get("softDeletePolicy") or {}
+    if not isinstance(policy, dict):
+        raise TypeError("state bucket soft-delete policy has an unexpected shape")
+    raw = policy.get("retentionDurationSeconds", policy.get("retentionDuration", 0))
+    seconds = int(str(raw).removesuffix("s") or "0")
+    if seconds > 0:
+        raise RuntimeError("state bucket soft delete must be disabled before teardown")
 
 
 def main() -> int:
@@ -88,6 +100,7 @@ def main() -> int:
         raise SystemExit("state bucket does not belong to the confirmed project")
     if str(bucket.get("location", "")).lower() != args.region.lower():
         raise SystemExit("state bucket is not in the confirmed Montréal region")
+    require_soft_delete_disabled(bucket)
 
     run(
         [
