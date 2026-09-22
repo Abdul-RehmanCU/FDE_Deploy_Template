@@ -43,15 +43,20 @@ RUN --mount=type=cache,target=/root/.cache/uv \
 # Editable/build tooling leaves package metadata in the application environment.
 # Keep those distributions on fixed versions and assert the exact scanned environment.
 RUN UV_NO_CACHE=1 uv pip install --system "msgpack==1.2.2" "setuptools==84.0.0" && \
-    /usr/local/bin/python -c "from importlib.metadata import version; assert version('msgpack') == '1.2.2'; assert version('setuptools') == '84.0.0'" && \
+    /usr/local/bin/python -c "from importlib.metadata import version; from pathlib import Path; import msgpack, setuptools; assert version('msgpack') == '1.2.2'; assert version('setuptools') == '84.0.0'; assert Path(msgpack.__file__).is_relative_to('/usr/local'); assert Path(setuptools.__file__).is_relative_to('/usr/local')" && \
     UV_NO_CACHE=1 uv pip install --python /app/.venv/bin/python "msgpack==1.2.2" "setuptools==84.0.0" && \
     rm -rf /usr/local/lib/python3.14/site-packages/pip /usr/local/lib/python3.14/site-packages/pip-*.dist-info /usr/local/lib/python3.14/ensurepip && \
     find /usr/local /app -type d \( -name 'msgpack-1.1.2.dist-info' -o -name 'setuptools-70.3.0.dist-info' \) -exec rm -rf {} + && \
     find /usr/local /app -type f \( -name 'msgpack-1.1.2*.whl' -o -name 'setuptools-70.3.0*.whl' \) -delete && \
     test -z "$(find /usr/local /app \( -name 'msgpack-1.1.2*' -o -name 'setuptools-70.3.0*' \) -print -quit)" && \
-    /app/.venv/bin/python -c "from importlib.metadata import version; assert version('msgpack') == '1.2.2'; assert version('setuptools') == '84.0.0'"
+    /app/.venv/bin/python -c "from importlib.metadata import version; from pathlib import Path; import msgpack, setuptools; assert version('msgpack') == '1.2.2'; assert version('setuptools') == '84.0.0'; assert Path(msgpack.__file__).is_relative_to('/app/.venv'); assert Path(setuptools.__file__).is_relative_to('/app/.venv')"
 
 WORKDIR /app/backend/
+
+RUN SECRET_KEY=build-only-secret-key-with-at-least-32-characters \
+    DATABASE_URL=postgresql://app:build-password@127.0.0.1:5432/app \
+    REDIS_URL=redis://127.0.0.1:6379/0 FASTAPI_ENV=test STORAGE_BACKEND=local \
+    /app/.venv/bin/python -c "import alembic, app.main, app.outbox_publisher, app.worker"
 
 RUN groupadd --gid 10001 app && \
     useradd --uid 10001 --gid 10001 --no-create-home --shell /usr/sbin/nologin app && \
