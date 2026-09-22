@@ -2,15 +2,19 @@ import logging
 import time
 from time import monotonic
 
+from opentelemetry import trace
+from opentelemetry.propagate import extract
 from sqlmodel import Session, col, select
 
 from app.core.config import settings
 from app.core.db import engine
+from app.core.observability import configure_logging
 from app.models import JobOutbox, utc_now
 from app.services.jobs import reconcile_stalled_jobs
 from app.worker import celery_app
 
 logger = logging.getLogger(__name__)
+tracer = trace.get_tracer(__name__)
 
 
 def publish_batch() -> int:
@@ -28,17 +32,25 @@ def publish_batch() -> int:
         for row in rows:
             row.publish_attempts += 1
             try:
-                celery_app.send_task(
-                    "app.process_job",
-                    kwargs={
-                        key: value
-                        for key, value in row.payload.items()
-                        if key != "traceparent"
-                    },
-                    task_id=str(row.job_id),
-                    headers={"traceparent": row.payload.get("traceparent", "")},
-                    retry=False,
+                headers = (
+                    {"traceparent": row.payload["traceparent"]}
+                    if row.payload.get("traceparent")
+                    else {}
                 )
+                context = extract(headers) if headers else None
+                with tracer.start_as_current_span("outbox.publish", context=context):
+                    celery_app.send_task(
+                        "app.process_job",
+                        kwargs={
+                            key: value
+                            for key, value in row.payload.items()
+                            if key != "traceparent"
+                        },
+                        task_id=str(row.job_id),
+                        headers=headers,
+                        retry=False,
+                    )
+                    logger.info("job_published", extra={"event": "job_published"})
                 row.published_at = utc_now()
                 row.last_error = None
             except Exception:
@@ -52,7 +64,7 @@ def publish_batch() -> int:
 
 
 def main() -> None:
-    logging.basicConfig(level=logging.INFO)
+    configure_logging()
     last_reconcile = 0.0
     while True:
         if monotonic() - last_reconcile >= settings.JOB_RECONCILE_INTERVAL_SECONDS:

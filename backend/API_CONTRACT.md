@@ -80,6 +80,20 @@ Secrets support either direct variables for local/CI use or CSI-mounted files:
 `STORAGE_BACKEND=local|gcs`, `STORAGE_LOCAL_ROOT`, `GCS_BUCKET`,
 `APP_ENVIRONMENT`, and `APP_VERSION`.
 
+Managed TLS uses `DATABASE_SSLMODE=verify-ca` with
+`DATABASE_SSLROOTCERT_FILE`, `DATABASE_SSLCERT_FILE`, and
+`DATABASE_SSLKEY_FILE` for direct private-IP Cloud SQL mutual TLS. A
+`rediss://` broker requires `REDIS_CA_FILE`; API readiness, login limiting,
+Celery worker, and publisher all require CA verification. The mounted libpq
+private key must be owner-only and readable by runtime UID 10001.
+
+The API exports bounded HTTP series
+`http_server_requests_total` and
+`http_server_request_duration_seconds_{bucket,count,sum}` with method, route
+template, and status labels. It returns `X-Trace-Id` when tracing is active and
+injects the active server context into durable outbox/Celery delivery without
+requiring a caller-supplied `traceparent`.
+
 The outbox publisher holds a claimed row lock only during one broker publication
 attempt. Redis connect timeout is 5 seconds, the configurable socket timeout is
 `OUTBOX_PUBLISH_TIMEOUT_SECONDS` (default 10), Celery publish retries are off,

@@ -18,6 +18,8 @@ Safe errors use:
 
 Request validation omits submitted values, including passwords and contact
 data. List responses use `{data, next_cursor, has_more}`. Cursors are opaque.
+When OpenTelemetry is configured, responses include `X-Trace-Id`; clients must
+treat it as diagnostic metadata rather than an authorization token.
 
 ## Resources
 

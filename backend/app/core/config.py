@@ -1,3 +1,4 @@
+import ssl
 from pathlib import Path
 from typing import Literal, Self
 
@@ -20,8 +21,15 @@ class Settings(BaseSettings):
     SECRET_KEY_FILE: Path | None = None
     DATABASE_URL: str | None = None
     DATABASE_URL_FILE: Path | None = None
+    DATABASE_SSLMODE: Literal["disable", "require", "verify-ca", "verify-full"] = (
+        "disable"
+    )
+    DATABASE_SSLROOTCERT_FILE: Path | None = None
+    DATABASE_SSLCERT_FILE: Path | None = None
+    DATABASE_SSLKEY_FILE: Path | None = None
     REDIS_URL: str | None = None
     REDIS_URL_FILE: Path | None = None
+    REDIS_CA_FILE: Path | None = None
 
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     BACKEND_CORS_ORIGINS: list[str] | str = ["http://localhost:5173"]
@@ -89,6 +97,29 @@ class Settings(BaseSettings):
             raise ValueError("DATABASE_URL or DATABASE_URL_FILE is required")
         if not self.REDIS_URL:
             raise ValueError("REDIS_URL or REDIS_URL_FILE is required")
+        if self.REDIS_URL.startswith("rediss://"):
+            if self.REDIS_CA_FILE is None or not self.REDIS_CA_FILE.is_file():
+                raise ValueError(
+                    "REDIS_CA_FILE is required and must exist for rediss://"
+                )
+        if bool(self.DATABASE_SSLCERT_FILE) != bool(self.DATABASE_SSLKEY_FILE):
+            raise ValueError(
+                "DATABASE_SSLCERT_FILE and DATABASE_SSLKEY_FILE must be provided together"
+            )
+        if self.DATABASE_SSLMODE in ("verify-ca", "verify-full"):
+            if (
+                self.DATABASE_SSLROOTCERT_FILE is None
+                or not self.DATABASE_SSLROOTCERT_FILE.is_file()
+            ):
+                raise ValueError(
+                    "DATABASE_SSLROOTCERT_FILE is required for verified database TLS"
+                )
+        for name, path in (
+            ("DATABASE_SSLCERT_FILE", self.DATABASE_SSLCERT_FILE),
+            ("DATABASE_SSLKEY_FILE", self.DATABASE_SSLKEY_FILE),
+        ):
+            if path is not None and not path.is_file():
+                raise ValueError(f"{name} must reference a readable file")
         if self.STORAGE_BACKEND == "gcs" and not self.GCS_BUCKET:
             raise ValueError("GCS_BUCKET is required when STORAGE_BACKEND=gcs")
         if self.FASTAPI_ENV != "development" and self.SECRET_KEY.startswith(
@@ -105,6 +136,40 @@ class Settings(BaseSettings):
             if value.startswith(scheme):
                 return value.replace(scheme, "postgresql+psycopg://", 1)
         return value
+
+    @property
+    def database_connect_args(self) -> dict[str, str]:
+        if self.DATABASE_SSLMODE == "disable":
+            return {}
+        result: dict[str, str] = {"sslmode": self.DATABASE_SSLMODE}
+        if self.DATABASE_SSLROOTCERT_FILE:
+            result["sslrootcert"] = str(self.DATABASE_SSLROOTCERT_FILE)
+        if self.DATABASE_SSLCERT_FILE and self.DATABASE_SSLKEY_FILE:
+            result["sslcert"] = str(self.DATABASE_SSLCERT_FILE)
+            result["sslkey"] = str(self.DATABASE_SSLKEY_FILE)
+        return result
+
+    @property
+    def redis_connection_kwargs(self) -> dict[str, object]:
+        if not self.REDIS_URL or not self.REDIS_URL.startswith("rediss://"):
+            return {}
+        assert self.REDIS_CA_FILE
+        return {
+            "ssl_ca_certs": str(self.REDIS_CA_FILE),
+            "ssl_cert_reqs": "required",
+            "ssl_check_hostname": True,
+        }
+
+    @property
+    def celery_broker_use_ssl(self) -> dict[str, object] | None:
+        if not self.REDIS_URL or not self.REDIS_URL.startswith("rediss://"):
+            return None
+        assert self.REDIS_CA_FILE
+        return {
+            "ssl_cert_reqs": ssl.CERT_REQUIRED,
+            "ssl_ca_certs": str(self.REDIS_CA_FILE),
+            "ssl_check_hostname": True,
+        }
 
 
 settings = Settings()  # type: ignore[call-arg]

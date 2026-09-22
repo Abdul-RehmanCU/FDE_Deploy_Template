@@ -63,6 +63,10 @@ secretProvider:
     appSecretKey: replace-me-secret-key
     postgresPassword: replace-me-postgres-password
     redisPassword: replace-me-redis-password
+    redisCa: replace-me-redis-ca
+    databaseSslRootCert: replace-me-database-ssl-root-cert
+    databaseSslCert: replace-me-database-ssl-cert
+    databaseSslKey: replace-me-database-ssl-key
 
 demoDependencies:
   enabled: true

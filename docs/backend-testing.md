@@ -27,6 +27,9 @@ publication and stalled reconciliation; audit rollback; and PostgreSQL-derived
 worker metrics. Unit tests cover UTF-8 BOM, malformed and oversized data,
 duplicate rules, formula neutralization, object path traversal, secret-file
 precedence, safe errors, PII redaction, upload compensation, and retention.
+Focused tests also assert bounded HTTP metric labels, automatic active-context
+outbox injection, trace-aware JSON redaction, verified `rediss://` CA options,
+Celery broker TLS, and Cloud SQL CA/client-certificate connection arguments.
 The migration-upgrade test first applies the upstream schema, inserts a legacy
 administrator and item, upgrades to head, and proves both legacy reads and the
 new FDE schema survive. The backup drill uses real version-matched PostgreSQL

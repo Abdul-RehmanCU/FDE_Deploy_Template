@@ -48,7 +48,7 @@
         "projectId": { "type": "string", "pattern": "^[a-z][a-z0-9-]{4,28}[a-z0-9]$" },
         "secretNames": {
           "type": "object",
-          "required": ["databaseUrl", "redisUrl", "appSecretKey", "postgresPassword", "redisPassword"],
+          "required": ["databaseUrl", "redisUrl", "appSecretKey"],
           "additionalProperties": false,
           "properties": {
             "databaseUrl": { "$ref": "#/definitions/secretName" },
@@ -56,6 +56,10 @@
             "appSecretKey": { "$ref": "#/definitions/secretName" },
             "postgresPassword": { "$ref": "#/definitions/secretName" },
             "redisPassword": { "$ref": "#/definitions/secretName" }
+            ,"redisCa": { "$ref": "#/definitions/secretName" }
+            ,"databaseSslRootCert": { "$ref": "#/definitions/secretName" }
+            ,"databaseSslCert": { "$ref": "#/definitions/secretName" }
+            ,"databaseSslKey": { "$ref": "#/definitions/secretName" }
           }
         }
       }
@@ -75,7 +79,14 @@
       "then": {
         "properties": {
           "environment": { "const": "production" },
-          "demoDependencies": { "properties": { "enabled": { "const": false } } }
+          "demoDependencies": { "properties": { "enabled": { "const": false } } },
+          "secretProvider": {
+            "properties": {
+              "secretNames": {
+                "required": ["databaseUrl", "redisUrl", "appSecretKey", "redisCa", "databaseSslRootCert", "databaseSslCert", "databaseSslKey"]
+              }
+            }
+          }
         }
       }
     },
@@ -121,6 +132,18 @@
                 "required": ["volumeHandle"],
                 "properties": { "volumeHandle": { "type": "string", "pattern": "^projects/[^/]+/zones/northamerica-northeast1-a/disks/[a-z0-9-]+$" } }
               }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": { "properties": { "demoDependencies": { "properties": { "enabled": { "const": true } } } } },
+      "then": {
+        "properties": {
+          "secretProvider": {
+            "properties": {
+              "secretNames": { "required": ["postgresPassword", "redisPassword"] }
             }
           }
         }

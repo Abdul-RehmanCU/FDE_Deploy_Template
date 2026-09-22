@@ -8,7 +8,11 @@ from starlette.responses import JSONResponse
 
 from app.api.main import api_router
 from app.core.config import settings
-from app.core.observability import configure_logging, configure_tracing
+from app.core.observability import (
+    configure_logging,
+    configure_tracing,
+    observe_http_request,
+)
 
 
 def custom_generate_unique_id(route: APIRoute) -> str:
@@ -53,6 +57,7 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.middleware("http")(observe_http_request)
 
 app.include_router(api_router, prefix=settings.API_V1_STR)
 app.mount("/internal/metrics", make_asgi_app())

@@ -1,6 +1,7 @@
 import uuid
 from datetime import timedelta
 
+from opentelemetry.propagate import inject
 from sqlalchemy import delete, or_
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlmodel import Session, col, select
@@ -33,12 +34,15 @@ def enqueue_job(
     actor: User,
     traceparent: str | None = None,
 ) -> Job:
+    carrier: dict[str, str] = {}
+    inject(carrier)
+    effective_traceparent = carrier.get("traceparent") or traceparent
     job = Job(
         import_id=import_batch.id,
         kind=kind,
         created_by_id=actor.id,
         max_attempts=settings.CELERY_TASK_MAX_RETRIES + 1,
-        traceparent=traceparent,
+        traceparent=effective_traceparent,
     )
     session.add(job)
     session.flush()
@@ -48,7 +52,11 @@ def enqueue_job(
             payload={
                 "job_id": str(job.id),
                 "kind": kind.value,
-                **({"traceparent": traceparent} if traceparent else {}),
+                **(
+                    {"traceparent": effective_traceparent}
+                    if effective_traceparent
+                    else {}
+                ),
             },
         )
     )

@@ -27,7 +27,10 @@ def readiness(session: SessionDep, response: Response) -> HealthPublic:
     try:
         assert settings.REDIS_URL
         Redis.from_url(
-            settings.REDIS_URL, socket_connect_timeout=2, socket_timeout=2
+            settings.REDIS_URL,
+            socket_connect_timeout=2,
+            socket_timeout=2,
+            **settings.redis_connection_kwargs,
         ).ping()
     except RedisError, AssertionError:
         failures.append("redis")

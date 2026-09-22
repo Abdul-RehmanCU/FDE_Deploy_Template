@@ -22,6 +22,15 @@ configuration contains references, not secret values. The runtime image uses
 UID/GID 10001 and one API worker; Kubernetes supplies read-only secrets and a
 writable storage mount only where needed.
 
+The managed direct-connection profile uses Cloud SQL mutual TLS with
+`sslmode=verify-ca`, the instance server CA, and a client certificate/private
+key. The private key is mounted or copied with owner-only permissions for UID
+10001. Memorystore uses `rediss://`, `REDIS_CA_FILE`, and required certificate
+verification in redis-py and Celery. Demo `postgresql://`/`redis://` endpoints
+remain private in-cluster services. Managed certificate issuance, rotation,
+and insertion into Secret Manager occur outside Terraform state and remain
+live-test prerequisites.
+
 Object keys are generated from server UUIDs. Upload filenames never become
 paths. Downloads pass authorization before storage access. Upload failure after
 object creation performs a compensating delete, and the seven-day cleanup also
@@ -36,3 +45,6 @@ contains action, actor/resource IDs, counts, roles, and status; it excludes PII.
 Prometheus routes are internal: API `/internal/metrics` on 8000 and worker
 `/metrics` on 9100. Network policy allows the observability namespace, not the
 public frontend proxy.
+
+References: [Cloud SQL client-certificate connections](https://docs.cloud.google.com/sql/docs/postgres/connect-admin-ip)
+and [Memorystore in-transit encryption](https://docs.cloud.google.com/memorystore/docs/redis/manage-in-transit-encryption).

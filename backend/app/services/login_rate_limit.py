@@ -14,7 +14,11 @@ def enforce_login_rate_limit(client_ip: str, email: str) -> None:
     digest = hashlib.sha256(identity).hexdigest()
     key = f"fde:login:{digest}"
     assert settings.REDIS_URL
-    client = Redis.from_url(settings.REDIS_URL, decode_responses=True)
+    client = Redis.from_url(
+        settings.REDIS_URL,
+        decode_responses=True,
+        **settings.redis_connection_kwargs,
+    )
     try:
         value = int(cast(Any, client.incr(key)))
         if value == 1:

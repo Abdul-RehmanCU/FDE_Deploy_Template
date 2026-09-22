@@ -272,7 +272,15 @@ resource "google_storage_bucket_iam_member" "runtime_objects" {
 }
 
 resource "google_secret_manager_secret" "runtime" {
-  for_each  = toset(["database-url", "redis-url", "secret-key"])
+  for_each = toset([
+    "database-ssl-cert",
+    "database-ssl-key",
+    "database-ssl-root-cert",
+    "database-url",
+    "redis-ca",
+    "redis-url",
+    "secret-key",
+  ])
   project   = var.project_id
   secret_id = "${local.prefix}-${each.key}"
   labels    = local.labels
