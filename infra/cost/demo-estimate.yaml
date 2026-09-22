@@ -33,7 +33,7 @@ items:
     unit: GiB-hour
     unit_price_usd: 0.000054795
     estimated_usd: 0.032877
-    basis: "Conservative 150 GiB aggregate for four hours at Montréal standard PD rate; configuration is expected to use less."
+    basis: "Conservative 150 GiB aggregate for four hours at Montréal standard PD rate; actual plan is seven predeclared data disks totaling 54 GiB plus one 30 GiB node boot disk."
   - id: external-ip
     quantity: 4
     unit: address-hour

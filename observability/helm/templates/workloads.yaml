@@ -28,7 +28,13 @@ spec:
         - { name: rules, configMap: { name: fde-prometheus-config, items: [{ key: alerts.yml, path: alerts.yml }] } }
   volumeClaimTemplates:
     - metadata: { name: data }
-      spec: { accessModes: [ReadWriteOnce], resources: { requests: { storage: {{ .Values.storage.prometheus }} } } }
+      spec:
+        accessModes: [ReadWriteOnce]
+        {{- if .Values.storage.predeclared }}
+        storageClassName: ""
+        volumeName: fde-observability-prometheus
+        {{- end }}
+        resources: { requests: { storage: {{ .Values.storage.prometheus }} } }
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -74,7 +80,13 @@ spec:
       volumes: [{ name: config, configMap: { name: fde-loki-config } }]
   volumeClaimTemplates:
     - metadata: { name: data }
-      spec: { accessModes: [ReadWriteOnce], resources: { requests: { storage: {{ .Values.storage.loki }} } } }
+      spec:
+        accessModes: [ReadWriteOnce]
+        {{- if .Values.storage.predeclared }}
+        storageClassName: ""
+        volumeName: fde-observability-loki
+        {{- end }}
+        resources: { requests: { storage: {{ .Values.storage.loki }} } }
 ---
 apiVersion: apps/v1
 kind: StatefulSet
@@ -99,4 +111,10 @@ spec:
       volumes: [{ name: config, configMap: { name: fde-tempo-config } }]
   volumeClaimTemplates:
     - metadata: { name: data }
-      spec: { accessModes: [ReadWriteOnce], resources: { requests: { storage: {{ .Values.storage.tempo }} } } }
+      spec:
+        accessModes: [ReadWriteOnce]
+        {{- if .Values.storage.predeclared }}
+        storageClassName: ""
+        volumeName: fde-observability-tempo
+        {{- end }}
+        resources: { requests: { storage: {{ .Values.storage.tempo }} } }

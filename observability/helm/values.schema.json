@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": ["storage"],
+  "properties": {
+    "storage": {
+      "type": "object",
+      "required": ["predeclared", "prometheus", "loki", "tempo", "volumeHandles"],
+      "properties": {
+        "predeclared": { "const": true },
+        "volumeHandles": {
+          "type": "object",
+          "required": ["prometheus", "loki", "tempo"],
+          "additionalProperties": false,
+          "properties": {
+            "prometheus": { "$ref": "#/definitions/volumeHandle" },
+            "loki": { "$ref": "#/definitions/volumeHandle" },
+            "tempo": { "$ref": "#/definitions/volumeHandle" }
+          }
+        }
+      }
+    }
+  },
+  "definitions": {
+    "volumeHandle": {
+      "type": "string",
+      "pattern": "^projects/[^/]+/zones/northamerica-northeast1-a/disks/[a-z0-9-]+$"
+    }
+  }
+}

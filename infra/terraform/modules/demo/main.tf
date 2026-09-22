@@ -13,6 +13,25 @@ locals {
       "${namespace}-${name}" => { namespace = namespace, name = name }
     }
   ]...)
+  persistent_disks = {
+    "${local.prefix}-observability-loki"       = 8
+    "${local.prefix}-observability-prometheus" = 8
+    "${local.prefix}-observability-tempo"      = 8
+    "${local.prefix}-production-demo-postgres" = 10
+    "${local.prefix}-production-demo-redis"    = 5
+    "${local.prefix}-staging-postgres"         = 10
+    "${local.prefix}-staging-redis"            = 5
+  }
+}
+
+resource "google_compute_disk" "data" {
+  for_each = local.persistent_disks
+  project  = var.project_id
+  zone     = var.zone
+  name     = each.key
+  type     = "pd-standard"
+  size     = each.value
+  labels   = local.labels
 }
 
 resource "google_compute_network" "demo" {

@@ -1,0 +1,33 @@
+{{- if and .Values.secretProvider.enabled .Values.demoDependencies.enabled .Values.demoDependencies.postgres.volumeHandle .Values.demoDependencies.redis.volumeHandle }}
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: {{ include "fde.fullname" . }}-postgres
+  labels:
+    {{- include "fde.labels" . | nindent 4 }}
+spec:
+  capacity: { storage: {{ .Values.demoDependencies.postgres.storage }} }
+  accessModes: ["ReadWriteOnce"]
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  csi:
+    driver: pd.csi.storage.gke.io
+    volumeHandle: {{ .Values.demoDependencies.postgres.volumeHandle | quote }}
+    fsType: ext4
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: {{ include "fde.fullname" . }}-redis
+  labels:
+    {{- include "fde.labels" . | nindent 4 }}
+spec:
+  capacity: { storage: {{ .Values.demoDependencies.redis.storage }} }
+  accessModes: ["ReadWriteOnce"]
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  csi:
+    driver: pd.csi.storage.gke.io
+    volumeHandle: {{ .Values.demoDependencies.redis.volumeHandle | quote }}
+    fsType: ext4
+{{- end }}

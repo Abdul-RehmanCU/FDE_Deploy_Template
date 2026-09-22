@@ -39,6 +39,7 @@ main:
               status: "sentinel-ok"
               manifest_sha: $${expected_sha}
               project_number: $${project_result.body.name}
+              expiry_id: $${manifest.expiry_id}
           - condition: $${mode in ["cleanup", "recovery"] and sys.now() < time.parse(manifest.expires_at)}
             return:
               status: "not-due"
@@ -70,7 +71,8 @@ main:
                   scope_name: $${manifest.zone}
                   collection: "disks"
                   name: $${disk.name}
-                  creation_timestamp: $${disk.creation_timestamp}
+                  expected_expiry_id: $${disk.expiry_id}
+                  creation_timestamp: null
                 result: disk_result
             - record_disk:
                 assign:
@@ -88,6 +90,7 @@ main:
                   scope_name: $${manifest.region}
                   collection: "addresses"
                   name: $${address.name}
+                  expected_expiry_id: null
                   creation_timestamp: $${address.creation_timestamp}
                 result: address_result
             - record_address:
@@ -201,7 +204,7 @@ delete_gke_cluster:
         next: poll
 
 delete_compute_resource:
-  params: [project, scope_kind, scope_name, collection, name, creation_timestamp]
+  params: [project, scope_kind, scope_name, collection, name, expected_expiry_id, creation_timestamp]
   steps:
     - read_resource:
         try:
@@ -222,7 +225,9 @@ delete_compute_resource:
                     raise: $${e}
     - verify_fingerprint:
         switch:
-          - condition: $${existing.body.creationTimestamp != creation_timestamp}
+          - condition: $${expected_expiry_id != null and map.get(default(map.get(existing.body, "labels"), {}), "expiry-id") != expected_expiry_id}
+            return: "ownership-mismatch"
+          - condition: $${creation_timestamp != null and existing.body.creationTimestamp != creation_timestamp}
             return: "ownership-mismatch"
     - request_delete:
         try:

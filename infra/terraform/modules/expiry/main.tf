@@ -9,12 +9,13 @@ locals {
     cluster_name        = var.cluster_name
     artifact_repository = var.artifact_repository
     bucket_names        = sort(var.bucket_names)
-    disk_resources      = var.disk_resources
+    disk_resources      = [for name in var.disk_names : { name = name, expiry_id = var.expiry_id }]
     address_resources   = var.address_resources
   }
   manifest_json = jsonencode(local.manifest)
   manifest_sha  = sha256(local.manifest_json)
 }
+
 
 resource "google_service_account" "workflow" {
   project      = var.project_id

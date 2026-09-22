@@ -8,3 +8,12 @@ bucket_names = [
   "fdetemplate-fde-demo-staging",
   "fdetemplate-fde-demo-production-demo",
 ]
+disk_names = [
+  "fde-demo-observability-loki",
+  "fde-demo-observability-prometheus",
+  "fde-demo-observability-tempo",
+  "fde-demo-production-demo-postgres",
+  "fde-demo-production-demo-redis",
+  "fde-demo-staging-postgres",
+  "fde-demo-staging-redis",
+]

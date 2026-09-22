@@ -23,3 +23,6 @@ output "secret_ids" {
   value       = sort([for secret in google_secret_manager_secret.runtime : secret.secret_id])
   description = "Secret containers only; versions are populated outside Terraform."
 }
+output "persistent_disk_volume_handles" {
+  value = { for name, disk in google_compute_disk.data : name => "projects/${var.project_id}/zones/${var.zone}/disks/${disk.name}" }
+}

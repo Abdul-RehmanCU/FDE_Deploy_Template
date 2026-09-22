@@ -10,9 +10,14 @@ images:
   alloy: grafana/alloy:v1.10.2
   otelCollector: otel/opentelemetry-collector-contrib:0.135.0
 storage:
+  predeclared: true
   prometheus: 8Gi
   loki: 8Gi
   tempo: 8Gi
+  volumeHandles:
+    prometheus: projects/fdetemplate/zones/northamerica-northeast1-a/disks/fde-demo-observability-prometheus
+    loki: projects/fdetemplate/zones/northamerica-northeast1-a/disks/fde-demo-observability-loki
+    tempo: projects/fdetemplate/zones/northamerica-northeast1-a/disks/fde-demo-observability-tempo
 resources:
   small:
     requests: { cpu: 50m, memory: 128Mi }

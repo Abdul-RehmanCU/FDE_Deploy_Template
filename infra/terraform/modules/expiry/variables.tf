@@ -55,22 +55,17 @@ variable "bucket_names" {
     error_message = "bucket_names must be unique valid exact bucket names."
   }
 }
-variable "disk_resources" {
-  type = list(object({
-    name               = string
-    creation_timestamp = string
-  }))
+variable "disk_names" {
+  type        = list(string)
   default     = []
-  description = "Exact zonal disk names and immutable creation timestamps discovered after workloads start."
+  description = "Exact disk names predeclared in the workflow before GKE or disks exist."
   validation {
     condition = (
-      length(var.disk_resources) == length(distinct([for resource in var.disk_resources : resource.name])) &&
-      [for resource in var.disk_resources : resource.name] == sort([for resource in var.disk_resources : resource.name]) &&
-      alltrue([for resource in var.disk_resources :
-        can(regex("^[a-z][a-z0-9-]{1,61}[a-z0-9]$", resource.name)) && can(formatdate("YYYY", resource.creation_timestamp))
-      ])
+      length(var.disk_names) == length(distinct(var.disk_names)) &&
+      var.disk_names == sort(var.disk_names) &&
+      alltrue([for name in var.disk_names : can(regex("^[a-z][a-z0-9-]{1,61}[a-z0-9]$", name))])
     )
-    error_message = "disk_resources must contain unique exact names and RFC3339 creation timestamps."
+    error_message = "disk_names must be sorted unique exact names."
   }
 }
 variable "address_resources" {

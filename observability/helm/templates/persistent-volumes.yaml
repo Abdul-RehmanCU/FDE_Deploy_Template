@@ -1,0 +1,23 @@
+{{- if .Values.storage.predeclared }}
+{{- $volumes := list
+  (dict "name" "prometheus" "size" .Values.storage.prometheus "handle" .Values.storage.volumeHandles.prometheus)
+  (dict "name" "loki" "size" .Values.storage.loki "handle" .Values.storage.volumeHandles.loki)
+  (dict "name" "tempo" "size" .Values.storage.tempo "handle" .Values.storage.volumeHandles.tempo)
+-}}
+{{ range $index, $volume := $volumes }}
+{{ if gt $index 0 }}---
+{{ end }}
+apiVersion: v1
+kind: PersistentVolume
+metadata: { name: fde-observability-{{ $volume.name }} }
+spec:
+  capacity: { storage: {{ $volume.size }} }
+  accessModes: ["ReadWriteOnce"]
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: ""
+  csi:
+    driver: pd.csi.storage.gke.io
+    volumeHandle: {{ $volume.handle | quote }}
+    fsType: ext4
+{{ end }}
+{{- end }}

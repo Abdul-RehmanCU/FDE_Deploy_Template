@@ -56,6 +56,10 @@ spec:
     - metadata: { name: data }
       spec:
         accessModes: ["ReadWriteOnce"]
+        {{- if and .Values.secretProvider.enabled .Values.demoDependencies.postgres.volumeHandle }}
+        storageClassName: ""
+        volumeName: {{ include "fde.fullname" . }}-postgres
+        {{- end }}
         resources: { requests: { storage: {{ .Values.demoDependencies.postgres.storage }} } }
 ---
 apiVersion: v1
@@ -121,5 +125,9 @@ spec:
     - metadata: { name: data }
       spec:
         accessModes: ["ReadWriteOnce"]
+        {{- if and .Values.secretProvider.enabled .Values.demoDependencies.redis.volumeHandle }}
+        storageClassName: ""
+        volumeName: {{ include "fde.fullname" . }}-redis
+        {{- end }}
         resources: { requests: { storage: {{ .Values.demoDependencies.redis.storage }} } }
 {{- end }}

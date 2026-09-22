@@ -23,7 +23,7 @@ def rendered_workflow() -> str:
         "cluster_name": "fde-demo",
         "artifact_repository": "fde-demo-images",
         "bucket_names": ["fdetemplate-fde-demo-staging"],
-        "disk_resources": [{"name": "pvc-exact-name", "creation_timestamp": "2026-09-22T10:00:00Z"}],
+        "disk_resources": [{"name": "pvc-exact-name", "expiry_id": "demo-20260922"}],
         "address_resources": [],
     }
     return WORKFLOW.read_text(encoding="utf-8").replace("${manifest_json}", json.dumps(manifest)).replace("$${", "${")
@@ -77,6 +77,7 @@ def test_bucket_cleanup_covers_versions_replay_and_concurrency() -> None:
     assert text.index("verify_bucket_owner") < text.index("list_first_page")
     assert "verify_repository_owner" in text
     assert "creationTimestamp != creation_timestamp" in text
+    assert '"expiry-id") != expected_expiry_id' in text
     assert "cleanup-incomplete" in text
 
 
@@ -138,3 +139,5 @@ def test_runtime_secret_and_act_as_bindings_are_resource_scoped() -> None:
     assert 'resource "google_service_account_iam_member" "infra_can_use_nodes"' in demo
     assert 'resource "google_service_account_iam_member" "infra_can_use_workflow"' in expiry
     assert 'resource "google_service_account_iam_member" "infra_can_use_scheduler"' in expiry
+    assert "disk_names" in expiry
+    assert "expiry_id = var.expiry_id" in expiry

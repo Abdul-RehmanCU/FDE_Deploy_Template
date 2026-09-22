@@ -94,6 +94,30 @@
           }
         }
       }
+    },
+    {
+      "if": {
+        "allOf": [
+          { "properties": { "profile": { "const": "demo" } } },
+          { "properties": { "secretProvider": { "properties": { "enabled": { "const": true } } } } }
+        ]
+      },
+      "then": {
+        "properties": {
+          "demoDependencies": {
+            "properties": {
+              "postgres": {
+                "required": ["volumeHandle"],
+                "properties": { "volumeHandle": { "type": "string", "pattern": "^projects/[^/]+/zones/northamerica-northeast1-a/disks/[a-z0-9-]+$" } }
+              },
+              "redis": {
+                "required": ["volumeHandle"],
+                "properties": { "volumeHandle": { "type": "string", "pattern": "^projects/[^/]+/zones/northamerica-northeast1-a/disks/[a-z0-9-]+$" } }
+              }
+            }
+          }
+        }
+      }
     }
   ],
   "definitions": {
