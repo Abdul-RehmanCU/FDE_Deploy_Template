@@ -69,3 +69,13 @@ def test_expiry_accepts_the_intentionally_empty_address_allowlist() -> None:
     block = terraform_block(text, 'variable "address_resources"')
     assert 'default     = []' in block
     assert 'join(",", [for resource in var.address_resources : resource.name])' in block
+
+
+def test_expiry_custom_role_uses_supported_artifact_registry_permissions() -> None:
+    text = (ROOT / "infra" / "terraform" / "modules" / "expiry" / "main.tf").read_text(
+        encoding="utf-8"
+    )
+    block = terraform_block(text, 'resource "google_project_iam_custom_role" "cleanup"')
+    assert '"artifactregistry.repositories.get"' in block
+    assert '"artifactregistry.repositories.delete"' in block
+    assert 'artifactregistry.operations.get' not in block

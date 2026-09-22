@@ -31,7 +31,6 @@ resource "google_project_iam_custom_role" "cleanup" {
   permissions = [
     "artifactregistry.repositories.delete",
     "artifactregistry.repositories.get",
-    "artifactregistry.operations.get",
     "compute.addresses.delete",
     "compute.addresses.get",
     "compute.disks.delete",
