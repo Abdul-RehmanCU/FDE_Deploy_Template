@@ -60,33 +60,34 @@ jobs:
           deny-licenses: AGPL-1.0-only,AGPL-1.0-or-later,SSPL-1.0
 
   container-scan:
-    name: Container image scan
+    name: Container image scan (${{ matrix.component }})
     runs-on: ubuntu-24.04
     timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - component: backend
+            dockerfile: backend/Dockerfile
+            image: fde-backend:scan
+          - component: frontend
+            dockerfile: frontend/Dockerfile
+            image: fde-frontend:scan
+    env:
+      DOCKERFILE: ${{ matrix.dockerfile }}
+      IMAGE_REF: ${{ matrix.image }}
     steps:
       - name: Check out repository
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
-      - name: Build release images without publishing
-        run: |
-          docker build --tag fde-backend:scan --file backend/Dockerfile .
-          docker build --tag fde-frontend:scan --file frontend/Dockerfile .
-      - name: Scan backend image
+      - name: Build release image without publishing
+        run: docker build --tag "$IMAGE_REF" --file "$DOCKERFILE" .
+      - name: Scan release image
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           scan-type: image
-          image-ref: fde-backend:scan
-          scanners: vuln,secret
-          severity: HIGH,CRITICAL
-          ignore-unfixed: true
-          format: table
-          exit-code: "1"
-      - name: Scan frontend image
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
-        with:
-          scan-type: image
-          image-ref: fde-frontend:scan
+          image-ref: ${{ matrix.image }}
           scanners: vuln,secret
           severity: HIGH,CRITICAL
           ignore-unfixed: true
