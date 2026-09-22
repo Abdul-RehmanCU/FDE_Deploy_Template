@@ -197,18 +197,9 @@ data:
         source_labels = ["__meta_kubernetes_pod_container_name"]
         target_label = "container"
       }
-      rule {
-        source_labels = ["__meta_kubernetes_pod_uid", "__meta_kubernetes_pod_container_name"]
-        separator = "/"
-        target_label = "__path__"
-        replacement = "/var/log/pods/*$1/*.log"
-      }
     }
-    local.file_match "pod_logs" {
-      path_targets = discovery.relabel.pod_logs.output
-    }
-    loki.source.file "pod_logs" {
-      targets = local.file_match.pod_logs.targets
+    loki.source.kubernetes "pod_logs" {
+      targets = discovery.relabel.pod_logs.output
       forward_to = [loki.process.json.receiver]
     }
     loki.process "json" {
