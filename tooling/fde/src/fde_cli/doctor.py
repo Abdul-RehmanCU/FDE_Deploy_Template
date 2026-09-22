@@ -9,6 +9,7 @@ from .process import executable, run, run_json
 REQUIRED_DEMO_SERVICES = {
     "artifactregistry.googleapis.com",
     "cloudasset.googleapis.com",
+    "cloudresourcemanager.googleapis.com",
     "cloudscheduler.googleapis.com",
     "compute.googleapis.com",
     "container.googleapis.com",

@@ -1,8 +1,11 @@
 locals {
+  # The owner CLI enables Resource Manager before init/import/refresh. Resource
+  # dependencies below order creation, but cannot protect a prior state refresh.
   github_owner = split("/", var.github_repository)[0]
   required_services = toset([
     "artifactregistry.googleapis.com",
     "cloudasset.googleapis.com",
+    "cloudresourcemanager.googleapis.com",
     "cloudscheduler.googleapis.com",
     "compute.googleapis.com",
     "container.googleapis.com",
@@ -88,6 +91,8 @@ resource "google_storage_bucket" "terraform_state" {
     purpose     = "terraform-state"
     managed-by  = "terraform"
   }
+
+  depends_on = [google_project_service.required]
 }
 
 resource "google_service_account" "automation" {
@@ -95,6 +100,8 @@ resource "google_service_account" "automation" {
   project      = var.project_id
   account_id   = "fde-${each.key}"
   display_name = each.value
+
+  depends_on = [google_project_service.required]
 }
 
 resource "google_iam_workload_identity_pool" "github" {
@@ -102,6 +109,8 @@ resource "google_iam_workload_identity_pool" "github" {
   workload_identity_pool_id = "fde-github"
   display_name              = "FDE GitHub Actions"
   description               = "Keyless GitHub Actions federation for the FDE repository"
+
+  depends_on = [google_project_service.required]
 }
 
 resource "google_iam_workload_identity_pool_provider" "github" {
@@ -129,6 +138,8 @@ resource "google_iam_workload_identity_pool_provider" "github" {
   attribute_condition = each.value
 
   oidc { issuer_uri = "https://token.actions.githubusercontent.com" }
+
+  depends_on = [google_project_service.required]
 }
 
 resource "google_service_account_iam_member" "github_federation" {
@@ -136,12 +147,16 @@ resource "google_service_account_iam_member" "github_federation" {
   service_account_id = google_service_account.automation[each.key].name
   role               = "roles/iam.workloadIdentityUser"
   member             = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.github.name}/attribute.automation/${each.key}"
+
+  depends_on = [google_project_service.required]
 }
 
 resource "google_storage_bucket_iam_member" "infra_state" {
   bucket = google_storage_bucket.terraform_state.name
   role   = "roles/storage.objectAdmin"
   member = "serviceAccount:${google_service_account.automation["infra"].email}"
+
+  depends_on = [google_project_service.required]
 }
 
 resource "google_project_iam_member" "automation_roles" {
@@ -149,4 +164,6 @@ resource "google_project_iam_member" "automation_roles" {
   project  = var.project_id
   role     = each.value.role
   member   = "serviceAccount:${google_service_account.automation[each.value.identity].email}"
+
+  depends_on = [google_project_service.required]
 }

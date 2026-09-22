@@ -51,6 +51,16 @@ The authorized cost evidence is supplied privately to the protected workflow as 
 
 The first bootstrap cannot authenticate through a federation provider that does not yet exist. An authorized project owner performs this one-time, non-GKE seed with Application Default Credentials:
 
+`fde bootstrap` checks Cloud Resource Manager before touching storage or running Terraform and enables it if missing. Subsequent keyless reconciliation only reads the enabled service. If the caller cannot enable APIs, the command stops before Terraform and requests an authorized owner or Service Usage Admin.
+
+For direct Terraform use, enable this prerequisite first:
+
+```bash
+gcloud services enable cloudresourcemanager.googleapis.com --project=PROJECT_ID
+```
+
+Terraform resource dependencies order creation; they cannot enable an API before Terraform refreshes existing project/IAM state. The bootstrap preflight prevents that `403 SERVICE_DISABLED` failure.
+
 ```bash
 uv run --project tooling/fde fde bootstrap \
   --config path/to/customer.yaml --customer CUSTOMER --environment staging --project PROJECT_ID \

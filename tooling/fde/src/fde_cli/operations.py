@@ -286,6 +286,7 @@ def bootstrap_gcp(
     if config.project != confirm_project:
         raise OperationError("--confirm-project must exactly match the configured project")
     gcloud = executable("gcloud")
+    ensure_cloud_resource_manager(gcloud, config.project)
     bucket_uri = f"gs://{state_bucket}"
     described = run([gcloud, "storage", "buckets", "describe", bucket_uri, "--format=json"], check=False)
     if described.returncode:
@@ -374,6 +375,40 @@ def bootstrap_gcp(
         ],
         cwd=terraform_dir,
     )
+
+
+def ensure_cloud_resource_manager(gcloud: str, project: str) -> None:
+    """Enable the API before Terraform can refresh project/IAM state.
+
+    Reconciliation identities need only read the already-enabled API. The
+    initial owner bootstrap enables it when missing; Terraform dependencies
+    alone cannot order reads performed during refresh.
+    """
+    service = "cloudresourcemanager.googleapis.com"
+    query = [
+        gcloud,
+        "services",
+        "list",
+        "--enabled",
+        f"--project={project}",
+        f"--filter=config.name={service}",
+        "--format=value(config.name)",
+    ]
+    if service in run(query).stdout.splitlines():
+        return
+    try:
+        run([gcloud, "services", "enable", service, f"--project={project}", "--quiet"])
+    except RuntimeError as exc:
+        raise OperationError(
+            f"Enable {service} in project {project} with an authorized owner or "
+            "Service Usage Admin before retrying bootstrap. No Terraform work "
+            f"has started. {redact(str(exc))}"
+        ) from exc
+    if service not in run(query).stdout.splitlines():
+        raise OperationError(
+            f"{service} is not yet reported enabled in project {project}; "
+            "retry bootstrap after activation. No Terraform work has started."
+        )
 
 
 def assert_scope(config: InstallationConfig, customer: str, environment: str, project: str) -> None:
