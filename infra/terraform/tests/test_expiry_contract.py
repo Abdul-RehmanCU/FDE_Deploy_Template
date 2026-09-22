@@ -1,4 +1,5 @@
 import json
+import subprocess
 from pathlib import Path
 
 import yaml
@@ -73,13 +74,34 @@ def test_scheduler_has_recovery_run_and_bounded_apply_window() -> None:
     assert 'recovery_1 = timeadd(var.expires_at, "10m")' in text
     assert 'recovery_2 = timeadd(var.expires_at, "20m")' in text
     assert 'timeadd(timestamp(), "3h40m")' in text
-    assert 'permissions = ["workflows.executions.create"]' in text
+    assert 'role   = "roles/workflows.invoker"' in text
     assert "resource.name ==" not in text
 
 
 def test_expiry_timestamp_must_be_exact_utc_minute() -> None:
     text = (ROOT / "modules" / "expiry" / "variables.tf").read_text(encoding="utf-8")
     assert "T[0-9]{2}:[0-9]{2}:00Z" in text
+
+
+def terraform_console(expression: str) -> str:
+    completed = subprocess.run(
+        ["terraform", "console"],
+        cwd=ROOT / "modules" / "expiry",
+        input=expression + "\n",
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return completed.stdout.strip().strip('"')
+
+
+def test_real_terraform_trigger_rendering_stays_on_or_after_deadline() -> None:
+    primary = terraform_console('formatdate("m h D M *", "2026-09-22T12:00:00Z")')
+    recovery_1 = terraform_console('formatdate("m h D M *", timeadd("2026-09-22T12:00:00Z", "10m"))')
+    recovery_2 = terraform_console('formatdate("m h D M *", timeadd("2026-09-22T12:00:00Z", "20m"))')
+    assert primary == "0 12 22 9 *"
+    assert recovery_1 == "10 12 22 9 *"
+    assert recovery_2 == "20 12 22 9 *"
 
 
 def test_workload_identities_have_separate_provider_attributes() -> None:

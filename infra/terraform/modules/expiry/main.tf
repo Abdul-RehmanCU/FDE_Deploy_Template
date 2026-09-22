@@ -80,18 +80,12 @@ resource "google_service_account" "scheduler" {
   display_name = "Invoke FDE expiry workflow"
 }
 
-resource "google_project_iam_custom_role" "scheduler_invoker" {
-  project     = var.project_id
-  role_id     = replace(substr("fdeExpiryInvoke${title(replace(var.expiry_id, "-", ""))}", 0, 64), "_", "")
-  title       = "FDE expiry invocation ${var.expiry_id}"
-  description = "Create workflow executions; Workflows IAM does not support resource-name conditions"
-  permissions = ["workflows.executions.create"]
-}
-
 resource "google_project_iam_member" "scheduler_invoker" {
   project = var.project_id
-  role    = google_project_iam_custom_role.scheduler_invoker.id
-  member  = "serviceAccount:${google_service_account.scheduler.email}"
+  # Workflows does not support resource-name IAM conditions. This dedicated,
+  # Scheduler-only identity receives the documented project-level invoker role.
+  role   = "roles/workflows.invoker"
+  member = "serviceAccount:${google_service_account.scheduler.email}"
 }
 
 resource "google_cloud_scheduler_job" "expiry" {

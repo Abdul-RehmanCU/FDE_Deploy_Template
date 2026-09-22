@@ -46,6 +46,8 @@ def load_release_gate(path: str | Path, *, now: datetime | None = None) -> Relea
     current = now or datetime.now(timezone.utc)
     if expires_at.tzinfo is None:
         raise ReleaseGateError("expires_at must include a timezone")
+    if expires_at.utcoffset() != timedelta(0) or expires_at.second != 0 or expires_at.microsecond != 0:
+        raise ReleaseGateError("expires_at must be UTC and aligned to an exact minute")
     remaining = expires_at.astimezone(timezone.utc) - current.astimezone(timezone.utc)
     if remaining <= timedelta(0) or remaining > timedelta(hours=4):
         raise ReleaseGateError("expiry must be in the future and no more than four hours away")

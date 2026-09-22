@@ -41,12 +41,22 @@ def test_rejects_incomplete_evidence(tmp_path: Path, field: str) -> None:
 
 def test_rejects_expiry_over_four_hours(tmp_path: Path) -> None:
     with pytest.raises(ReleaseGateError, match="four hours"):
-        load_release_gate(write_gate(tmp_path, expires_at=(NOW + timedelta(hours=4, seconds=1)).isoformat()), now=NOW)
+        load_release_gate(write_gate(tmp_path, expires_at=(NOW + timedelta(hours=4, minutes=1)).isoformat()), now=NOW)
 
 
 def test_rejects_expired_gate(tmp_path: Path) -> None:
     with pytest.raises(ReleaseGateError, match="future"):
-        load_release_gate(write_gate(tmp_path, expires_at=(NOW - timedelta(seconds=1)).isoformat()), now=NOW)
+        load_release_gate(write_gate(tmp_path, expires_at=(NOW - timedelta(minutes=1)).isoformat()), now=NOW)
+
+
+def test_rejects_non_minute_boundary(tmp_path: Path) -> None:
+    with pytest.raises(ReleaseGateError, match="exact minute"):
+        load_release_gate(write_gate(tmp_path, expires_at=(NOW + timedelta(hours=2, seconds=1)).isoformat()), now=NOW)
+
+
+def test_rejects_non_utc_expiry(tmp_path: Path) -> None:
+    with pytest.raises(ReleaseGateError, match="UTC"):
+        load_release_gate(write_gate(tmp_path, expires_at="2026-09-22T06:00:00-04:00"), now=NOW)
 
 
 def test_rejects_manfiest_mismatch_shape(tmp_path: Path) -> None:
