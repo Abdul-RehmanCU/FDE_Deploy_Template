@@ -128,7 +128,12 @@ function NewImportPage() {
               className="mt-4 flex gap-3 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800"
             >
               <AlertCircle className="mt-0.5 size-4 shrink-0" />
-              <span>{localError || extractErrorMessage(upload.error)}</span>
+              <span>
+                {localError ||
+                  (upload.error
+                    ? extractErrorMessage(upload.error)
+                    : "Upload failed")}
+              </span>
             </div>
           )}
 

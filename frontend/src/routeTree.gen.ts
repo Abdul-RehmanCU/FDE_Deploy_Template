@@ -16,8 +16,15 @@ import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as SignupRouteImport } from './routes/signup'
 import { Route as LayoutIndexRouteImport } from './routes/_layout/index'
 import { Route as LayoutAdminRouteImport } from './routes/_layout/admin'
+import { Route as LayoutAuditRouteImport } from './routes/_layout/audit'
+import { Route as LayoutDirectoryRouteImport } from './routes/_layout/directory'
 import { Route as LayoutItemsRouteImport } from './routes/_layout/items'
 import { Route as LayoutSettingsRouteImport } from './routes/_layout/settings'
+import { Route as LayoutImportsIndexRouteImport } from './routes/_layout/imports/index'
+import { Route as LayoutImportsImportIdRouteImport } from './routes/_layout/imports/$importId'
+import { Route as LayoutImportsNewRouteImport } from './routes/_layout/imports/new'
+import { Route as LayoutJobsIndexRouteImport } from './routes/_layout/jobs/index'
+import { Route as LayoutJobsJobIdRouteImport } from './routes/_layout/jobs/$jobId'
 
 const LayoutRoute = LayoutRouteImport.update({
   id: '/_layout',
@@ -53,6 +60,16 @@ const LayoutAdminRoute = LayoutAdminRouteImport.update({
   path: '/admin',
   getParentRoute: () => LayoutRoute,
 } as any)
+const LayoutAuditRoute = LayoutAuditRouteImport.update({
+  id: '/audit',
+  path: '/audit',
+  getParentRoute: () => LayoutRoute,
+} as any)
+const LayoutDirectoryRoute = LayoutDirectoryRouteImport.update({
+  id: '/directory',
+  path: '/directory',
+  getParentRoute: () => LayoutRoute,
+} as any)
 const LayoutItemsRoute = LayoutItemsRouteImport.update({
   id: '/items',
   path: '/items',
@@ -63,6 +80,31 @@ const LayoutSettingsRoute = LayoutSettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => LayoutRoute,
 } as any)
+const LayoutImportsIndexRoute = LayoutImportsIndexRouteImport.update({
+  id: '/imports/',
+  path: '/imports/',
+  getParentRoute: () => LayoutRoute,
+} as any)
+const LayoutImportsImportIdRoute = LayoutImportsImportIdRouteImport.update({
+  id: '/imports/$importId',
+  path: '/imports/$importId',
+  getParentRoute: () => LayoutRoute,
+} as any)
+const LayoutImportsNewRoute = LayoutImportsNewRouteImport.update({
+  id: '/imports/new',
+  path: '/imports/new',
+  getParentRoute: () => LayoutRoute,
+} as any)
+const LayoutJobsIndexRoute = LayoutJobsIndexRouteImport.update({
+  id: '/jobs/',
+  path: '/jobs/',
+  getParentRoute: () => LayoutRoute,
+} as any)
+const LayoutJobsJobIdRoute = LayoutJobsJobIdRouteImport.update({
+  id: '/jobs/$jobId',
+  path: '/jobs/$jobId',
+  getParentRoute: () => LayoutRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof LayoutIndexRoute
@@ -71,8 +113,15 @@ export interface FileRoutesByFullPath {
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
   '/admin': typeof LayoutAdminRoute
+  '/audit': typeof LayoutAuditRoute
+  '/directory': typeof LayoutDirectoryRoute
   '/items': typeof LayoutItemsRoute
   '/settings': typeof LayoutSettingsRoute
+  '/imports/$importId': typeof LayoutImportsImportIdRoute
+  '/imports/new': typeof LayoutImportsNewRoute
+  '/jobs/$jobId': typeof LayoutJobsJobIdRoute
+  '/imports/': typeof LayoutImportsIndexRoute
+  '/jobs/': typeof LayoutJobsIndexRoute
 }
 export interface FileRoutesByTo {
   '/login': typeof LoginRoute
@@ -80,9 +129,16 @@ export interface FileRoutesByTo {
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
   '/admin': typeof LayoutAdminRoute
+  '/audit': typeof LayoutAuditRoute
+  '/directory': typeof LayoutDirectoryRoute
   '/items': typeof LayoutItemsRoute
   '/settings': typeof LayoutSettingsRoute
   '/': typeof LayoutIndexRoute
+  '/imports/$importId': typeof LayoutImportsImportIdRoute
+  '/imports/new': typeof LayoutImportsNewRoute
+  '/jobs/$jobId': typeof LayoutJobsJobIdRoute
+  '/imports': typeof LayoutImportsIndexRoute
+  '/jobs': typeof LayoutJobsIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -92,9 +148,16 @@ export interface FileRoutesById {
   '/reset-password': typeof ResetPasswordRoute
   '/signup': typeof SignupRoute
   '/_layout/admin': typeof LayoutAdminRoute
+  '/_layout/audit': typeof LayoutAuditRoute
+  '/_layout/directory': typeof LayoutDirectoryRoute
   '/_layout/items': typeof LayoutItemsRoute
   '/_layout/settings': typeof LayoutSettingsRoute
   '/_layout/': typeof LayoutIndexRoute
+  '/_layout/imports/$importId': typeof LayoutImportsImportIdRoute
+  '/_layout/imports/new': typeof LayoutImportsNewRoute
+  '/_layout/jobs/$jobId': typeof LayoutJobsJobIdRoute
+  '/_layout/imports/': typeof LayoutImportsIndexRoute
+  '/_layout/jobs/': typeof LayoutJobsIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -105,8 +168,15 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/signup'
     | '/admin'
+    | '/audit'
+    | '/directory'
     | '/items'
     | '/settings'
+    | '/imports/$importId'
+    | '/imports/new'
+    | '/jobs/$jobId'
+    | '/imports/'
+    | '/jobs/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/login'
@@ -114,9 +184,16 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/signup'
     | '/admin'
+    | '/audit'
+    | '/directory'
     | '/items'
     | '/settings'
     | '/'
+    | '/imports/$importId'
+    | '/imports/new'
+    | '/jobs/$jobId'
+    | '/imports'
+    | '/jobs'
   id:
     | '__root__'
     | '/_layout'
@@ -125,9 +202,16 @@ export interface FileRouteTypes {
     | '/reset-password'
     | '/signup'
     | '/_layout/admin'
+    | '/_layout/audit'
+    | '/_layout/directory'
     | '/_layout/items'
     | '/_layout/settings'
     | '/_layout/'
+    | '/_layout/imports/$importId'
+    | '/_layout/imports/new'
+    | '/_layout/jobs/$jobId'
+    | '/_layout/imports/'
+    | '/_layout/jobs/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -189,6 +273,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutAdminRouteImport
       parentRoute: typeof LayoutRoute
     }
+    '/_layout/audit': {
+      id: '/_layout/audit'
+      path: '/audit'
+      fullPath: '/audit'
+      preLoaderRoute: typeof LayoutAuditRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/directory': {
+      id: '/_layout/directory'
+      path: '/directory'
+      fullPath: '/directory'
+      preLoaderRoute: typeof LayoutDirectoryRouteImport
+      parentRoute: typeof LayoutRoute
+    }
     '/_layout/items': {
       id: '/_layout/items'
       path: '/items'
@@ -203,21 +301,70 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof LayoutSettingsRouteImport
       parentRoute: typeof LayoutRoute
     }
+    '/_layout/imports/': {
+      id: '/_layout/imports/'
+      path: '/imports'
+      fullPath: '/imports/'
+      preLoaderRoute: typeof LayoutImportsIndexRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/imports/$importId': {
+      id: '/_layout/imports/$importId'
+      path: '/imports/$importId'
+      fullPath: '/imports/$importId'
+      preLoaderRoute: typeof LayoutImportsImportIdRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/imports/new': {
+      id: '/_layout/imports/new'
+      path: '/imports/new'
+      fullPath: '/imports/new'
+      preLoaderRoute: typeof LayoutImportsNewRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/jobs/': {
+      id: '/_layout/jobs/'
+      path: '/jobs'
+      fullPath: '/jobs/'
+      preLoaderRoute: typeof LayoutJobsIndexRouteImport
+      parentRoute: typeof LayoutRoute
+    }
+    '/_layout/jobs/$jobId': {
+      id: '/_layout/jobs/$jobId'
+      path: '/jobs/$jobId'
+      fullPath: '/jobs/$jobId'
+      preLoaderRoute: typeof LayoutJobsJobIdRouteImport
+      parentRoute: typeof LayoutRoute
+    }
   }
 }
 
 interface LayoutRouteChildren {
   LayoutAdminRoute: typeof LayoutAdminRoute
+  LayoutAuditRoute: typeof LayoutAuditRoute
+  LayoutDirectoryRoute: typeof LayoutDirectoryRoute
   LayoutItemsRoute: typeof LayoutItemsRoute
   LayoutSettingsRoute: typeof LayoutSettingsRoute
   LayoutIndexRoute: typeof LayoutIndexRoute
+  LayoutImportsImportIdRoute: typeof LayoutImportsImportIdRoute
+  LayoutImportsNewRoute: typeof LayoutImportsNewRoute
+  LayoutJobsJobIdRoute: typeof LayoutJobsJobIdRoute
+  LayoutImportsIndexRoute: typeof LayoutImportsIndexRoute
+  LayoutJobsIndexRoute: typeof LayoutJobsIndexRoute
 }
 
 const LayoutRouteChildren: LayoutRouteChildren = {
   LayoutAdminRoute: LayoutAdminRoute,
+  LayoutAuditRoute: LayoutAuditRoute,
+  LayoutDirectoryRoute: LayoutDirectoryRoute,
   LayoutItemsRoute: LayoutItemsRoute,
   LayoutSettingsRoute: LayoutSettingsRoute,
   LayoutIndexRoute: LayoutIndexRoute,
+  LayoutImportsImportIdRoute: LayoutImportsImportIdRoute,
+  LayoutImportsNewRoute: LayoutImportsNewRoute,
+  LayoutJobsJobIdRoute: LayoutJobsJobIdRoute,
+  LayoutImportsIndexRoute: LayoutImportsIndexRoute,
+  LayoutJobsIndexRoute: LayoutJobsIndexRoute,
 }
 
 const LayoutRouteWithChildren =
