@@ -61,6 +61,10 @@ def validate_cleanup_manifest(
         raise OperationError("cleanup manifest does not match deterministic project/customer/run ownership")
 
 
+def remaining_instance_names(resources: list[dict[str, object]]) -> list[str]:
+    return sorted(str(resource.get("name", "unknown")) for resource in resources)
+
+
 def validate_helm_values(config: InstallationConfig, path: Path) -> None:
     try:
         values = yaml.safe_load(path.read_text(encoding="utf-8"))
@@ -615,6 +619,9 @@ def destroy_demo(
         },
     }
     residues: dict[str, list[str]] = {}
+    remaining_instances = remaining_instance_names(by_kind.get("instances", []))
+    if remaining_instances:
+        residues["instances"] = remaining_instances
     for kind, names in expected_names.items():
         present: list[str] = []
         for resource in by_kind.get(kind, []):

@@ -17,6 +17,7 @@ from fde_cli.operations import (
     validate_expiry_contract,
     validate_helm_values,
     validate_paid_cost_gate,
+    remaining_instance_names,
     validate_demo_cost_drivers,
     validate_cleanup_manifest,
 )
@@ -242,6 +243,14 @@ def test_cleanup_manifest_fallback_is_exact_and_fail_closed(tmp_path: Path) -> N
         drifted = {**manifest, field: value}
         with pytest.raises(OperationError, match="does not match"):
             validate_cleanup_manifest(cfg, "demo-test-run", drifted)
+
+
+def test_cleanup_inventory_fails_closed_on_any_dedicated_project_vm() -> None:
+    assert remaining_instance_names([]) == []
+    assert remaining_instance_names([{"name": "gke-demo-node-a"}, {"name": "unexpected-vm"}]) == [
+        "gke-demo-node-a",
+        "unexpected-vm",
+    ]
 
 
 def valid_helm_values(tmp_path: Path) -> tuple[object, Path, dict[str, object]]:
