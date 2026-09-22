@@ -143,11 +143,18 @@ jobs:
         run: |
           helm lint infra/helm/fde --strict
           helm template fde infra/helm/fde --namespace fde-staging > "$RUNNER_TEMP/fde-rendered.yaml"
+          helm lint observability/helm --strict
+          helm template fde-observability observability/helm --namespace observability > "$RUNNER_TEMP/observability-rendered.yaml"
       - name: Validate rendered Kubernetes resources
         run: >-
           docker run --rm -i ghcr.io/yannh/kubeconform:v0.7.0
           -strict -summary -ignore-missing-schemas
           < "$RUNNER_TEMP/fde-rendered.yaml"
+      - name: Validate rendered observability resources
+        run: >-
+          docker run --rm -i ghcr.io/yannh/kubeconform:v0.7.0
+          -strict -summary -ignore-missing-schemas
+          < "$RUNNER_TEMP/observability-rendered.yaml"
 
   deployment-cli:
     name: Deployment CLI tests
