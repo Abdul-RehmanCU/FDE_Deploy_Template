@@ -26,7 +26,8 @@ Never promote `latest` or rebuild between environments.
 7. Confirm API, worker, publisher, PostgreSQL, Redis, and telemetry components report healthy state.
 
 ```bash
-uv run --project tooling/fde fde verify path/to/customer.yaml
+uv run --project tooling/fde fde verify \
+  --config path/to/customer.yaml --customer CUSTOMER --environment staging --project PROJECT_ID
 kubectl -n CUSTOMER-STAGING get deploy,statefulset,job,pod
 helm -n CUSTOMER-STAGING history RELEASE_NAME
 ```
@@ -53,7 +54,8 @@ Failure injection is disabled by default and restricted to the demo workflow.
 4. Roll back only the application release:
 
    ```bash
-   uv run --project tooling/fde fde rollback path/to/customer.yaml
+   uv run --project tooling/fde fde rollback \
+     --config path/to/customer.yaml --customer CUSTOMER --environment ENVIRONMENT --project PROJECT_ID
    ```
 
 5. Verify the previous application version, readiness, business smoke flow, and request-probe results.

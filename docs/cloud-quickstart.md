@@ -28,8 +28,8 @@ Record the project number, active account, billing-account attachment, enabled A
 Copy `infra/config/customers/demo.example.yaml`. Replace the customer, project, immutable image digests, expiry, and resource-manifest placeholders. Secret fields must be references; never place secret values in the file.
 
 ```bash
-uv run --project tooling/fde fde validate-config path/to/customer.yaml
-uv run --project tooling/fde fde doctor path/to/customer.yaml
+uv run --project tooling/fde fde validate-config --config path/to/customer.yaml
+uv run --project tooling/fde fde doctor --config path/to/customer.yaml --cloud
 ```
 
 The demo profile accepts only `northamerica-northeast1` and the bounded topology in the plan. The CLI refuses the managed profile under the demo authorization.
@@ -45,36 +45,65 @@ Review `infra/cost/demo-estimate.yaml` and `infra/cost/ledger.demo.json`. Refres
 - an exact resource manifest and matching project number;
 - independent review recorded for the same revision.
 
-```bash
-uv run --project tooling/fde fde gate path/to/customer.yaml path/to/evidence.json
-```
+The authorized cost evidence is supplied privately to the protected workflow as `DEMO_COST_EVIDENCE_JSON`. It must set `paid_provisioning_allowed: true` and contain a billing/resource baseline observed within 30 minutes. The committed planning ledger intentionally keeps this flag false.
 
-## 4. Install expiry before runtime
+## 4. Seed keyless identity once, then install expiry
 
-The expiry state is separate from the demo state so it can be installed and proven first.
+The first bootstrap cannot authenticate through a federation provider that does not yet exist. An authorized project owner performs this one-time, non-GKE seed with Application Default Credentials:
 
 ```bash
-terraform -chdir=infra/terraform/environments/expiry init
-terraform -chdir=infra/terraform/environments/expiry plan -out=expiry.tfplan
-terraform -chdir=infra/terraform/environments/expiry apply expiry.tfplan
+uv run --project tooling/fde fde bootstrap \
+  --config path/to/customer.yaml --customer CUSTOMER --environment staging --project PROJECT_ID \
+  --terraform-dir infra/terraform/bootstrap --state-bucket STATE_BUCKET \
+  --github-repository OWNER/FDE_Deploy_Template --confirm-project PROJECT_ID
 ```
 
-Invoke the workflow with an innocuous sentinel manifest. Confirm exact project/resource targeting, retry behavior, stale-trigger refusal, and Scheduler-to-Workflows authorization. Do not create GKE until this evidence is captured.
+Configure these exact GitHub environments and variables from the bootstrap outputs:
+
+| Environment | Identity contract |
+| --- | --- |
+| `demo-build` | build provider and `GCP_BUILD_SERVICE_ACCOUNT` |
+| `demo-infrastructure` | infrastructure provider and `GCP_INFRA_SERVICE_ACCOUNT` |
+| `demo-staging` | deploy provider and `GCP_DEPLOY_SERVICE_ACCOUNT` |
+| `demo-prod` | deploy provider and `GCP_DEPLOY_SERVICE_ACCOUNT`; separate from real protected `production` |
+| `demo-cleanup` | cleanup provider and `GCP_CLEANUP_SERVICE_ACCOUNT` |
+
+Set `GCP_WIF_PROVIDER` in each environment to its exact provider output. Then manually dispatch `Bootstrap and expiry guard`, or the gated `Bounded GCP demo rehearsal`. The workflow applies the separate expiry state, proves correct sentinel success, wrong-fingerprint rejection, and early-cleanup refusal before GKE. A generation-zero state-bucket object consumes the single paid-run authorization so another dispatch cannot start a second paid run. No recurring paid trigger is configured.
 
 ## 5. Create and apply reviewed plans
 
 ```bash
-uv run --project tooling/fde fde plan path/to/customer.yaml
-uv run --project tooling/fde fde deploy path/to/customer.yaml
+uv run --project tooling/fde fde plan \
+  --config path/to/customer.yaml --customer CUSTOMER --environment staging --project PROJECT_ID \
+  --terraform-dir infra/terraform/environments/demo --backend-bucket STATE_BUCKET \
+  --state-prefix demo/EXPIRY_ID --out /absolute/path/demo.tfplan --expiry-id EXPIRY_ID
+
+uv run --project tooling/fde fde deploy-infrastructure \
+  --config path/to/customer.yaml --customer CUSTOMER --environment staging --project PROJECT_ID \
+  --gate path/to/release-gate.json --cost path/to/private-current-cost.yaml \
+  --terraform-dir infra/terraform/environments/demo --plan /absolute/path/demo.tfplan \
+  --expiry-terraform-dir infra/terraform/environments/expiry \
+  --expiry-evidence path/to/expiry-evidence.json
 ```
 
-The saved plan must be fresh, tied to current HEAD and customer/environment/project, and pass the release gate. The first billable action starts the four-hour maximum runtime clock.
+After apply, render configuration and Helm values from the signed image manifest plus live Terraform outputs. Validate parity, then deploy each environment:
+
+```bash
+uv run --project tooling/fde fde deploy-release \
+  --config path/to/rendered-staging.yaml --customer CUSTOMER --environment staging --project PROJECT_ID \
+  --chart infra/helm/fde --values path/to/rendered-staging-values.yaml
+```
+
+The saved plan must be fresh, tied to current HEAD and customer/environment/project, and pass the release gate. The first billable action starts the four-hour maximum runtime clock. The repository workflow builds once after Artifact Registry exists and promotes those exact signed digests from staging to `demo-prod`.
 
 ## 6. Verify and collect evidence
 
 ```bash
-uv run --project tooling/fde fde verify path/to/customer.yaml
-uv run --project tooling/fde fde evidence path/to/customer.yaml
+uv run --project tooling/fde fde verify \
+  --config path/to/customer.yaml --customer CUSTOMER --environment staging --project PROJECT_ID
+uv run --project tooling/fde fde evidence \
+  --config path/to/customer.yaml --customer CUSTOMER --environment staging --project PROJECT_ID \
+  --output-dir path/to/private-evidence
 ```
 
 Verify staging before production-demo. Promote exact image digests, run the migration Job, complete the browser smoke journey, measure continuous requests during rollout, inject the controlled unhealthy release, verify Helm rollback, restore a backup into a disposable database, and capture the observability evidence.
@@ -82,8 +111,21 @@ Verify staging before production-demo. Promote exact image digests, run the migr
 ## 7. Destroy and reconcile
 
 ```bash
-uv run --project tooling/fde fde destroy path/to/customer.yaml
-uv run --project tooling/fde fde evidence path/to/customer.yaml
+uv run --project tooling/fde fde destroy \
+  --config path/to/customer.yaml --customer CUSTOMER --environment staging --project PROJECT_ID \
+  --terraform-dir infra/terraform/environments/demo --confirm-customer CUSTOMER \
+  --expiry-id EXPIRY_ID --expiry-terraform-dir infra/terraform/environments/expiry \
+  --manifest-file path/to/reviewed-fallback-manifest.json
 ```
 
 Confirm the remaining inventory for GKE clusters, Compute Engine instances/disks/addresses, Artifact Registry repositories, GCS buckets and object generations, Workflows, Scheduler jobs, secrets, Helm releases, and Kubernetes resources. Preserve delayed billing as pending; never report an invented final cost.
+
+Immediately after runtime and expiry cleanup are proven and sanitized evidence is exported, the project owner retires the bootstrap identity with local ADC. Automation must not revoke the WIF/cleanup identity it is currently using. Billing can be queried later with zero resources:
+
+```bash
+python scripts/finalize_bootstrap.py \
+  --project PROJECT_ID --state-bucket STATE_BUCKET --github-repository OWNER/FDE_Deploy_Template \
+  --confirm FINALIZE-BOOTSTRAP --evidence-out path/to/private-final-bootstrap-evidence.json
+```
+
+This command targets only the bootstrap IAM/WIF/API resources, confirms that only the labeled state bucket remains in Terraform state, removes all state-object generations, deletes that exact bucket last, and fails if the FDE WIF pool remains.

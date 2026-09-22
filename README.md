@@ -182,7 +182,7 @@ See [database recovery](docs/database-recovery.md) for backup/restore boundaries
 ## Cost and teardown
 
 - Total authorized GCP spend is USD 25, with at most USD 10 estimated for the single demo and USD 15 reserved for delayed charges and cleanup.
-- The planned demo estimate is USD 4.50619304; billing was CA$0 at the captured baseline, with an explicit reporting-delay caveat.
+- The planned demo estimate is USD 4.96619304; billing was CA$0 at the captured baseline, with an explicit reporting-delay caveat. Paid provisioning still requires a separate private baseline observed within 30 minutes.
 - Primary expiry is planned at two hours. Three exact-minute scheduler attempts must begin within the four-hour maximum.
 - Cleanup targets an allowlisted resource manifest and never deletes the project.
 - A successful destroy command is insufficient: evidence must include the remaining cluster, VM, disk, IP, registry, bucket, workflow, scheduler, Helm, and Kubernetes inventory.
