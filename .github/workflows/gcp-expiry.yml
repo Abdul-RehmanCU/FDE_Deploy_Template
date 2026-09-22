@@ -51,7 +51,7 @@ jobs:
     name: Apply and prove independent expiry
     runs-on: ubuntu-24.04
     timeout-minutes: 25
-    environment: demo-infra
+    environment: demo-infrastructure
     permissions:
       contents: read # required to check out the selected revision
       id-token: write # required for keyless GCP Workload Identity Federation
@@ -67,6 +67,7 @@ jobs:
       STATE_BUCKET: ${{ inputs.state_bucket }}
       EXPIRY_ID: ${{ inputs.expiry_id }}
       EXPIRES_AT: ${{ inputs.expires_at }}
+      COST_EVIDENCE_JSON: ${{ secrets.DEMO_COST_EVIDENCE_JSON }}
     steps:
       - name: Check out selected main revision
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -100,11 +101,14 @@ jobs:
           version: "0.9.18"
       - name: Install deployment CLI
         run: uv sync --frozen --project tooling/fde
-      - name: Require current paid-provisioning evidence
-        run: >-
-          uv run --project tooling/fde python -c
-          "from fde_cli.cost import load_cost_gate; from fde_cli.operations import validate_paid_cost_gate;
-          validate_paid_cost_gate(load_cost_gate('infra/cost/demo-estimate.yaml'))"
+      - name: Require root-authorized current private cost evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$COST_EVIDENCE_JSON"
+          printf '%s' "$COST_EVIDENCE_JSON" > "$RUNNER_TEMP/fde-paid-cost-evidence.yaml"
+          uv run --project tooling/fde python -c \
+            "from fde_cli.cost import load_cost_gate; from fde_cli.operations import validate_paid_cost_gate; validate_paid_cost_gate(load_cost_gate('$RUNNER_TEMP/fde-paid-cost-evidence.yaml'))"
       - name: Authenticate infrastructure identity
         uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
         with:
@@ -117,10 +121,14 @@ jobs:
         with:
           terraform_version: 1.15.8
           terraform_wrapper: false
-      - name: Reconcile bootstrap state and protected identities
+      - name: Reconcile pre-seeded bootstrap state and protected identities
         shell: bash
         run: |
           set -euo pipefail
+          gcloud storage buckets describe "gs://$STATE_BUCKET" --format=json >/dev/null || {
+            echo "Run the one-time owner-authenticated 'fde bootstrap' seed before this keyless workflow." >&2
+            exit 1
+          }
           mkdir -p "$RUNNER_TEMP/fde-private"
           python - <<'PY'
           import os, yaml
@@ -171,8 +179,34 @@ jobs:
           schedules=$(terraform -chdir=infra/terraform/environments/expiry output -json scheduler_jobs)
           test "$(jq 'length' <<<"$schedules")" -eq 3
 
-          sentinel=$(gcloud workflows run "$workflow_name" --project="$PROJECT_ID" --location="$REGION" \
-            --data="{\"mode\":\"sentinel\",\"manifest_sha\":\"$manifest_sha\"}" --format=json)
+          run_execution() {
+            local mode=$1
+            local supplied_sha=$2
+            local output=$3
+            local argument
+            argument=$(jq -nc --arg mode "$mode" --arg manifest_sha "$supplied_sha" '{mode:$mode,manifest_sha:$manifest_sha}')
+            local token
+            token=$(gcloud auth print-access-token)
+            local created
+            created=$(curl --fail --silent --request POST \
+              --header "Authorization: Bearer $token" --header 'Content-Type: application/json' \
+              --data "$(jq -nc --arg argument "$argument" '{argument:$argument}')" \
+              "https://workflowexecutions.googleapis.com/v1/projects/${PROJECT_ID}/locations/${REGION}/workflows/${workflow_name}/executions")
+            local execution_id
+            execution_id=$(jq -r '.name | split("/")[-1]' <<<"$created")
+            test -n "$execution_id"
+            for _ in {1..60}; do
+              gcloud workflows executions describe "$execution_id" --workflow="$workflow_name" \
+                --project="$PROJECT_ID" --location="$REGION" --format=json > "$output"
+              state=$(jq -r '.state' "$output")
+              [[ "$state" =~ ^(SUCCEEDED|FAILED|CANCELLED)$ ]] && return 0
+              sleep 2
+            done
+            return 1
+          }
+
+          run_execution sentinel "$manifest_sha" "$private_dir/sentinel.json"
+          sentinel=$(cat "$private_dir/sentinel.json")
           sentinel_state=$(jq -r '.state' <<<"$sentinel")
           sentinel_result=$(jq -r '.result' <<<"$sentinel")
           test "$sentinel_state" = SUCCEEDED
@@ -180,16 +214,12 @@ jobs:
           test "$(jq -r '.manifest_sha' <<<"$sentinel_result")" = "$manifest_sha"
           test "$(jq -r '.expiry_id' <<<"$sentinel_result")" = "$EXPIRY_ID"
 
-          set +e
-          gcloud workflows run "$workflow_name" --project="$PROJECT_ID" --location="$REGION" \
-            --data="{\"mode\":\"sentinel\",\"manifest_sha\":\"$(printf '0%.0s' {1..64})\"}" \
-            --format=json >"$private_dir/wrong-sha.json" 2>&1
-          wrong_sha_status=$?
-          set -e
-          test "$wrong_sha_status" -ne 0
+          run_execution sentinel "$(printf '0%.0s' {1..64})" "$private_dir/wrong-sha.json"
+          test "$(jq -r '.state' "$private_dir/wrong-sha.json")" = FAILED
 
-          recovery=$(gcloud workflows run "$workflow_name" --project="$PROJECT_ID" --location="$REGION" \
-            --data="{\"mode\":\"recovery\",\"manifest_sha\":\"$manifest_sha\"}" --format=json)
+          run_execution recovery "$manifest_sha" "$private_dir/recovery.json"
+          recovery=$(cat "$private_dir/recovery.json")
+          test "$(jq -r '.state' <<<"$recovery")" = SUCCEEDED
           recovery_result=$(jq -r '.result' <<<"$recovery")
           test "$(jq -r '.status' <<<"$recovery_result")" = not-due
 
