@@ -24,6 +24,7 @@ spec:
           command: ["python", "-m", "app.outbox_publisher"]
           env:
             {{- include "fde.backendEnv" . | nindent 12 }}
+            - { name: OTEL_SERVICE_NAME, value: fde-outbox-publisher }
           volumeMounts:
             {{- include "fde.secretMount" . | nindent 12 }}
           resources: {{- toYaml .Values.publisher.resources | nindent 12 }}

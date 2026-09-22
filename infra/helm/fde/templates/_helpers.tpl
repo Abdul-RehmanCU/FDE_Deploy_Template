@@ -35,4 +35,9 @@ fde.dev/environment: {{ .Values.environment | quote }}
 - { name: GCS_BUCKET, value: {{ .Values.storage.gcsBucket | quote }} }
 - { name: APP_ENVIRONMENT, value: {{ .Values.environment | quote }} }
 - { name: APP_VERSION, value: {{ .Values.appVersion | quote }} }
+{{- if .Values.observability.enabled }}
+- { name: OTEL_EXPORTER_OTLP_ENDPOINT, value: {{ .Values.observability.otlpEndpoint | quote }} }
+- { name: OTEL_EXPORTER_OTLP_PROTOCOL, value: grpc }
+- { name: OTEL_RESOURCE_ATTRIBUTES, value: {{ printf "deployment.environment=%s,service.version=%s" .Values.environment .Values.appVersion | quote }} }
+{{- end }}
 {{- end -}}

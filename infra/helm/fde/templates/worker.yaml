@@ -25,6 +25,7 @@ spec:
           command: ["celery", "-A", "app.worker.celery_app", "worker", "--loglevel=INFO", "--concurrency=2"]
           env:
             {{- include "fde.backendEnv" . | nindent 12 }}
+            - { name: OTEL_SERVICE_NAME, value: fde-worker }
           volumeMounts:
             {{- include "fde.secretMount" . | nindent 12 }}
           livenessProbe:

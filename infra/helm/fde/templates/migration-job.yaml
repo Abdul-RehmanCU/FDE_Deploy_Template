@@ -31,6 +31,7 @@ spec:
           command: ["alembic", "upgrade", "head"]
           env:
             {{- include "fde.backendEnv" . | nindent 12 }}
+            - { name: OTEL_SERVICE_NAME, value: fde-migration }
           volumeMounts:
             {{- include "fde.secretMount" . | nindent 12 }}
           resources:

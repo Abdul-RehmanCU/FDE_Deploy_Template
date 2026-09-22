@@ -52,6 +52,7 @@ storage:
 
 secretProvider:
   enabled: true
+  kubernetesSecretName: fde-runtime-secrets
   projectId: fdetemplate
   secretNames:
     databaseUrl: replace-me-database-url
@@ -83,6 +84,10 @@ ingress:
 
 networkPolicy:
   enabled: true
+
+observability:
+  enabled: true
+  otlpEndpoint: http://fde-otel-collector.observability:4317
 
 namespaceControls:
   enabled: true
