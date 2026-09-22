@@ -121,6 +121,10 @@ export interface UserPublic {
   updated_at: string
 }
 
+export interface UserCreatedPublic extends UserPublic {
+  temporary_password: string
+}
+
 export interface CursorPage<T> {
   data: T[]
   next_cursor: string | null

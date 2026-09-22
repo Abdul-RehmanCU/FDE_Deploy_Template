@@ -10,13 +10,21 @@ import type {
   ImportRowPublic,
   JobAttemptPublic,
   JobPublic,
+  UserCreatedPublic,
   UserPublic,
 } from "./types"
 
 const security = [{ scheme: "bearer", type: "http" }] as const
-type Errors = { 400: ApiErrorEnvelope; 401: ApiErrorEnvelope; 403: ApiErrorEnvelope }
+type Errors = {
+  400: ApiErrorEnvelope
+  401: ApiErrorEnvelope
+  403: ApiErrorEnvelope
+}
 
-async function get<T>(url: string, query?: Record<string, unknown>): Promise<T> {
+async function get<T>(
+  url: string,
+  query?: Record<string, unknown>,
+): Promise<T> {
   const response = await client.get<{ 200: T }, Errors, true>({
     responseType: "json",
     security,
@@ -122,6 +130,40 @@ export const fdeApi = {
 
   listUsers: (cursor?: string) =>
     get<CursorPage<UserPublic>>("/api/v1/users", { cursor, limit: 50 }),
+
+  createUser: (body: {
+    email: string
+    full_name?: string | null
+    role: "admin" | "operator" | "viewer"
+  }) =>
+    post<UserCreatedPublic>("/api/v1/users", body, {
+      "Content-Type": "application/json",
+    }),
+
+  updateUser: async (
+    id: string,
+    body: Partial<{
+      email: string
+      full_name: string | null
+      role: "admin" | "operator" | "viewer"
+      is_active: boolean
+    }>,
+  ) => {
+    const response = await client.patch<{ 200: UserPublic }, Errors, true>({
+      body,
+      headers: { "Content-Type": "application/json" },
+      responseType: "json",
+      security,
+      throwOnError: true,
+      url: `/api/v1/users/${id}`,
+    })
+    return response.data
+  },
+
+  issueTemporaryPassword: (id: string) =>
+    post<{ temporary_password: string }>(
+      `/api/v1/users/${id}/temporary-password`,
+    ),
 
   listAuditEvents: (action?: string, cursor?: string) =>
     get<CursorPage<AuditEventPublic>>("/api/v1/audit-events", {
