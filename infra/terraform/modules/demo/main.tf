@@ -249,3 +249,11 @@ resource "google_secret_manager_secret_iam_member" "runtime" {
   role      = "roles/secretmanager.secretAccessor"
   member    = "serviceAccount:${google_service_account.runtime[each.value.namespace].email}"
 }
+
+resource "google_secret_manager_secret_iam_member" "deploy_add_versions" {
+  for_each  = local.secret_specs
+  project   = var.project_id
+  secret_id = google_secret_manager_secret.runtime[each.key].secret_id
+  role      = "roles/secretmanager.secretVersionAdder"
+  member    = "serviceAccount:fde-deploy@${var.project_id}.iam.gserviceaccount.com"
+}
