@@ -91,3 +91,12 @@ def test_expiry_ownership_checks_use_safe_nested_workflows_lookups() -> None:
     assert 'map.get(existing_repository.body, ["labels", "expiry-id"])' in text
     assert 'default(map.get(existing.body, "resourceLabels"), {})' not in text
     assert 'default(map.get(existing.body, "labels"), {})' not in text
+
+
+def test_expiry_probe_only_retries_new_logging_role_propagation() -> None:
+    workflow = (ROOT / ".github" / "workflows" / "gcp-expiry.yml").read_text(
+        encoding="utf-8"
+    )
+    assert "for _ in {1..12}; do" in workflow
+    assert 'contains("logging.logEntries.create")' in workflow
+    assert "sleep 10" in workflow

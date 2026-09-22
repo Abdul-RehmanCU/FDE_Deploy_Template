@@ -205,9 +205,19 @@ jobs:
             return 1
           }
 
-          run_execution sentinel "$manifest_sha" "$private_dir/sentinel.json"
-          sentinel=$(cat "$private_dir/sentinel.json")
-          sentinel_state=$(jq -r '.state' <<<"$sentinel")
+          # A newly created custom role can take several seconds to propagate.
+          # Retry only the observed logging permission propagation failure; any
+          # other sentinel failure remains immediately fatal below.
+          sentinel_state=UNKNOWN
+          for _ in {1..12}; do
+            run_execution sentinel "$manifest_sha" "$private_dir/sentinel.json"
+            sentinel=$(cat "$private_dir/sentinel.json")
+            sentinel_state=$(jq -r '.state' <<<"$sentinel")
+            test "$sentinel_state" = SUCCEEDED && break
+            jq -e '(.error.payload // "") | contains("logging.logEntries.create")' \
+              "$private_dir/sentinel.json" >/dev/null || break
+            sleep 10
+          done
           sentinel_result=$(jq -r '.result' <<<"$sentinel")
           test "$sentinel_state" = SUCCEEDED
           test "$(jq -r '.status' <<<"$sentinel_result")" = sentinel-ok
