@@ -9,4 +9,5 @@ output "redis_host" {
   sensitive = true
 }
 output "application_bucket" { value = google_storage_bucket.application.name }
+output "runtime_service_account" { value = google_service_account.runtime.email }
 output "customer_domain" { value = var.domain }

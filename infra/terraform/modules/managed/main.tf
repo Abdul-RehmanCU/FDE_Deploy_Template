@@ -91,6 +91,12 @@ resource "google_project_iam_member" "node_roles" {
   member  = "serviceAccount:${google_service_account.nodes.email}"
 }
 
+resource "google_service_account_iam_member" "infra_can_use_nodes" {
+  service_account_id = google_service_account.nodes.name
+  role               = "roles/iam.serviceAccountUser"
+  member             = "serviceAccount:fde-infra@${var.project_id}.iam.gserviceaccount.com"
+}
+
 resource "google_container_cluster" "managed" {
   project                  = var.project_id
   name                     = var.cluster_name
@@ -155,6 +161,7 @@ resource "google_container_node_pool" "managed" {
       enable_secure_boot          = true
     }
   }
+  depends_on = [google_service_account_iam_member.infra_can_use_nodes]
 }
 
 resource "google_sql_database_instance" "postgres" {
@@ -240,6 +247,30 @@ resource "google_storage_bucket" "application" {
   }
 }
 
+resource "google_service_account" "runtime" {
+  project      = var.project_id
+  account_id   = substr("${local.prefix}-runtime", 0, 30)
+  display_name = "FDE managed production runtime"
+}
+
+resource "google_service_account_iam_member" "infra_can_use_runtime" {
+  service_account_id = google_service_account.runtime.name
+  role               = "roles/iam.serviceAccountUser"
+  member             = "serviceAccount:fde-infra@${var.project_id}.iam.gserviceaccount.com"
+}
+
+resource "google_service_account_iam_member" "gke_runtime" {
+  service_account_id = google_service_account.runtime.name
+  role               = "roles/iam.workloadIdentityUser"
+  member             = "serviceAccount:${var.project_id}.svc.id.goog[production/fde-runtime]"
+}
+
+resource "google_storage_bucket_iam_member" "runtime_objects" {
+  bucket = google_storage_bucket.application.name
+  role   = "roles/storage.objectAdmin"
+  member = "serviceAccount:${google_service_account.runtime.email}"
+}
+
 resource "google_secret_manager_secret" "runtime" {
   for_each  = toset(["database-url", "redis-url", "secret-key"])
   project   = var.project_id
@@ -252,4 +283,12 @@ resource "google_secret_manager_secret" "runtime" {
       }
     }
   }
+}
+
+resource "google_secret_manager_secret_iam_member" "runtime" {
+  for_each  = google_secret_manager_secret.runtime
+  project   = var.project_id
+  secret_id = each.value.secret_id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.runtime.email}"
 }

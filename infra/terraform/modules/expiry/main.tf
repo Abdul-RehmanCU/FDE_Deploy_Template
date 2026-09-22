@@ -72,12 +72,28 @@ resource "google_workflows_workflow" "cleanup" {
   source_contents = templatefile("${path.module}/workflow.yaml.tftpl", {
     manifest_json = local.manifest_json
   })
+  depends_on = [
+    google_project_iam_member.workflow_cleanup,
+    google_service_account_iam_member.infra_can_use_workflow,
+  ]
 }
 
 resource "google_service_account" "scheduler" {
   project      = var.project_id
   account_id   = substr("fde-schedule-${var.expiry_id}", 0, 30)
   display_name = "Invoke FDE expiry workflow"
+}
+
+resource "google_service_account_iam_member" "infra_can_use_workflow" {
+  service_account_id = google_service_account.workflow.name
+  role               = "roles/iam.serviceAccountUser"
+  member             = "serviceAccount:fde-infra@${var.project_id}.iam.gserviceaccount.com"
+}
+
+resource "google_service_account_iam_member" "infra_can_use_scheduler" {
+  service_account_id = google_service_account.scheduler.name
+  role               = "roles/iam.serviceAccountUser"
+  member             = "serviceAccount:fde-infra@${var.project_id}.iam.gserviceaccount.com"
 }
 
 resource "google_project_iam_member" "scheduler_invoker" {
@@ -121,7 +137,10 @@ resource "google_cloud_scheduler_job" "expiry" {
       scope                 = "https://www.googleapis.com/auth/cloud-platform"
     }
   }
-  depends_on = [google_project_iam_member.scheduler_invoker]
+  depends_on = [
+    google_project_iam_member.scheduler_invoker,
+    google_service_account_iam_member.infra_can_use_scheduler,
+  ]
 
   lifecycle {
     precondition {

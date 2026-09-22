@@ -17,6 +17,44 @@ locals {
     deploy  = "Release immutable images to GKE"
     cleanup = "Run allowlisted demo expiry cleanup"
   }
+  automation_roles = {
+    build = toset([
+      "roles/artifactregistry.writer",
+    ])
+    infra = toset([
+      "roles/artifactregistry.admin",
+      "roles/cloudscheduler.admin",
+      "roles/compute.networkAdmin",
+      "roles/container.admin",
+      "roles/iam.roleAdmin",
+      "roles/iam.serviceAccountAdmin",
+      "roles/resourcemanager.projectIamAdmin",
+      "roles/secretmanager.admin",
+      "roles/storage.admin",
+      "roles/workflows.admin",
+    ])
+    deploy = toset([
+      "roles/artifactregistry.reader",
+      "roles/container.developer",
+    ])
+    cleanup = toset([
+      "roles/artifactregistry.admin",
+      "roles/cloudscheduler.admin",
+      "roles/compute.networkAdmin",
+      "roles/container.admin",
+      "roles/iam.roleAdmin",
+      "roles/iam.serviceAccountAdmin",
+      "roles/resourcemanager.projectIamAdmin",
+      "roles/secretmanager.admin",
+      "roles/storage.admin",
+      "roles/workflows.admin",
+    ])
+  }
+  automation_role_bindings = merge([
+    for identity, roles in local.automation_roles : {
+      for role in roles : "${identity}:${role}" => { identity = identity, role = role }
+    }
+  ]...)
 }
 
 resource "google_project_service" "required" {
@@ -65,7 +103,7 @@ resource "google_iam_workload_identity_pool" "github" {
 
 resource "google_iam_workload_identity_pool_provider" "github" {
   for_each = {
-    build   = "assertion.repository == '${var.github_repository}' && assertion.repository_owner == 'Abdul-RehmanCU' && (assertion.ref == 'refs/heads/main' || assertion.event_name == 'pull_request')"
+    build   = "assertion.repository == '${var.github_repository}' && assertion.repository_owner == 'Abdul-RehmanCU' && assertion.ref == 'refs/heads/main' && assertion.environment == 'demo-build'"
     infra   = "assertion.repository == '${var.github_repository}' && assertion.repository_owner == 'Abdul-RehmanCU' && assertion.ref == 'refs/heads/main' && assertion.environment == 'demo-infrastructure'"
     deploy  = "assertion.repository == '${var.github_repository}' && assertion.repository_owner == 'Abdul-RehmanCU' && assertion.ref == 'refs/heads/main' && assertion.environment in ['demo-staging', 'demo-prod']"
     cleanup = "assertion.repository == '${var.github_repository}' && assertion.repository_owner == 'Abdul-RehmanCU' && assertion.ref == 'refs/heads/main' && assertion.environment == 'demo-cleanup'"
@@ -100,4 +138,11 @@ resource "google_storage_bucket_iam_member" "infra_state" {
   bucket = google_storage_bucket.terraform_state.name
   role   = "roles/storage.objectAdmin"
   member = "serviceAccount:${google_service_account.automation["infra"].email}"
+}
+
+resource "google_project_iam_member" "automation_roles" {
+  for_each = local.automation_role_bindings
+  project  = var.project_id
+  role     = each.value.role
+  member   = "serviceAccount:${google_service_account.automation[each.value.identity].email}"
 }

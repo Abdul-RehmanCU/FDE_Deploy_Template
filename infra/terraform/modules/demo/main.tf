@@ -6,6 +6,12 @@ locals {
     profile     = "demo"
     managed-by  = "terraform"
   })
+  secret_specs = merge([
+    for namespace in var.namespaces : {
+      for name in ["database-url", "postgres-password", "redis-password", "redis-url", "secret-key"] :
+      "${namespace}-${name}" => { namespace = namespace, name = name }
+    }
+  ]...)
 }
 
 resource "google_compute_network" "demo" {
@@ -49,6 +55,12 @@ resource "google_project_iam_member" "node_roles" {
   project = var.project_id
   role    = each.key
   member  = "serviceAccount:${google_service_account.gke_nodes.email}"
+}
+
+resource "google_service_account_iam_member" "infra_can_use_nodes" {
+  service_account_id = google_service_account.gke_nodes.name
+  role               = "roles/iam.serviceAccountUser"
+  member             = "serviceAccount:fde-infra@${var.project_id}.iam.gserviceaccount.com"
 }
 
 resource "google_container_cluster" "demo" {
@@ -128,6 +140,7 @@ resource "google_container_node_pool" "demo" {
       error_message = "Refusing an oversized demo boot disk."
     }
   }
+  depends_on = [google_service_account_iam_member.infra_can_use_nodes]
 }
 
 resource "google_artifact_registry_repository" "images" {
@@ -180,13 +193,6 @@ resource "google_storage_bucket_iam_member" "runtime_objects" {
   member   = "serviceAccount:${google_service_account.runtime[each.key].email}"
 }
 
-resource "google_project_iam_member" "runtime_secrets" {
-  for_each = var.namespaces
-  project  = var.project_id
-  role     = "roles/secretmanager.secretAccessor"
-  member   = "serviceAccount:${google_service_account.runtime[each.key].email}"
-}
-
 resource "google_service_account_iam_member" "gke_runtime" {
   for_each           = var.namespaces
   service_account_id = google_service_account.runtime[each.key].name
@@ -194,11 +200,15 @@ resource "google_service_account_iam_member" "gke_runtime" {
   member             = "serviceAccount:${var.project_id}.svc.id.goog[${each.key}/fde-runtime]"
 }
 
+resource "google_service_account_iam_member" "infra_can_use_runtime" {
+  for_each           = var.namespaces
+  service_account_id = google_service_account.runtime[each.key].name
+  role               = "roles/iam.serviceAccountUser"
+  member             = "serviceAccount:fde-infra@${var.project_id}.iam.gserviceaccount.com"
+}
+
 resource "google_secret_manager_secret" "runtime" {
-  for_each = toset([
-    for pair in setproduct(var.namespaces, ["database-url", "postgres-password", "redis-password", "redis-url", "secret-key"]) :
-    "${pair[0]}-${pair[1]}"
-  ])
+  for_each  = local.secret_specs
   project   = var.project_id
   secret_id = "${local.prefix}-${each.key}"
   labels    = local.labels
@@ -209,4 +219,12 @@ resource "google_secret_manager_secret" "runtime" {
       }
     }
   }
+}
+
+resource "google_secret_manager_secret_iam_member" "runtime" {
+  for_each  = local.secret_specs
+  project   = var.project_id
+  secret_id = google_secret_manager_secret.runtime[each.key].secret_id
+  role      = "roles/secretmanager.secretAccessor"
+  member    = "serviceAccount:${google_service_account.runtime[each.value.namespace].email}"
 }

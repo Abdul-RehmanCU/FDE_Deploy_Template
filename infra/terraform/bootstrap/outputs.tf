@@ -9,3 +9,12 @@ output "workload_identity_provider" {
 output "service_accounts" {
   value = { for name, account in google_service_account.automation : name => account.email }
 }
+
+output "automation_scope_notes" {
+  value = {
+    build   = "main branch and protected demo-build environment; PR validation has no cloud writer"
+    infra   = "dedicated demo project Terraform control; broad only inside project"
+    deploy  = "GKE workload deployment and Artifact Registry pull only"
+    cleanup = "protected demo-cleanup environment; broad Terraform destroy in dedicated project, distinct from exact-manifest expiry workflow identity"
+  }
+}
