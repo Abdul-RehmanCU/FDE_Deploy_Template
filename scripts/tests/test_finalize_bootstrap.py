@@ -84,3 +84,19 @@ def test_versioning_evidence_accepts_both_gcloud_shapes() -> None:
     assert MODULE.normalized_versioning({"versioningEnabled": False}) == {
         "enabled": False
     }
+
+
+def test_only_bucket_and_non_disabling_api_records_can_be_retired() -> None:
+    MODULE.verify_retirable_state([
+        'google_project_service.required["container.googleapis.com"]',
+        "google_storage_bucket.terraform_state",
+    ])
+    with pytest.raises(RuntimeError, match="unexpected bootstrap state"):
+        MODULE.verify_retirable_state([
+            'google_service_account.automation["infra"]',
+            "google_storage_bucket.terraform_state",
+        ])
+    with pytest.raises(RuntimeError, match="state bucket must remain"):
+        MODULE.verify_retirable_state([
+            'google_project_service.required["container.googleapis.com"]',
+        ])

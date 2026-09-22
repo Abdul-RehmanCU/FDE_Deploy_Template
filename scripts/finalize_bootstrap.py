@@ -103,6 +103,19 @@ def normalized_versioning(bucket: dict[str, object]) -> object:
     return metadata
 
 
+def verify_retirable_state(entries: list[str]) -> None:
+    """Only the still-live state bucket and non-disabling API records may remain."""
+    permitted = {"google_storage_bucket.terraform_state"}
+    if "google_storage_bucket.terraform_state" not in entries:
+        raise RuntimeError("state bucket must remain managed until object export")
+    unexpected = [
+        entry for entry in entries
+        if entry not in permitted and not entry.startswith("google_project_service.required[")
+    ]
+    if unexpected:
+        raise RuntimeError(f"unexpected bootstrap state remains: {unexpected}")
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Owner-ADC final teardown immediately after runtime and expiry reconciliation"
@@ -180,7 +193,6 @@ def main() -> int:
         "google_iam_workload_identity_pool_provider.github",
         "google_iam_workload_identity_pool.github",
         "google_service_account.automation",
-        "google_project_service.required",
     )
     state_result = run(
         [terraform, "state", "list"], cwd=terraform_dir, check=False
@@ -194,7 +206,11 @@ def main() -> int:
             "cannot inspect bootstrap Terraform state: "
             + state_result.stderr.strip()
         )
-    valid_state_prefixes = (*targets, "google_storage_bucket.terraform_state")
+    valid_state_prefixes = (
+        *targets,
+        "google_project_service.required",
+        "google_storage_bucket.terraform_state",
+    )
     unexpected_state = [
         entry
         for entry in state
@@ -238,13 +254,13 @@ def main() -> int:
             "cannot inspect bootstrap Terraform state after destroy: "
             + state_after_destroy_result.stderr.strip()
         )
-    if state_after_destroy == ["google_storage_bucket.terraform_state"]:
-        run(
-            [terraform, "state", "rm", "google_storage_bucket.terraform_state"],
-            cwd=terraform_dir,
-        )
-    elif state_after_destroy:
-        raise SystemExit(f"unexpected bootstrap state remains: {state_after_destroy}")
+    verify_retirable_state(state_after_destroy)
+    if any(entry.startswith("google_project_service.required[") for entry in state_after_destroy):
+        # All services use disable_on_destroy=false. Remove only their state
+        # records here; targeting them for destroy also targets the dependent
+        # state bucket before its versioned objects have been cleared.
+        run([terraform, "state", "rm", "google_project_service.required"], cwd=terraform_dir)
+    run([terraform, "state", "rm", "google_storage_bucket.terraform_state"], cwd=terraform_dir)
 
     authorization = f"{bucket_uri}/authorizations/single-paid-demo.json"
     all_versions_before = list_bucket_generations(bucket_uri, gcloud)
