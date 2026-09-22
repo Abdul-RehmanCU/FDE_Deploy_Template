@@ -126,6 +126,7 @@ resource "google_container_cluster" "demo" {
       error_message = "Refusing a demo cluster larger or different than the approved machine."
     }
   }
+  depends_on = [google_compute_disk.data]
 }
 
 resource "google_container_node_pool" "demo" {
