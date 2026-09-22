@@ -59,6 +59,8 @@ def parser() -> argparse.ArgumentParser:
     deploy.add_argument("--plan", required=True)
     deploy.add_argument("--chart", required=True)
     deploy.add_argument("--values", required=True)
+    deploy.add_argument("--expiry-terraform-dir", required=True)
+    deploy.add_argument("--expiry-evidence", required=True)
 
     verify = cloud_command("verify", "Verify rollout and dependency-aware health")
     verify.add_argument("--local-port", type=int, default=18080)
@@ -115,6 +117,8 @@ def main(argv: list[str] | None = None) -> int:
                 plan_path=Path(args.plan),
                 chart=Path(args.chart),
                 values=Path(args.values),
+                expiry_terraform_dir=Path(args.expiry_terraform_dir),
+                expiry_evidence_path=Path(args.expiry_evidence),
             )
             return 0
         if args.command == "verify":

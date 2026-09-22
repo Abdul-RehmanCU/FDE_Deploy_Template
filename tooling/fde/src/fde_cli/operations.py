@@ -4,6 +4,7 @@ import json
 import subprocess
 import time
 import urllib.request
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable
 
@@ -15,6 +16,132 @@ from .process import executable, redact, run
 
 class OperationError(RuntimeError):
     pass
+
+
+def validate_expiry_contract(
+    *,
+    project: str,
+    region: str,
+    zone: str,
+    gate_expires_at: datetime,
+    gate_sha: str,
+    state_sha: str,
+    manifest: dict[str, object],
+    sentinel: dict[str, object],
+    planned_disks: dict[str, str],
+    planned_clusters: dict[str, str],
+    planned_buckets: dict[str, str],
+    planned_repositories: dict[str, str],
+) -> None:
+    if state_sha != gate_sha or sentinel.get("manifest_sha") != state_sha:
+        raise OperationError("release gate, expiry state, and sentinel manifest SHA do not match")
+    if sentinel.get("status") != "sentinel-ok":
+        raise OperationError("live expiry sentinel did not succeed")
+    if manifest.get("project_id") != project or sentinel.get("expiry_id") != manifest.get("expiry_id"):
+        raise OperationError("live sentinel or compiled manifest does not match project/expiry_id")
+    try:
+        manifest_expiry = datetime.fromisoformat(str(manifest.get("expires_at", "")).replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise OperationError("compiled manifest expiry is invalid") from exc
+    if manifest_expiry.astimezone(timezone.utc) != gate_expires_at.astimezone(timezone.utc):
+        raise OperationError("release gate deadline differs from compiled expiry manifest")
+    if manifest.get("region") != region or manifest.get("zone") != zone:
+        raise OperationError("compiled expiry manifest region/zone differs from configuration")
+    manifest_disk_names = sorted(
+        str(item["name"]) for item in manifest.get("disk_resources", [])  # type: ignore[union-attr]
+    )
+    if sorted(planned_disks) != manifest_disk_names:
+        raise OperationError("demo plan disk set differs from compiled expiry manifest")
+    if not planned_disks or any(label != manifest.get("expiry_id") for label in planned_disks.values()):
+        raise OperationError("demo plan expiry_id labels differ from compiled expiry manifest")
+    expected = {
+        "cluster": [str(manifest.get("cluster_name"))],
+        "bucket": sorted(str(name) for name in manifest.get("bucket_names", [])),  # type: ignore[union-attr]
+        "repository": [str(manifest.get("artifact_repository"))],
+    }
+    actual = {
+        "cluster": sorted(planned_clusters),
+        "bucket": sorted(planned_buckets),
+        "repository": sorted(planned_repositories),
+    }
+    for kind in expected:
+        if actual[kind] != expected[kind]:
+            raise OperationError(f"demo plan {kind} set differs from compiled expiry manifest")
+    for resources in (planned_clusters, planned_buckets, planned_repositories):
+        if any(label != manifest.get("expiry_id") for label in resources.values()):
+            raise OperationError("demo plan resource expiry_id differs from compiled expiry manifest")
+
+
+def validate_demo_cost_drivers(resources: list[dict[str, object]], *, zone: str) -> None:
+    node_pools = [item["values"] for item in resources if item.get("type") == "google_container_node_pool"]
+    clusters = [item["values"] for item in resources if item.get("type") == "google_container_cluster"]
+    disks = [item["values"] for item in resources if item.get("type") == "google_compute_disk"]
+    forbidden = {
+        "google_compute_forwarding_rule",
+        "google_compute_global_forwarding_rule",
+        "google_compute_region_backend_service",
+        "google_sql_database_instance",
+        "google_redis_instance",
+    }
+    if any(item.get("type") in forbidden for item in resources):
+        raise OperationError("demo plan contains a public-LB or managed-profile cost driver")
+    if len(clusters) != 1 or clusters[0].get("location") != zone:
+        raise OperationError("demo plan must contain one zonal Montréal cluster")
+    if len(node_pools) != 1 or node_pools[0].get("node_count") != 1:
+        raise OperationError("demo plan must contain one fixed node")
+    node_configs = node_pools[0].get("node_config")
+    if not isinstance(node_configs, list) or len(node_configs) != 1:
+        raise OperationError("demo node configuration is unknown")
+    node = node_configs[0]
+    if (
+        node.get("machine_type") != "e2-standard-4"
+        or node.get("disk_type") != "pd-standard"
+        or node.get("disk_size_gb") != 30
+    ):
+        raise OperationError("demo node machine or boot disk differs from priced configuration")
+    if node_pools[0].get("autoscaling") not in (None, []):
+        raise OperationError("demo node autoscaling must remain disabled")
+    if not all(isinstance(item.get("size"), (int, float)) for item in disks):
+        raise OperationError("demo data disk sizes are unknown")
+    sizes = sorted(item.get("size") for item in disks)
+    if sizes != [5, 5, 8, 8, 8, 10, 10] or any(item.get("type") != "pd-standard" for item in disks):
+        raise OperationError("demo data disks differ from the priced 54 GiB pd-standard set")
+
+
+def collect_plan_contract(plan_json: dict[str, object]) -> tuple[
+    dict[str, str], dict[str, str], dict[str, str], dict[str, str], list[dict[str, object]]
+]:
+    targets: dict[str, dict[str, str]] = {
+        "google_compute_disk": {},
+        "google_container_cluster": {},
+        "google_storage_bucket": {},
+        "google_artifact_registry_repository": {},
+    }
+    resources: list[dict[str, object]] = []
+
+    def collect(module: dict[str, object]) -> None:
+        for resource in module.get("resources", []):  # type: ignore[union-attr]
+            resource_type = resource.get("type")  # type: ignore[union-attr]
+            values_map = resource.get("values", {})  # type: ignore[union-attr]
+            resources.append({"type": resource_type, "values": values_map})
+            target = targets.get(str(resource_type))
+            if target is not None:
+                name = values_map.get("repository_id") if resource_type == "google_artifact_registry_repository" else values_map.get("name")
+                labels = values_map.get("resource_labels") if resource_type == "google_container_cluster" else values_map.get("labels")
+                if name is None or not isinstance(labels, dict):
+                    raise OperationError(f"demo plan has unknown identity or labels for {resource_type}")
+                target[str(name)] = str(labels.get("expiry-id"))
+        for child in module.get("child_modules", []):  # type: ignore[union-attr]
+            collect(child)
+
+    collect(plan_json.get("planned_values", {}).get("root_module", {}))  # type: ignore[union-attr]
+    return (
+        targets["google_compute_disk"],
+        targets["google_container_cluster"],
+        targets["google_storage_bucket"],
+        targets["google_artifact_registry_repository"],
+        resources,
+    )
 
 
 def bootstrap_gcp(
@@ -154,6 +281,8 @@ def deploy_demo(
     plan_path: Path,
     chart: Path,
     values: Path,
+    expiry_terraform_dir: Path,
+    expiry_evidence_path: Path,
 ) -> None:
     if config.profile != "demo":
         raise OperationError("managed profile deployment is forbidden under the USD 25 demo authorization")
@@ -161,15 +290,67 @@ def deploy_demo(
     gate = load_release_gate(gate_path)
     if cost.project != config.project or gate.project != config.project or gate.customer != config.customer:
         raise OperationError("cost/release evidence does not match explicit deployment scope")
+    terraform = executable("terraform")
+    state_sha = run([terraform, "output", "-raw", "manifest_sha"], cwd=expiry_terraform_dir).stdout.strip()
+    manifest_result = run([terraform, "output", "-json", "compiled_manifest"], cwd=expiry_terraform_dir)
+    try:
+        manifest = json.loads(manifest_result.stdout)
+        expiry_evidence = json.loads(expiry_evidence_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        raise OperationError(f"invalid expiry evidence: {exc}") from exc
+    if expiry_evidence.get("manifest_sha") != state_sha:
+        raise OperationError("expiry evidence file does not match remote expiry state")
+    gcloud = executable("gcloud")
+    execution = run(
+        [
+            gcloud,
+            "workflows",
+            "executions",
+            "describe",
+            str(expiry_evidence.get("execution_id", "")),
+            f"--workflow={expiry_evidence.get('workflow', '')}",
+            f"--location={config.region}",
+            f"--project={config.project}",
+            "--format=json",
+        ]
+    )
+    execution_json = json.loads(execution.stdout)
+    try:
+        sentinel_result = json.loads(execution_json.get("result", "{}"))
+    except json.JSONDecodeError as exc:
+        raise OperationError("live sentinel returned invalid result JSON") from exc
+    if execution_json.get("state") != "SUCCEEDED":
+        raise OperationError("live expiry sentinel did not succeed")
+    plan_json = json.loads(run([terraform, "show", "-json", str(plan_path.resolve())], cwd=terraform_dir).stdout)
+    (
+        planned_disks,
+        planned_clusters,
+        planned_buckets,
+        planned_repositories,
+        planned_resources,
+    ) = collect_plan_contract(plan_json)
+    validate_demo_cost_drivers(planned_resources, zone=config.zone)
+    validate_expiry_contract(
+        project=config.project,
+        region=config.region,
+        zone=config.zone,
+        gate_expires_at=gate.expires_at,
+        gate_sha=gate.exact_manifest_sha,
+        state_sha=state_sha,
+        manifest=manifest,
+        sentinel=sentinel_result,
+        planned_disks=planned_disks,
+        planned_clusters=planned_clusters,
+        planned_buckets=planned_buckets,
+        planned_repositories=planned_repositories,
+    )
     git = executable("git")
     revision = run([git, "-C", str(terraform_dir), "rev-parse", "HEAD"]).stdout.strip().lower()
     if revision != gate.revision.lower():
         raise OperationError("release gate revision does not match the current repository HEAD")
     if plan_path.stat().st_mtime > gate_path.stat().st_mtime:
         raise OperationError("release gate must be issued after the final Terraform plan")
-    terraform = executable("terraform")
     run([terraform, "apply", "-input=false", "-lock-timeout=60s", str(plan_path.resolve())], cwd=terraform_dir)
-    gcloud = executable("gcloud")
     run([gcloud, "container", "clusters", "get-credentials", f"fde-{config.customer}-demo", f"--zone={config.zone}", f"--project={config.project}"])
     helm = executable("helm")
     run(
