@@ -63,7 +63,7 @@ items:
     unit: GiB-ingested
     unit_price_usd: 0.50
     estimated_usd: 1.00
-    basis: "Two-GiB telemetry ceiling; ignores included allotments. In-cluster Loki remains the primary demo log store."
+    basis: "Two-GiB telemetry ceiling including 10%-sampled VPC Flow Logs; ignores included allotments. In-cluster Loki remains the primary demo log store."
   - id: network-egress
     quantity: 2
     unit: GiB
@@ -124,5 +124,6 @@ sources:
   - "https://cloud.google.com/kubernetes-engine/pricing"
   - "https://cloud.google.com/compute/disks-image-pricing"
   - "https://cloud.google.com/artifact-registry/pricing"
+  - "https://cloud.google.com/vpc/network-pricing#flow-logs-pricing"
   - "https://cloud.google.com/workflows/pricing"
   - "https://cloud.google.com/billing/docs/how-to/budgets-spend-caps"

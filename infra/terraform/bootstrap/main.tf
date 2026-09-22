@@ -2,6 +2,7 @@ locals {
   github_owner = split("/", var.github_repository)[0]
   required_services = toset([
     "artifactregistry.googleapis.com",
+    "binaryauthorization.googleapis.com",
     "cloudasset.googleapis.com",
     "cloudscheduler.googleapis.com",
     "compute.googleapis.com",
@@ -66,6 +67,7 @@ resource "google_project_service" "required" {
 }
 
 resource "google_storage_bucket" "terraform_state" {
+  #checkov:skip=CKV_GCP_62: Access logs cannot safely target the same state bucket; project-level Data Access audit logging is the bootstrap prerequisite.
   name                        = var.state_bucket_name
   project                     = var.project_id
   location                    = var.region
@@ -103,6 +105,7 @@ resource "google_iam_workload_identity_pool" "github" {
 }
 
 resource "google_iam_workload_identity_pool_provider" "github" {
+  #checkov:skip=CKV_GCP_125: Conditions bind exact repository owner/repo, main ref, and protected GitHub environment; the scanner does not evaluate the for_each CEL map.
   for_each = {
     build   = "assertion.repository == '${var.github_repository}' && assertion.repository_owner == '${local.github_owner}' && assertion.ref == 'refs/heads/main' && assertion.environment == 'demo-build'"
     infra   = "assertion.repository == '${var.github_repository}' && assertion.repository_owner == '${local.github_owner}' && assertion.ref == 'refs/heads/main' && assertion.environment == 'demo-infrastructure'"

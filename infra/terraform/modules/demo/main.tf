@@ -25,6 +25,7 @@ locals {
 }
 
 resource "google_compute_disk" "data" {
+  #checkov:skip=CKV_GCP_37: The bounded demo accepts Google-managed encryption; customer-managed keys add cost and key teardown risk.
   for_each = local.persistent_disks
   project  = var.project_id
   zone     = var.zone
@@ -41,6 +42,24 @@ resource "google_compute_network" "demo" {
   routing_mode            = "REGIONAL"
 }
 
+resource "google_compute_firewall" "internal" {
+  project = var.project_id
+  name    = "${local.prefix}-internal"
+  network = google_compute_network.demo.name
+
+  direction     = "INGRESS"
+  source_ranges = ["10.42.0.0/20", "10.44.0.0/20", "10.48.0.0/16"]
+  allow { protocol = "icmp" }
+  allow {
+    protocol = "tcp"
+    ports    = ["1-65535"]
+  }
+  allow {
+    protocol = "udp"
+    ports    = ["1-65535"]
+  }
+}
+
 resource "google_compute_subnetwork" "demo" {
   project                  = var.project_id
   name                     = "${local.prefix}-demo-${var.region}"
@@ -48,6 +67,11 @@ resource "google_compute_subnetwork" "demo" {
   network                  = google_compute_network.demo.id
   ip_cidr_range            = "10.42.0.0/20"
   private_ip_google_access = true
+  log_config {
+    aggregation_interval = "INTERVAL_10_MIN"
+    flow_sampling        = 0.1
+    metadata             = "INCLUDE_ALL_METADATA"
+  }
 
   secondary_ip_range {
     range_name    = "pods"
@@ -84,19 +108,30 @@ resource "google_service_account_iam_member" "infra_can_use_nodes" {
 }
 
 resource "google_container_cluster" "demo" {
-  project                  = var.project_id
-  name                     = var.cluster_name
-  location                 = var.zone
-  network                  = google_compute_network.demo.id
-  subnetwork               = google_compute_subnetwork.demo.id
-  remove_default_node_pool = true
-  initial_node_count       = 1
-  deletion_protection      = false
-  resource_labels          = local.labels
-  networking_mode          = "VPC_NATIVE"
+  #checkov:skip=CKV_GCP_20: GitHub-hosted demo runners have ephemeral addresses; the public control-plane endpoint is protected by IAM and the single-use paid-run gate.
+  #checkov:skip=CKV_GCP_25: Private nodes require Cloud NAT, which is outside the bounded demo budget; the opt-in managed profile uses private nodes.
+  #checkov:skip=CKV_GCP_64: Private nodes require Cloud NAT, which is outside the bounded demo budget; the opt-in managed profile uses private nodes.
+  #checkov:skip=CKV_GCP_65: Google Groups RBAC requires customer Workspace group provisioning; Kubernetes RBAC remains explicit in the application chart.
+  #checkov:skip=CKV_GCP_69: The separately managed node pool sets workload_metadata_config mode GKE_METADATA; this check does not follow that resource relationship.
+  #checkov:skip=CKV_GCP_21: resource_labels is the current provider field and includes the mandatory expiry ownership label; this check expects the legacy field.
+  project                     = var.project_id
+  name                        = var.cluster_name
+  location                    = var.zone
+  network                     = google_compute_network.demo.id
+  subnetwork                  = google_compute_subnetwork.demo.id
+  remove_default_node_pool    = true
+  initial_node_count          = 1
+  deletion_protection         = false
+  resource_labels             = local.labels
+  networking_mode             = "VPC_NATIVE"
+  enable_intranode_visibility = true
+  binary_authorization { evaluation_mode = "PROJECT_SINGLETON_POLICY_ENFORCE" }
 
   release_channel { channel = "REGULAR" }
   workload_identity_config { workload_pool = "${var.project_id}.svc.id.goog" }
+  master_auth {
+    client_certificate_config { issue_client_certificate = false }
+  }
   ip_allocation_policy {
     cluster_secondary_range_name  = "pods"
     services_secondary_range_name = "services"
@@ -165,6 +200,7 @@ resource "google_container_node_pool" "demo" {
 }
 
 resource "google_artifact_registry_repository" "images" {
+  #checkov:skip=CKV_GCP_84: The bounded demo accepts Google-managed encryption; customer-managed keys add cost and independent key cleanup risk.
   project                = var.project_id
   location               = var.region
   repository_id          = "${local.prefix}-images"
@@ -185,6 +221,7 @@ resource "google_artifact_registry_repository" "images" {
 }
 
 resource "google_storage_bucket" "application" {
+  #checkov:skip=CKV_GCP_62: GCS Data Access audit logging is a project-level prerequisite; a circular same-module access-log bucket is intentionally avoided.
   for_each                    = var.namespaces
   project                     = var.project_id
   name                        = "${var.project_id}-${local.prefix}-${each.key}"
@@ -194,6 +231,7 @@ resource "google_storage_bucket" "application" {
   public_access_prevention    = "enforced"
   force_destroy               = true
   labels                      = merge(local.labels, { environment = each.key })
+  versioning { enabled = true }
   lifecycle_rule {
     condition { age = 7 }
     action { type = "Delete" }

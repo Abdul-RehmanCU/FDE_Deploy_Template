@@ -17,6 +17,24 @@ resource "google_compute_network" "managed" {
   routing_mode            = "REGIONAL"
 }
 
+resource "google_compute_firewall" "internal" {
+  project = var.project_id
+  name    = "${local.prefix}-internal"
+  network = google_compute_network.managed.name
+
+  direction     = "INGRESS"
+  source_ranges = ["10.64.0.0/20", "10.68.0.0/20", "10.72.0.0/16"]
+  allow { protocol = "icmp" }
+  allow {
+    protocol = "tcp"
+    ports    = ["1-65535"]
+  }
+  allow {
+    protocol = "udp"
+    ports    = ["1-65535"]
+  }
+}
+
 resource "google_compute_subnetwork" "managed" {
   project                  = var.project_id
   name                     = "${local.prefix}-${var.region}"
@@ -24,6 +42,11 @@ resource "google_compute_subnetwork" "managed" {
   network                  = google_compute_network.managed.id
   ip_cidr_range            = "10.64.0.0/20"
   private_ip_google_access = true
+  log_config {
+    aggregation_interval = "INTERVAL_10_MIN"
+    flow_sampling        = 0.5
+    metadata             = "INCLUDE_ALL_METADATA"
+  }
   secondary_ip_range {
     range_name    = "pods"
     ip_cidr_range = "10.72.0.0/16"
@@ -98,20 +121,28 @@ resource "google_service_account_iam_member" "infra_can_use_nodes" {
 }
 
 resource "google_container_cluster" "managed" {
-  project                  = var.project_id
-  name                     = var.cluster_name
-  location                 = var.region
-  network                  = google_compute_network.managed.id
-  subnetwork               = google_compute_subnetwork.managed.id
-  remove_default_node_pool = true
-  initial_node_count       = 1
-  deletion_protection      = true
-  resource_labels          = local.labels
-  networking_mode          = "VPC_NATIVE"
-  enable_shielded_nodes    = true
+  #checkov:skip=CKV_GCP_65: The reusable profile cannot invent a customer's Google Workspace security group; cluster and chart RBAC remain explicit prerequisites.
+  #checkov:skip=CKV_GCP_21: resource_labels is the current provider field and is populated from mandatory installation labels; this check expects the legacy field.
+  #checkov:skip=CKV_GCP_69: The separately managed node pool sets workload_metadata_config mode GKE_METADATA; this check does not follow that resource relationship.
+  project                     = var.project_id
+  name                        = var.cluster_name
+  location                    = var.region
+  network                     = google_compute_network.managed.id
+  subnetwork                  = google_compute_subnetwork.managed.id
+  remove_default_node_pool    = true
+  initial_node_count          = 1
+  deletion_protection         = true
+  resource_labels             = local.labels
+  networking_mode             = "VPC_NATIVE"
+  enable_shielded_nodes       = true
+  enable_intranode_visibility = true
+  binary_authorization { evaluation_mode = "PROJECT_SINGLETON_POLICY_ENFORCE" }
 
   release_channel { channel = "REGULAR" }
   workload_identity_config { workload_pool = "${var.project_id}.svc.id.goog" }
+  master_auth {
+    client_certificate_config { issue_client_certificate = false }
+  }
   private_cluster_config {
     enable_private_nodes    = true
     enable_private_endpoint = false
@@ -165,6 +196,8 @@ resource "google_container_node_pool" "managed" {
 }
 
 resource "google_sql_database_instance" "postgres" {
+  #checkov:skip=CKV_GCP_79: PostgreSQL 16 matches the tested backup/restore and application support matrix; automatic major-version drift is unsafe.
+  #checkov:skip=CKV_GCP_111: Logging every SQL statement can expose customer PII; pgAudit is restricted to DDL and role changes instead.
   project             = var.project_id
   name                = "${local.prefix}-postgres"
   region              = var.region
@@ -177,6 +210,46 @@ resource "google_sql_database_instance" "postgres" {
     disk_size         = 20
     disk_autoresize   = true
     user_labels       = local.labels
+    database_flags {
+      name  = "cloudsql.enable_pgaudit"
+      value = "on"
+    }
+    database_flags {
+      name  = "pgaudit.log"
+      value = "ddl,role"
+    }
+    database_flags {
+      name  = "log_checkpoints"
+      value = "on"
+    }
+    database_flags {
+      name  = "log_connections"
+      value = "on"
+    }
+    database_flags {
+      name  = "log_disconnections"
+      value = "on"
+    }
+    database_flags {
+      name  = "log_duration"
+      value = "on"
+    }
+    database_flags {
+      name  = "log_hostname"
+      value = "on"
+    }
+    database_flags {
+      name  = "log_lock_waits"
+      value = "on"
+    }
+    database_flags {
+      name  = "log_min_messages"
+      value = "error"
+    }
+    database_flags {
+      name  = "log_min_error_statement"
+      value = "error"
+    }
     backup_configuration {
       enabled                        = true
       point_in_time_recovery_enabled = true
@@ -225,6 +298,7 @@ resource "google_redis_instance" "redis" {
 }
 
 resource "google_storage_bucket" "application" {
+  #checkov:skip=CKV_GCP_62: GCS Data Access audit logging is a project-level prerequisite; a circular same-module access-log bucket is intentionally avoided.
   project                     = var.project_id
   name                        = "${var.project_id}-${local.prefix}-application"
   location                    = var.region
