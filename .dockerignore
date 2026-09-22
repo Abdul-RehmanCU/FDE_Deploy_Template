@@ -1,6 +1,17 @@
 .git
+.github
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+.secrets
 **/__pycache__
 **/.venv
+**/.terraform
+**/*.tfstate*
 backend/htmlcov
 frontend/blob-report
 frontend/dist
@@ -8,3 +19,5 @@ frontend/node_modules
 frontend/playwright-report
 frontend/test-results
 node_modules
+evidence/private
+artifacts/private

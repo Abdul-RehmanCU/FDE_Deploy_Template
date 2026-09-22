@@ -1,8 +1,55 @@
-.vscode/*
-!.vscode/extensions.json
+# Local editor and operating-system state
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Local secrets and deployment credentials
+.env
+.env.*
+!.env.example
+!.env.*.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.kubeconfig
+kubeconfig*
+.secrets/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+htmlcov/
+.coverage
+coverage.xml
+
+# JavaScript and browser tests
 node_modules/
+frontend/dist/
 backend/app/frontend/
-/test-results/
-/playwright-report/
-/blob-report/
-/playwright/.cache/
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
+
+# Terraform and infrastructure runtime state
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+crash.*.log
+.terraformrc
+terraform.rc
+
+# Runtime evidence may contain customer or cloud identifiers. Only sanitized
+# evidence under docs/evidence/ is eligible for publication.
+evidence/private/
+artifacts/private/
+tmp/
+temp/
