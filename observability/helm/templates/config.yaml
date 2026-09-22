@@ -214,14 +214,14 @@ data:
       }
       stage.json {
         expressions = {
-          level = "level"
-          trace_id = "trace_id"
-          job_id = "job_id"
+          level = "level",
+          trace_id = "trace_id",
+          job_id = "job_id",
         }
       }
       stage.labels {
         values = {
-          level = ""
+          level = "",
         }
       }
       stage.label_drop {
