@@ -25,7 +25,8 @@ class Settings(BaseSettings):
 
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     BACKEND_CORS_ORIGINS: list[str] | str = ["http://localhost:5173"]
-    LOGIN_RATE_LIMIT: str = "5/minute"
+    LOGIN_RATE_LIMIT_ATTEMPTS: int = 5
+    LOGIN_RATE_LIMIT_WINDOW_SECONDS: int = 60
     DB_POOL_SIZE: int = 5
     DB_MAX_OVERFLOW: int = 5
     DB_POOL_TIMEOUT_SECONDS: int = 10
