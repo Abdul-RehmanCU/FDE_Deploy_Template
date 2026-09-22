@@ -93,6 +93,10 @@ ingress:
 
 networkPolicy:
   enabled: true
+  managedServices:
+    postgresCidr: ""
+    redisCidr: ""
+    redisTlsPort: 6378
 
 observability:
   enabled: true

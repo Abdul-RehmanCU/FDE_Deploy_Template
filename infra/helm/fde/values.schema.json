@@ -71,6 +71,23 @@
         "enabled": { "type": "boolean" },
         "otlpEndpoint": { "type": "string", "pattern": "^https?://[^ ]+:[0-9]+$" }
       }
+    },
+    "networkPolicy": {
+      "type": "object",
+      "required": ["enabled", "managedServices"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "managedServices": {
+          "type": "object",
+          "required": ["postgresCidr", "redisCidr", "redisTlsPort"],
+          "additionalProperties": false,
+          "properties": {
+            "postgresCidr": { "type": "string", "pattern": "^(|(?:[0-9]{1,3}\\.){3}[0-9]{1,3}/32)$" },
+            "redisCidr": { "type": "string", "pattern": "^(|(?:[0-9]{1,3}\\.){3}[0-9]{1,3}/32)$" },
+            "redisTlsPort": { "type": "integer", "const": 6378 }
+          }
+        }
+      }
     }
   },
   "allOf": [
@@ -84,6 +101,17 @@
             "properties": {
               "secretNames": {
                 "required": ["databaseUrl", "redisUrl", "appSecretKey", "redisCa", "databaseSslRootCert", "databaseSslCert", "databaseSslKey"]
+              }
+            }
+          },
+          "networkPolicy": {
+            "properties": {
+              "managedServices": {
+                "properties": {
+                  "postgresCidr": { "pattern": "^(?:[0-9]{1,3}\\.){3}[0-9]{1,3}/32$" },
+                  "redisCidr": { "pattern": "^(?:[0-9]{1,3}\\.){3}[0-9]{1,3}/32$" },
+                  "redisTlsPort": { "const": 6378 }
+                }
               }
             }
           }

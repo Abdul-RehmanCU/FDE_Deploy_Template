@@ -303,6 +303,12 @@ resource "google_redis_instance" "redis" {
       }
     }
   }
+  lifecycle {
+    postcondition {
+      condition     = self.port == 6378
+      error_message = "Managed Memorystore TLS must expose the CA-verified port 6378 expected by Helm and REDIS_URL."
+    }
+  }
   depends_on = [google_service_networking_connection.private_services]
 }
 
