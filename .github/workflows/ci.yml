@@ -274,6 +274,7 @@ jobs:
           helm upgrade --install fde infra/helm/fde \
             --namespace fde-staging \
             --values infra/helm/fde/values-kind.yaml \
+            --set-string branding.name='CI Customer Directory' \
             --wait \
             --timeout 12m
       - name: Verify probes, migration, and frontend proxy
@@ -288,7 +289,8 @@ jobs:
           kubectl -n fde-staging port-forward service/fde-ci-demo-staging-frontend 18080:8080 > "$RUNNER_TEMP/port-forward.log" 2>&1 &
           for attempt in {1..30}; do
             if curl --fail --silent http://127.0.0.1:18080/ >/dev/null && \
-               curl --fail --silent http://127.0.0.1:18080/api/v1/health/ready >/dev/null; then
+               curl --fail --silent http://127.0.0.1:18080/api/v1/health/ready >/dev/null && \
+               curl --fail --silent http://127.0.0.1:18080/runtime-config.js | grep --fixed-strings 'brandName: "CI Customer Directory"' >/dev/null; then
               exit 0
             fi
             sleep 1
@@ -368,34 +370,28 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          kubectl -n fde-staging port-forward service/fde-ci-demo-staging-frontend 18082:8080 > "$RUNNER_TEMP/rollout-port-forward.log" 2>&1 &
-          for attempt in {1..30}; do
-            curl --fail --silent http://127.0.0.1:18082/api/v1/health/live >/dev/null && break
-            sleep 1
-          done
-
-          probe_log="$RUNNER_TEMP/rolling-probe.txt"
-          stop_file="$RUNNER_TEMP/stop-rolling-probe"
-          : > "$probe_log"
-          (
-            while test ! -f "$stop_file"; do
-              if curl --fail --silent --max-time 2 http://127.0.0.1:18082/api/v1/health/live >/dev/null; then
-                echo success >> "$probe_log"
-              else
-                echo error >> "$probe_log"
-              fi
-              sleep 0.2
-            done
-          ) &
-          probe_pid=$!
+          kubectl -n fde-staging run fde-rolling-probe \
+            --image=curlimages/curl:8.16.0 \
+            --restart=Never \
+            --command -- sh -ec '
+              while test ! -f /tmp/stop; do
+                if curl --fail --silent --max-time 2 http://fde-ci-demo-staging-api:8000/api/v1/health/live >/dev/null; then
+                  echo success
+                else
+                  echo error
+                fi
+                sleep 0.2
+              done'
+          kubectl -n fde-staging wait --for=condition=Ready pod/fde-rolling-probe --timeout=120s
           kubectl -n fde-staging patch deployment/fde-ci-demo-staging-api \
             --type merge \
             --patch "{\"spec\":{\"template\":{\"metadata\":{\"annotations\":{\"fde.dev/rollout-probe\":\"$(date +%s)\"}}}}}"
           kubectl -n fde-staging rollout status deployment/fde-ci-demo-staging-api --timeout=180s
-          touch "$stop_file"
-          wait "$probe_pid"
-          successes=$(grep -c '^success$' "$probe_log" || true)
-          errors=$(grep -c '^error$' "$probe_log" || true)
+          kubectl -n fde-staging exec fde-rolling-probe -- touch /tmp/stop
+          kubectl -n fde-staging wait --for=jsonpath='{.status.phase}'=Succeeded pod/fde-rolling-probe --timeout=30s
+          kubectl -n fde-staging logs fde-rolling-probe > "$RUNNER_TEMP/rolling-probe.txt"
+          successes=$(grep -c '^success$' "$RUNNER_TEMP/rolling-probe.txt" || true)
+          errors=$(grep -c '^error$' "$RUNNER_TEMP/rolling-probe.txt" || true)
           test "$successes" -gt 0
           echo "Rolling probe successes=$successes errors=$errors"
           {
@@ -408,6 +404,7 @@ jobs:
           helm upgrade fde infra/helm/fde \
             --namespace fde-staging \
             --values infra/helm/fde/values-kind.yaml \
+            --set-string branding.name='CI Customer Directory' \
             --set appVersion=ci-unhealthy \
             --set images.backend.tag=missing-ci \
             --no-hooks \
@@ -454,6 +451,7 @@ jobs:
           helm upgrade fde infra/helm/fde \
             --namespace fde-staging \
             --values infra/helm/fde/values-kind.yaml \
+            --set-string branding.name='CI Customer Directory' \
             --set observability.enabled=true \
             --set observability.otlpEndpoint=http://fde-otel-collector.observability.svc.cluster.local:4317 \
             --wait \
