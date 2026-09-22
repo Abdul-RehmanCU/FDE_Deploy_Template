@@ -1,6 +1,7 @@
 {
   "name": "fde-deploy-template",
   "private": true,
+  "packageManager": "bun@1.3.10",
   "workspaces": [
     "frontend",
     "packages/*"
