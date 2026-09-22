@@ -89,8 +89,12 @@ class User(UserBase, table=True):
     hashed_password: str = Field(max_length=255)
     must_change_password: bool = True
     token_version: int = 0
-    created_at: datetime = Field(default_factory=utc_now, sa_type=DateTime(timezone=True))  # type: ignore[call-overload]
-    updated_at: datetime = Field(default_factory=utc_now, sa_type=DateTime(timezone=True))  # type: ignore[call-overload]
+    created_at: datetime = Field(
+        default_factory=utc_now, sa_type=DateTime(timezone=True)
+    )  # type: ignore[call-overload]
+    updated_at: datetime = Field(
+        default_factory=utc_now, sa_type=DateTime(timezone=True)
+    )  # type: ignore[call-overload]
 
 
 class UserPublic(UserBase):
@@ -166,7 +170,9 @@ class ImportBatch(SQLModel, table=True):
         ),
     )
     mapping: dict[str, str] | None = Field(default=None, sa_column=Column(JSON))
-    header: list[str] = Field(default_factory=list, sa_column=Column(JSON, nullable=False))
+    header: list[str] = Field(
+        default_factory=list, sa_column=Column(JSON, nullable=False)
+    )
     total_rows: int = 0
     accepted_count: int = 0
     rejected_count: int = 0
@@ -177,17 +183,27 @@ class ImportBatch(SQLModel, table=True):
     error_code: str | None = Field(default=None, max_length=64)
     error_message: str | None = Field(default=None, max_length=500)
     confirm_idempotency_key: str | None = Field(default=None, max_length=128)
-    confirmation_started_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))  # type: ignore[call-overload]
+    confirmation_started_at: datetime | None = Field(
+        default=None, sa_type=DateTime(timezone=True)
+    )  # type: ignore[call-overload]
     created_by_id: uuid.UUID = Field(foreign_key="user.id", ondelete="RESTRICT")
-    created_at: datetime = Field(default_factory=utc_now, sa_type=DateTime(timezone=True))  # type: ignore[call-overload]
-    updated_at: datetime = Field(default_factory=utc_now, sa_type=DateTime(timezone=True))  # type: ignore[call-overload]
+    created_at: datetime = Field(
+        default_factory=utc_now, sa_type=DateTime(timezone=True)
+    )  # type: ignore[call-overload]
+    updated_at: datetime = Field(
+        default_factory=utc_now, sa_type=DateTime(timezone=True)
+    )  # type: ignore[call-overload]
 
 
 class ValidationRow(SQLModel, table=True):
     __tablename__ = "validation_row"
     __table_args__ = (
-        UniqueConstraint("import_id", "row_number", name="uq_validation_row_import_number"),
-        Index("ix_validation_row_import_outcome_row", "import_id", "outcome", "row_number"),
+        UniqueConstraint(
+            "import_id", "row_number", name="uq_validation_row_import_number"
+        ),
+        Index(
+            "ix_validation_row_import_outcome_row", "import_id", "outcome", "row_number"
+        ),
     )
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     import_id: uuid.UUID = Field(foreign_key="import_batch.id", ondelete="CASCADE")
@@ -204,9 +220,15 @@ class ValidationRow(SQLModel, table=True):
         )
     )
     normalized_email: str | None = Field(default=None, max_length=320)
-    clean_data: dict[str, str | None] | None = Field(default=None, sa_column=Column(JSON))
-    errors: list[dict[str, str]] = Field(default_factory=list, sa_column=Column(JSON, nullable=False))
-    created_at: datetime = Field(default_factory=utc_now, sa_type=DateTime(timezone=True))  # type: ignore[call-overload]
+    clean_data: dict[str, str | None] | None = Field(
+        default=None, sa_column=Column(JSON)
+    )
+    errors: list[dict[str, str]] = Field(
+        default_factory=list, sa_column=Column(JSON, nullable=False)
+    )
+    created_at: datetime = Field(
+        default_factory=utc_now, sa_type=DateTime(timezone=True)
+    )  # type: ignore[call-overload]
 
 
 class Contact(SQLModel, table=True):
@@ -224,9 +246,15 @@ class Contact(SQLModel, table=True):
     company: str | None = Field(default=None, max_length=255)
     country_code: str | None = Field(default=None, max_length=2)
     external_id: str | None = Field(default=None, max_length=255)
-    source_import_id: uuid.UUID = Field(foreign_key="import_batch.id", ondelete="RESTRICT")
-    created_at: datetime = Field(default_factory=utc_now, sa_type=DateTime(timezone=True))  # type: ignore[call-overload]
-    updated_at: datetime = Field(default_factory=utc_now, sa_type=DateTime(timezone=True))  # type: ignore[call-overload]
+    source_import_id: uuid.UUID = Field(
+        foreign_key="import_batch.id", ondelete="RESTRICT"
+    )
+    created_at: datetime = Field(
+        default_factory=utc_now, sa_type=DateTime(timezone=True)
+    )  # type: ignore[call-overload]
+    updated_at: datetime = Field(
+        default_factory=utc_now, sa_type=DateTime(timezone=True)
+    )  # type: ignore[call-overload]
 
 
 class Job(SQLModel, table=True):
@@ -266,7 +294,9 @@ class Job(SQLModel, table=True):
     error_code: str | None = Field(default=None, max_length=64)
     error_message: str | None = Field(default=None, max_length=500)
     created_by_id: uuid.UUID = Field(foreign_key="user.id", ondelete="RESTRICT")
-    created_at: datetime = Field(default_factory=utc_now, sa_type=DateTime(timezone=True))  # type: ignore[call-overload]
+    created_at: datetime = Field(
+        default_factory=utc_now, sa_type=DateTime(timezone=True)
+    )  # type: ignore[call-overload]
     started_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))  # type: ignore[call-overload]
     finished_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))  # type: ignore[call-overload]
     heartbeat_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))  # type: ignore[call-overload]
@@ -295,7 +325,9 @@ class JobAttempt(SQLModel, table=True):
     worker_id: str | None = Field(default=None, max_length=255)
     error_code: str | None = Field(default=None, max_length=64)
     error_message: str | None = Field(default=None, max_length=500)
-    started_at: datetime = Field(default_factory=utc_now, sa_type=DateTime(timezone=True))  # type: ignore[call-overload]
+    started_at: datetime = Field(
+        default_factory=utc_now, sa_type=DateTime(timezone=True)
+    )  # type: ignore[call-overload]
     finished_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))  # type: ignore[call-overload]
 
 
@@ -306,12 +338,18 @@ class JobOutbox(SQLModel, table=True):
     )
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     job_id: uuid.UUID = Field(foreign_key="job.id", ondelete="CASCADE", unique=True)
-    payload: dict[str, Any] = Field(default_factory=dict, sa_column=Column(JSON, nullable=False))
-    available_at: datetime = Field(default_factory=utc_now, sa_type=DateTime(timezone=True))  # type: ignore[call-overload]
+    payload: dict[str, Any] = Field(
+        default_factory=dict, sa_column=Column(JSON, nullable=False)
+    )
+    available_at: datetime = Field(
+        default_factory=utc_now, sa_type=DateTime(timezone=True)
+    )  # type: ignore[call-overload]
     published_at: datetime | None = Field(default=None, sa_type=DateTime(timezone=True))  # type: ignore[call-overload]
     publish_attempts: int = 0
     last_error: str | None = Field(default=None, max_length=500)
-    created_at: datetime = Field(default_factory=utc_now, sa_type=DateTime(timezone=True))  # type: ignore[call-overload]
+    created_at: datetime = Field(
+        default_factory=utc_now, sa_type=DateTime(timezone=True)
+    )  # type: ignore[call-overload]
 
 
 class AuditEvent(SQLModel, table=True):
@@ -321,13 +359,19 @@ class AuditEvent(SQLModel, table=True):
         Index("ix_audit_event_actor_id", "actor_id"),
     )
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
-    actor_id: uuid.UUID | None = Field(default=None, foreign_key="user.id", ondelete="SET NULL")
+    actor_id: uuid.UUID | None = Field(
+        default=None, foreign_key="user.id", ondelete="SET NULL"
+    )
     action: str = Field(max_length=100)
     resource_type: str = Field(max_length=64)
     resource_id: uuid.UUID | None = None
-    metadata_json: dict[str, Any] = Field(default_factory=dict, sa_column=Column("metadata", JSON, nullable=False))
+    metadata_json: dict[str, Any] = Field(
+        default_factory=dict, sa_column=Column("metadata", JSON, nullable=False)
+    )
     request_id: str | None = Field(default=None, max_length=64)
-    created_at: datetime = Field(default_factory=utc_now, sa_type=DateTime(timezone=True))  # type: ignore[call-overload]
+    created_at: datetime = Field(
+        default_factory=utc_now, sa_type=DateTime(timezone=True)
+    )  # type: ignore[call-overload]
 
 
 class ImportPublic(SQLModel):

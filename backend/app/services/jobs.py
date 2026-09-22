@@ -63,8 +63,12 @@ def enqueue_job(
     return job
 
 
-def _start_attempt(session: Session, job_id: uuid.UUID) -> tuple[Job, JobAttempt] | None:
-    job = session.exec(select(Job).where(Job.id == job_id).with_for_update()).one_or_none()
+def _start_attempt(
+    session: Session, job_id: uuid.UUID
+) -> tuple[Job, JobAttempt] | None:
+    job = session.exec(
+        select(Job).where(Job.id == job_id).with_for_update()
+    ).one_or_none()
     if not job or job.status in (JobStatus.SUCCEEDED, JobStatus.CANCELLED):
         return None
     if job.status == JobStatus.CANCEL_REQUESTED:
@@ -130,7 +134,12 @@ def _cancel_if_requested(
 
 
 def _fail_attempt(
-    session: Session, job_id: uuid.UUID, attempt_id: uuid.UUID, *, code: str, message: str
+    session: Session,
+    job_id: uuid.UUID,
+    attempt_id: uuid.UUID,
+    *,
+    code: str,
+    message: str,
 ) -> None:
     job = session.get(Job, job_id)
     attempt = session.get(JobAttempt, attempt_id)
@@ -214,7 +223,9 @@ def run_validation(session: Session, job_id: uuid.UUID) -> None:
         if _cancel_if_requested(session, job=job, attempt=attempt, batch=batch):
             return
 
-        session.exec(delete(ValidationRow).where(col(ValidationRow.import_id) == batch.id))
+        session.exec(
+            delete(ValidationRow).where(col(ValidationRow.import_id) == batch.id)
+        )
         session.add_all(
             [
                 ValidationRow(
@@ -248,7 +259,9 @@ def run_validation(session: Session, job_id: uuid.UUID) -> None:
         storage = get_storage()
         storage.put(
             _report_key(batch.id, "accepted"),
-            build_report([row for row in results if row.outcome == RowOutcome.ACCEPTED]),
+            build_report(
+                [row for row in results if row.outcome == RowOutcome.ACCEPTED]
+            ),
             "text/csv; charset=utf-8",
         )
         storage.put(
@@ -288,9 +301,7 @@ def run_confirmation(session: Session, job_id: uuid.UUID) -> None:
     job, attempt = started
     try:
         batch = session.exec(
-            select(ImportBatch)
-            .where(ImportBatch.id == job.import_id)
-            .with_for_update()
+            select(ImportBatch).where(ImportBatch.id == job.import_id).with_for_update()
         ).one()
         if _cancel_if_requested(session, job=job, attempt=attempt, batch=batch):
             return
@@ -372,7 +383,9 @@ def run_confirmation(session: Session, job_id: uuid.UUID) -> None:
 def reconcile_stalled_jobs(session: Session) -> int:
     cutoff = utc_now() - timedelta(seconds=settings.JOB_STALE_SECONDS)
     jobs = session.exec(
-        select(Job).join(JobOutbox).where(
+        select(Job)
+        .join(JobOutbox)
+        .where(
             or_(
                 (
                     (col(Job.status) == JobStatus.RUNNING)
@@ -390,7 +403,9 @@ def reconcile_stalled_jobs(session: Session) -> int:
         job.error_code = "delivery_reconciled"
         job.error_message = "The job was safely queued again after a stalled delivery"
         session.add(job)
-        existing = session.exec(select(JobOutbox).where(JobOutbox.job_id == job.id)).first()
+        existing = session.exec(
+            select(JobOutbox).where(JobOutbox.job_id == job.id)
+        ).first()
         if existing:
             existing.published_at = None
             existing.available_at = utc_now()

@@ -20,6 +20,12 @@ def enforce_login_rate_limit(client_ip: str, email: str) -> None:
         if value == 1:
             client.expire(key, settings.LOGIN_RATE_LIMIT_WINDOW_SECONDS)
     except RedisError:
-        api_error(503, "authentication_unavailable", "Authentication is temporarily unavailable")
+        api_error(
+            503,
+            "authentication_unavailable",
+            "Authentication is temporarily unavailable",
+        )
     if value > settings.LOGIN_RATE_LIMIT_ATTEMPTS:
-        api_error(429, "login_rate_limited", "Too many sign-in attempts; try again later")
+        api_error(
+            429, "login_rate_limited", "Too many sign-in attempts; try again later"
+        )

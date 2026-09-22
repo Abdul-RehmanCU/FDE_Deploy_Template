@@ -45,6 +45,7 @@ async def safe_validation_error(
         },
     )
 
+
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.BACKEND_CORS_ORIGINS,

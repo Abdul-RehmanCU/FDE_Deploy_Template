@@ -18,7 +18,7 @@ def _encode_attempt_cursor(number: int) -> str:
 def _decode_attempt_cursor(value: str) -> int:
     try:
         return int(base64.urlsafe_b64decode(value + "=" * (-len(value) % 4)).decode())
-    except (ValueError, UnicodeDecodeError):
+    except ValueError, UnicodeDecodeError:
         api_error(400, "invalid_cursor", "The pagination cursor is invalid")
 
 
@@ -48,12 +48,16 @@ def list_attempts(
             JobAttempt.attempt_number > _decode_attempt_cursor(cursor)
         )
     rows = list(
-        session.exec(statement.order_by(col(JobAttempt.attempt_number)).limit(limit + 1)).all()
+        session.exec(
+            statement.order_by(col(JobAttempt.attempt_number)).limit(limit + 1)
+        ).all()
     )
     has_more = len(rows) > limit
     rows = rows[:limit]
     return JobAttemptPage(
         data=[JobAttemptPublic.model_validate(row) for row in rows],
-        next_cursor=_encode_attempt_cursor(rows[-1].attempt_number) if has_more else None,
+        next_cursor=_encode_attempt_cursor(rows[-1].attempt_number)
+        if has_more
+        else None,
         has_more=has_more,
     )

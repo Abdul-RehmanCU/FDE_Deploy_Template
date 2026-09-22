@@ -71,11 +71,16 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def resolve_and_validate_secrets(self) -> Self:
-        self.SECRET_KEY = self._read_secret(self.SECRET_KEY_FILE, "SECRET_KEY") or self.SECRET_KEY
-        self.DATABASE_URL = (
-            self._read_secret(self.DATABASE_URL_FILE, "DATABASE_URL") or self.DATABASE_URL
+        self.SECRET_KEY = (
+            self._read_secret(self.SECRET_KEY_FILE, "SECRET_KEY") or self.SECRET_KEY
         )
-        self.REDIS_URL = self._read_secret(self.REDIS_URL_FILE, "REDIS_URL") or self.REDIS_URL
+        self.DATABASE_URL = (
+            self._read_secret(self.DATABASE_URL_FILE, "DATABASE_URL")
+            or self.DATABASE_URL
+        )
+        self.REDIS_URL = (
+            self._read_secret(self.REDIS_URL_FILE, "REDIS_URL") or self.REDIS_URL
+        )
         if not self.SECRET_KEY:
             raise ValueError("SECRET_KEY or SECRET_KEY_FILE is required")
         if len(self.SECRET_KEY) < 32:
@@ -86,7 +91,9 @@ class Settings(BaseSettings):
             raise ValueError("REDIS_URL or REDIS_URL_FILE is required")
         if self.STORAGE_BACKEND == "gcs" and not self.GCS_BUCKET:
             raise ValueError("GCS_BUCKET is required when STORAGE_BACKEND=gcs")
-        if self.FASTAPI_ENV != "development" and self.SECRET_KEY.startswith("generate-"):
+        if self.FASTAPI_ENV != "development" and self.SECRET_KEY.startswith(
+            "generate-"
+        ):
             raise ValueError("Placeholder secrets are forbidden outside development")
         return self
 

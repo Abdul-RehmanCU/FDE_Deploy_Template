@@ -160,7 +160,10 @@ def test_real_import_flow_is_authorized_atomic_and_replay_safe() -> None:
         assert b"'=1+1" in report.content
         assert b"'+10" in report.content
 
-        idempotency_headers = {**operator_headers, "Idempotency-Key": "confirm-12345678"}
+        idempotency_headers = {
+            **operator_headers,
+            "Idempotency-Key": "confirm-12345678",
+        }
         confirmation = client.post(
             f"/api/v1/imports/{import_id}/confirm", headers=idempotency_headers
         )
@@ -312,7 +315,9 @@ def test_running_validation_cancels_cleanly_and_ignores_concurrent_redelivery(
             first_delivery.result(timeout=5)
 
     with Session(engine) as session:
-        attempts = session.exec(select(JobAttempt).where(JobAttempt.job_id == job_id)).all()
+        attempts = session.exec(
+            select(JobAttempt).where(JobAttempt.job_id == job_id)
+        ).all()
         assert len(attempts) == 1
         assert attempts[0].status == JobStatus.CANCELLED
         assert session.exec(select(ValidationRow)).all() == []

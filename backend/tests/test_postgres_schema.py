@@ -22,7 +22,9 @@ def test_postgres_constraints_and_indexes_exist() -> None:
         )
         indexes = set(
             session.execute(
-                text("SELECT indexname FROM pg_indexes WHERE schemaname = current_schema()")
+                text(
+                    "SELECT indexname FROM pg_indexes WHERE schemaname = current_schema()"
+                )
             ).scalars()
         )
     assert {"ck_user_role", "ck_import_batch_status", "ck_job_status"} <= constraints
@@ -48,6 +50,8 @@ def test_worker_metrics_are_collected_from_durable_postgres_state() -> None:
         "fde_worker_metrics_collection_success",
     } <= names
     health = next(
-        family for family in families if family.name == "fde_worker_metrics_collection_success"
+        family
+        for family in families
+        if family.name == "fde_worker_metrics_collection_success"
     )
     assert health.samples[0].value == 1

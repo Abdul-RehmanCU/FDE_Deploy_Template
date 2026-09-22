@@ -35,7 +35,9 @@ def create(email: str, full_name: str | None = None) -> None:
         session.commit()
     typer.echo(f"Administrator created: {validated_email}")
     typer.echo(f"One-time temporary password: {password}")
-    typer.echo("Store it securely. It will not be shown again and must be changed at sign-in.")
+    typer.echo(
+        "Store it securely. It will not be shown again and must be changed at sign-in."
+    )
 
 
 if __name__ == "__main__":

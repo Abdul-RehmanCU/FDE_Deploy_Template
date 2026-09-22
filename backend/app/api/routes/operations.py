@@ -29,7 +29,7 @@ def readiness(session: SessionDep, response: Response) -> HealthPublic:
         Redis.from_url(
             settings.REDIS_URL, socket_connect_timeout=2, socket_timeout=2
         ).ping()
-    except (RedisError, AssertionError):
+    except RedisError, AssertionError:
         failures.append("redis")
     if settings.STORAGE_BACKEND == "local":
         try:

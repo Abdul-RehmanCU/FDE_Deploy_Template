@@ -30,8 +30,12 @@ def test_cleanup_removes_only_expired_intermediate_objects(tmp_path: Path) -> No
     storage.put("reports/old/errors.csv", b"old", "text/csv")
     storage.put("uploads/new/source.csv", b"new", "text/csv")
     old_timestamp = (utc_now() - timedelta(days=8)).timestamp()
-    os.utime(tmp_path / "uploads" / "old" / "source.csv", (old_timestamp, old_timestamp))
-    os.utime(tmp_path / "reports" / "old" / "errors.csv", (old_timestamp, old_timestamp))
+    os.utime(
+        tmp_path / "uploads" / "old" / "source.csv", (old_timestamp, old_timestamp)
+    )
+    os.utime(
+        tmp_path / "reports" / "old" / "errors.csv", (old_timestamp, old_timestamp)
+    )
     assert cleanup_expired_intermediates(storage) == 2
     assert storage.get("uploads/new/source.csv") == b"new"
     with pytest.raises(FileNotFoundError):

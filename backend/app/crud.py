@@ -17,7 +17,10 @@ def create_user(
     password = temporary_password or generate_temporary_password()
     db_obj = User.model_validate(
         user_create,
-        update={"hashed_password": get_password_hash(password), "must_change_password": True},
+        update={
+            "hashed_password": get_password_hash(password),
+            "must_change_password": True,
+        },
     )
     session.add(db_obj)
     session.flush()

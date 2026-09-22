@@ -114,7 +114,9 @@ class DurableJobCollector:
                 yield durations
 
                 outcomes = GaugeMetricFamily(
-                    "fde_import_rows", "Validated/imported rows by outcome", labels=["outcome"]
+                    "fde_import_rows",
+                    "Validated/imported rows by outcome",
+                    labels=["outcome"],
                 )
                 totals = session.execute(
                     select(  # type: ignore[call-overload]
@@ -127,7 +129,14 @@ class DurableJobCollector:
                     )
                 ).one()
                 for label, value in zip(
-                    ("accepted", "rejected", "duplicate", "existing", "inserted", "skipped"),
+                    (
+                        "accepted",
+                        "rejected",
+                        "duplicate",
+                        "existing",
+                        "inserted",
+                        "skipped",
+                    ),
                     totals,
                     strict=True,
                 ):

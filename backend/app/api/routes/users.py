@@ -44,7 +44,11 @@ def list_users(
     has_more = len(rows) > limit
     rows = rows[:limit]
     next_cursor = encode_cursor(rows[-1].created_at, rows[-1].id) if has_more else None
-    return UserPage(data=[UserPublic.model_validate(row) for row in rows], next_cursor=next_cursor, has_more=has_more)
+    return UserPage(
+        data=[UserPublic.model_validate(row) for row in rows],
+        next_cursor=next_cursor,
+        has_more=has_more,
+    )
 
 
 @router.post("", response_model=UserCreated, status_code=201)
@@ -53,7 +57,9 @@ def create_user(
 ) -> UserCreated:
     if crud.get_user_by_email(session=session, email=user_in.email):
         api_error(409, "email_conflict", "A user with this email already exists")
-    normalized = user_in.model_copy(update={"email": str(user_in.email).strip().lower()})
+    normalized = user_in.model_copy(
+        update={"email": str(user_in.email).strip().lower()}
+    )
     user, password = crud.create_user(session=session, user_create=normalized)
     record_audit(
         session,
@@ -100,7 +106,9 @@ def change_password(
 
 
 @router.get("/{user_id}", response_model=UserPublic)
-def read_user(user_id: uuid.UUID, session: SessionDep, current_admin: AdminUser) -> User:
+def read_user(
+    user_id: uuid.UUID, session: SessionDep, current_admin: AdminUser
+) -> User:
     del current_admin
     user = crud.get_user(session=session, user_id=user_id)
     if not user:
@@ -127,7 +135,9 @@ def update_user(
             update={"email": str(user_in.email).strip().lower()}
         )
     if user.id == current_admin.id and user_in.is_active is False:
-        api_error(409, "self_disable_forbidden", "Administrators cannot disable themselves")
+        api_error(
+            409, "self_disable_forbidden", "Administrators cannot disable themselves"
+        )
     user = crud.update_user(session=session, db_user=user, user_in=user_in)
     record_audit(
         session,

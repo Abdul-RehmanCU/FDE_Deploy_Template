@@ -33,10 +33,12 @@ def get_current_user(session: SessionDep, token: TokenDep) -> User:
     if not token:
         api_error(401, "invalid_token", "Authentication is required")
     try:
-        payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[security.ALGORITHM])
+        payload = jwt.decode(
+            token, settings.SECRET_KEY, algorithms=[security.ALGORITHM]
+        )
         token_data = TokenPayload(**payload)
         user_id = token_data.sub
-    except (InvalidTokenError, ValidationError):
+    except InvalidTokenError, ValidationError:
         api_error(401, "invalid_token", "Authentication is required")
     if not user_id:
         api_error(401, "invalid_token", "Authentication is required")
@@ -51,7 +53,9 @@ CurrentUser = Annotated[User, Depends(get_current_user)]
 
 def get_password_ready_user(current_user: CurrentUser) -> User:
     if current_user.must_change_password:
-        api_error(403, "password_change_required", "Change your temporary password first")
+        api_error(
+            403, "password_change_required", "Change your temporary password first"
+        )
     return current_user
 
 

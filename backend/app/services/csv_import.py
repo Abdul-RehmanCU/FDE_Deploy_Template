@@ -56,9 +56,13 @@ def _reader(content: bytes) -> Iterator[list[str]]:
     try:
         text = content.decode("utf-8-sig")
     except UnicodeDecodeError as exc:
-        raise CsvValidationError("invalid_encoding", "The file must be UTF-8 encoded") from exc
+        raise CsvValidationError(
+            "invalid_encoding", "The file must be UTF-8 encoded"
+        ) from exc
     if "\x00" in text:
-        raise CsvValidationError("malformed_csv", "The CSV contains unsupported null bytes")
+        raise CsvValidationError(
+            "malformed_csv", "The CSV contains unsupported null bytes"
+        )
     return csv.reader(io.StringIO(text, newline=""), strict=True)
 
 
@@ -69,7 +73,9 @@ def inspect_csv(content: bytes, max_rows: int) -> CsvInspection:
         reader = _reader(content)
         header = next(reader, None)
         if not header:
-            raise CsvValidationError("missing_header", "The CSV must contain a header row")
+            raise CsvValidationError(
+                "missing_header", "The CSV must contain a header row"
+            )
         cleaned = [value.strip() for value in header]
         if any(not value for value in cleaned):
             raise CsvValidationError("empty_header", "CSV headers cannot be empty")
@@ -81,18 +87,23 @@ def inspect_csv(content: bytes, max_rows: int) -> CsvInspection:
             count += 1
             if count > max_rows:
                 raise CsvValidationError(
-                    "too_many_rows", f"CSV files may contain at most {max_rows} data rows"
+                    "too_many_rows",
+                    f"CSV files may contain at most {max_rows} data rows",
                 )
             if len(row) != len(cleaned):
                 raise CsvValidationError(
                     "malformed_row", f"Row {count + 1} has the wrong number of columns"
                 )
     except csv.Error as exc:
-        raise CsvValidationError("malformed_csv", "The CSV structure is invalid") from exc
+        raise CsvValidationError(
+            "malformed_csv", "The CSV structure is invalid"
+        ) from exc
     return CsvInspection(header=cleaned, total_rows=count)
 
 
-def preview_csv(content: bytes, limit: int = 20) -> tuple[list[str], list[list[str]], bool]:
+def preview_csv(
+    content: bytes, limit: int = 20
+) -> tuple[list[str], list[list[str]], bool]:
     reader = _reader(content)
     header = next(reader, None)
     if not header:
@@ -109,16 +120,24 @@ def validate_mapping(mapping: dict[str, str], header: list[str]) -> dict[str, in
     unknown = sorted(set(mapping) - set(CANONICAL_FIELDS))
     missing = sorted(REQUIRED_FIELDS - set(mapping))
     if unknown:
-        raise CsvValidationError("unknown_field", f"Unknown mapped fields: {', '.join(unknown)}")
+        raise CsvValidationError(
+            "unknown_field", f"Unknown mapped fields: {', '.join(unknown)}"
+        )
     if missing:
-        raise CsvValidationError("missing_mapping", f"Required mappings are missing: {', '.join(missing)}")
+        raise CsvValidationError(
+            "missing_mapping", f"Required mappings are missing: {', '.join(missing)}"
+        )
     mapped_headers = list(mapping.values())
     if len(set(mapped_headers)) != len(mapped_headers):
-        raise CsvValidationError("duplicate_mapping", "Each CSV column can be mapped only once")
+        raise CsvValidationError(
+            "duplicate_mapping", "Each CSV column can be mapped only once"
+        )
     lookup = {value: index for index, value in enumerate(header)}
     absent = sorted(set(mapped_headers) - set(lookup))
     if absent:
-        raise CsvValidationError("unknown_header", f"Mapped headers do not exist: {', '.join(absent)}")
+        raise CsvValidationError(
+            "unknown_header", f"Mapped headers do not exist: {', '.join(absent)}"
+        )
     return {field: lookup[column] for field, column in mapping.items()}
 
 
@@ -141,8 +160,17 @@ def validate_rows(
         if len(row) != len(header):
             results.append(
                 ValidatedRow(
-                    row_number, RowOutcome.INVALID, None, None,
-                    [{"code": "malformed_row", "field": "row", "message": "Wrong number of columns"}],
+                    row_number,
+                    RowOutcome.INVALID,
+                    None,
+                    None,
+                    [
+                        {
+                            "code": "malformed_row",
+                            "field": "row",
+                            "message": "Wrong number of columns",
+                        }
+                    ],
                 )
             )
             continue
@@ -152,25 +180,51 @@ def validate_rows(
         errors: list[dict[str, str]] = []
         for field in REQUIRED_FIELDS:
             if not clean.get(field):
-                errors.append({"code": "required", "field": field, "message": "This field is required"})
+                errors.append(
+                    {
+                        "code": "required",
+                        "field": field,
+                        "message": "This field is required",
+                    }
+                )
         for field, value in clean.items():
             if value and len(value) > MAX_FIELD_LENGTHS[field]:
-                errors.append({"code": "too_long", "field": field, "message": f"Maximum length is {MAX_FIELD_LENGTHS[field]}"})
+                errors.append(
+                    {
+                        "code": "too_long",
+                        "field": field,
+                        "message": f"Maximum length is {MAX_FIELD_LENGTHS[field]}",
+                    }
+                )
 
         normalized_email: str | None = None
         email = clean.get("email")
         if email and len(email) <= MAX_FIELD_LENGTHS["email"]:
             try:
-                normalized_email = validate_email(email, check_deliverability=False).normalized.casefold()
+                normalized_email = validate_email(
+                    email, check_deliverability=False
+                ).normalized.casefold()
                 clean["email"] = normalized_email
             except EmailNotValidError:
-                errors.append({"code": "invalid_email", "field": "email", "message": "Enter a valid email address"})
+                errors.append(
+                    {
+                        "code": "invalid_email",
+                        "field": "email",
+                        "message": "Enter a valid email address",
+                    }
+                )
         country = clean.get("country_code")
         if country:
             country = country.upper()
             clean["country_code"] = country
             if not COUNTRY_CODE.fullmatch(country):
-                errors.append({"code": "invalid_country_code", "field": "country_code", "message": "Use a two-letter country code"})
+                errors.append(
+                    {
+                        "code": "invalid_country_code",
+                        "field": "country_code",
+                        "message": "Use a two-letter country code",
+                    }
+                )
 
         if errors:
             outcome = RowOutcome.INVALID
@@ -182,7 +236,9 @@ def validate_rows(
             outcome = RowOutcome.ACCEPTED
             assert normalized_email
             seen.add(normalized_email)
-        results.append(ValidatedRow(row_number, outcome, normalized_email, clean, errors))
+        results.append(
+            ValidatedRow(row_number, outcome, normalized_email, clean, errors)
+        )
     return results
 
 
@@ -198,7 +254,10 @@ def build_report(rows: list[ValidatedRow]) -> bytes:
     writer = csv.DictWriter(output, fieldnames=fieldnames, lineterminator="\r\n")
     writer.writeheader()
     for result in rows:
-        record = {field: neutralize_formula((result.clean_data or {}).get(field)) for field in CANONICAL_FIELDS}
+        record = {
+            field: neutralize_formula((result.clean_data or {}).get(field))
+            for field in CANONICAL_FIELDS
+        }
         record.update(
             row_number=str(result.row_number),
             outcome=result.outcome.value,

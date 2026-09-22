@@ -123,11 +123,17 @@ def list_imports(
     has_more = len(rows) > limit
     rows = rows[:limit]
     next_cursor = encode_cursor(rows[-1].created_at, rows[-1].id) if has_more else None
-    return ImportPage(data=[ImportPublic.model_validate(row) for row in rows], next_cursor=next_cursor, has_more=has_more)
+    return ImportPage(
+        data=[ImportPublic.model_validate(row) for row in rows],
+        next_cursor=next_cursor,
+        has_more=has_more,
+    )
 
 
 @router.get("/{import_id}", response_model=ImportPublic)
-def get_import(import_id: uuid.UUID, session: SessionDep, current_user: ReadyUser) -> ImportBatch:
+def get_import(
+    import_id: uuid.UUID, session: SessionDep, current_user: ReadyUser
+) -> ImportBatch:
     del current_user
     return get_import_or_404(session, import_id)
 
@@ -139,7 +145,9 @@ def preview_import(
     del current_user
     batch = get_import_or_404(session, import_id)
     try:
-        header, rows, truncated = preview_csv(get_storage().get(batch.upload_object_key))
+        header, rows, truncated = preview_csv(
+            get_storage().get(batch.upload_object_key)
+        )
     except FileNotFoundError:
         api_error(404, "upload_not_found", "The uploaded CSV is no longer available")
     return ImportPreview(header=header, rows=rows, truncated=truncated)
@@ -153,7 +161,11 @@ def set_mapping(
     current_user: OperatorUser,
 ) -> ImportBatch:
     batch = get_import_or_404(session, import_id)
-    if batch.status not in (ImportStatus.UPLOADED, ImportStatus.MAPPED, ImportStatus.FAILED):
+    if batch.status not in (
+        ImportStatus.UPLOADED,
+        ImportStatus.MAPPED,
+        ImportStatus.FAILED,
+    ):
         api_error(409, "import_not_mappable", "This import can no longer be remapped")
     try:
         validate_mapping(body.mapping, batch.header)
@@ -212,7 +224,9 @@ def confirm_import(
     import_id: uuid.UUID,
     session: SessionDep,
     current_user: OperatorUser,
-    idempotency_key: str = Header(min_length=8, max_length=128, alias="Idempotency-Key"),
+    idempotency_key: str = Header(
+        min_length=8, max_length=128, alias="Idempotency-Key"
+    ),
     traceparent: str | None = Header(default=None),
 ) -> ImportAction:
     batch = session.exec(
@@ -222,7 +236,11 @@ def confirm_import(
         api_error(404, "import_not_found", "Import not found")
     if batch.confirm_idempotency_key:
         if batch.confirm_idempotency_key != idempotency_key:
-            api_error(409, "idempotency_conflict", "This import was confirmed with another key")
+            api_error(
+                409,
+                "idempotency_conflict",
+                "This import was confirmed with another key",
+            )
         existing = session.exec(
             select(Job)
             .where(Job.import_id == batch.id, Job.kind == JobKind.CONFIRM)
@@ -325,7 +343,7 @@ def encode_row_cursor(row_number: int) -> str:
 def decode_row_cursor(cursor: str) -> int:
     try:
         return int(base64.urlsafe_b64decode(cursor + "=" * (-len(cursor) % 4)).decode())
-    except (ValueError, UnicodeDecodeError):
+    except ValueError, UnicodeDecodeError:
         api_error(400, "invalid_cursor", "The pagination cursor is invalid")
 
 
@@ -344,7 +362,9 @@ def list_validation_rows(
     if outcome:
         statement = statement.where(ValidationRow.outcome == outcome)
     if cursor:
-        statement = statement.where(ValidationRow.row_number > decode_row_cursor(cursor))
+        statement = statement.where(
+            ValidationRow.row_number > decode_row_cursor(cursor)
+        )
     rows = list(
         session.exec(
             statement.order_by(col(ValidationRow.row_number)).limit(limit + 1)

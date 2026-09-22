@@ -15,7 +15,9 @@ engine = create_engine(
 
 
 @event.listens_for(engine, "connect")
-def set_postgres_statement_timeout(dbapi_connection: Any, connection_record: object) -> None:
+def set_postgres_statement_timeout(
+    dbapi_connection: Any, connection_record: object
+) -> None:
     del connection_record
     cursor = dbapi_connection.cursor()
     try:

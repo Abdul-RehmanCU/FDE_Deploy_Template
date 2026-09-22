@@ -54,7 +54,8 @@ class LocalObjectStorage:
         return [
             path.relative_to(self.root).as_posix()
             for path in root.rglob("*")
-            if path.is_file() and datetime.fromtimestamp(path.stat().st_mtime, cutoff.tzinfo) < cutoff
+            if path.is_file()
+            and datetime.fromtimestamp(path.stat().st_mtime, cutoff.tzinfo) < cutoff
         ]
 
 

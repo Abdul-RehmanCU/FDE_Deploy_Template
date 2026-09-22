@@ -26,7 +26,10 @@ def stored_value(model: type[object], column_name: str, value: Enum) -> str:
 def test_database_enums_use_lowercase_contract_values() -> None:
     assert stored_value(User, "role", UserRole.ADMIN) == "admin"
     assert stored_value(ImportBatch, "status", ImportStatus.VALIDATED) == "validated"
-    assert stored_value(ValidationRow, "outcome", RowOutcome.FILE_DUPLICATE) == "file_duplicate"
+    assert (
+        stored_value(ValidationRow, "outcome", RowOutcome.FILE_DUPLICATE)
+        == "file_duplicate"
+    )
     assert stored_value(Job, "kind", JobKind.CONFIRM) == "confirm"
     assert stored_value(Job, "status", JobStatus.CANCEL_REQUESTED) == "cancel_requested"
     assert stored_value(JobAttempt, "status", JobStatus.SUCCEEDED) == "succeeded"
