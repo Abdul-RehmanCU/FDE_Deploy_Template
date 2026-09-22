@@ -19,6 +19,7 @@ The product is a guided contact onboarding workflow. Administrators and operator
 - [What is implemented](#what-is-implemented)
 - [Architecture](#architecture)
 - [Proven evidence](#proven-evidence)
+- [Working application gallery](#working-application-gallery)
 - [Repository map](#repository-map)
 - [Cloud-first quickstart](#cloud-first-quickstart)
 - [Optional local setup](#optional-local-setup)
@@ -72,6 +73,30 @@ The [implementation ledger](docs/implementation-ledger.md) separates real execut
 The latest fully green pre-kind baseline is [CI run 35702605568](https://github.com/Abdul-RehmanCU/FDE_Deploy_Template/actions/runs/35702605568) at `eebc040`. It passed Python 3.14 lint/types, Alembic against PostgreSQL, real PostgreSQL/Redis tests, frontend lint/build, CLI tests, Terraform initialization/validation, Helm lint/render, and kubeconform.
 
 The first real-stack browser run at `a9b7c6d` passed all five setup/admin/operator/viewer/mobile journeys and produced synthetic screenshots and videos. The next current-head run adds container-image and kind rehearsal evidence; use the ledger for its terminal result rather than assuming it passed.
+
+## Working application gallery
+
+These screenshots were captured by the real-stack Playwright job in [run 35706376224](https://github.com/Abdul-RehmanCU/FDE_Deploy_Template/actions/runs/35706376224) at `93d7c85`, using PostgreSQL, Redis, the API, publisher, worker, and deterministic synthetic records on a GitHub-hosted runner. They are CI application evidence, not GKE or production evidence.
+
+| Overview | Column mapping and source preview |
+| --- | --- |
+| ![Operations overview showing three imported contacts and durable job counts](docs/media/screenshots/overview.png) | ![Guided import mapping with source preview, six mapped fields, and save action](docs/media/screenshots/column-mapping.png) |
+
+| Validation review | Completed import |
+| --- | --- |
+| ![Validated import with accepted and issue counts, reports, row tabs, and accepted rows](docs/media/screenshots/validation-results.png) | ![Completed import with final inserted and skipped counts](docs/media/screenshots/completed-import.png) |
+
+| Searchable directory | User administration |
+| --- | --- |
+| ![Directory search returning the normalized synthetic Amélie Tremblay contact](docs/media/screenshots/directory.png) | ![Administrator view showing managed operator and viewer accounts](docs/media/screenshots/users.png) |
+
+| Mobile mapping | Mobile validation |
+| --- | --- |
+| ![Mobile guided import with source preview, keyboard-focused mapping control, and save action](docs/media/screenshots/mobile-column-mapping.png) | ![Mobile validation review with counts, confirm action, reports, and accepted row](docs/media/screenshots/mobile-validation.png) |
+
+[Watch the synthetic desktop import walkthrough](docs/media/browser-walkthrough.webm).
+
+Grafana, trace, alert, GKE rollout, backup/restore, and teardown media remain separate acceptance evidence and are not represented by these application screenshots.
 
 ## Repository map
 
