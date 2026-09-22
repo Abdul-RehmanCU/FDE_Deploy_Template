@@ -1,0 +1,212 @@
+locals {
+  prefix = "fde-${var.customer}"
+  labels = merge(var.labels, {
+    application = "fde-template"
+    customer    = var.customer
+    profile     = "demo"
+    managed-by  = "terraform"
+  })
+}
+
+resource "google_compute_network" "demo" {
+  project                 = var.project_id
+  name                    = "${local.prefix}-demo"
+  auto_create_subnetworks = false
+  routing_mode            = "REGIONAL"
+}
+
+resource "google_compute_subnetwork" "demo" {
+  project                  = var.project_id
+  name                     = "${local.prefix}-demo-${var.region}"
+  region                   = var.region
+  network                  = google_compute_network.demo.id
+  ip_cidr_range            = "10.42.0.0/20"
+  private_ip_google_access = true
+
+  secondary_ip_range {
+    range_name    = "pods"
+    ip_cidr_range = "10.48.0.0/16"
+  }
+  secondary_ip_range {
+    range_name    = "services"
+    ip_cidr_range = "10.44.0.0/20"
+  }
+}
+
+resource "google_service_account" "gke_nodes" {
+  project      = var.project_id
+  account_id   = "${local.prefix}-gke-node"
+  display_name = "FDE demo GKE nodes"
+}
+
+resource "google_project_iam_member" "node_roles" {
+  for_each = toset([
+    "roles/artifactregistry.reader",
+    "roles/logging.logWriter",
+    "roles/monitoring.metricWriter",
+    "roles/stackdriver.resourceMetadata.writer",
+  ])
+  project = var.project_id
+  role    = each.key
+  member  = "serviceAccount:${google_service_account.gke_nodes.email}"
+}
+
+resource "google_container_cluster" "demo" {
+  project                  = var.project_id
+  name                     = var.cluster_name
+  location                 = var.zone
+  network                  = google_compute_network.demo.id
+  subnetwork               = google_compute_subnetwork.demo.id
+  remove_default_node_pool = true
+  initial_node_count       = 1
+  deletion_protection      = false
+  resource_labels          = local.labels
+  networking_mode          = "VPC_NATIVE"
+
+  release_channel { channel = "REGULAR" }
+  workload_identity_config { workload_pool = "${var.project_id}.svc.id.goog" }
+  ip_allocation_policy {
+    cluster_secondary_range_name  = "pods"
+    services_secondary_range_name = "services"
+  }
+  addons_config {
+    horizontal_pod_autoscaling { disabled = true }
+    http_load_balancing { disabled = true }
+    gcp_filestore_csi_driver_config { enabled = false }
+  }
+  secret_manager_config { enabled = true }
+  network_policy {
+    enabled  = true
+    provider = "PROVIDER_UNSPECIFIED"
+  }
+  logging_config { enable_components = ["SYSTEM_COMPONENTS", "WORKLOADS"] }
+  monitoring_config { enable_components = ["SYSTEM_COMPONENTS"] }
+  maintenance_policy {
+    recurring_window {
+      start_time = "2026-01-01T08:00:00Z"
+      end_time   = "2026-01-01T12:00:00Z"
+      recurrence = "FREQ=WEEKLY;BYDAY=SU"
+    }
+  }
+  lifecycle {
+    precondition {
+      condition     = var.machine_type == "e2-standard-4"
+      error_message = "Refusing a demo cluster larger or different than the approved machine."
+    }
+  }
+}
+
+resource "google_container_node_pool" "demo" {
+  project    = var.project_id
+  name       = "fixed-demo"
+  location   = var.zone
+  cluster    = google_container_cluster.demo.name
+  node_count = 1
+
+  management {
+    auto_repair  = true
+    auto_upgrade = true
+  }
+  node_config {
+    machine_type    = var.machine_type
+    disk_type       = "pd-standard"
+    disk_size_gb    = var.node_disk_size_gb
+    image_type      = "COS_CONTAINERD"
+    service_account = google_service_account.gke_nodes.email
+    oauth_scopes    = ["https://www.googleapis.com/auth/cloud-platform"]
+    labels          = local.labels
+    metadata        = { disable-legacy-endpoints = "true" }
+    workload_metadata_config { mode = "GKE_METADATA" }
+    shielded_instance_config {
+      enable_integrity_monitoring = true
+      enable_secure_boot          = true
+    }
+  }
+  lifecycle {
+    precondition {
+      condition     = var.node_disk_size_gb <= 30
+      error_message = "Refusing an oversized demo boot disk."
+    }
+  }
+}
+
+resource "google_artifact_registry_repository" "images" {
+  project                = var.project_id
+  location               = var.region
+  repository_id          = "${local.prefix}-images"
+  format                 = "DOCKER"
+  description            = "Immutable FDE deployment images"
+  labels                 = local.labels
+  cleanup_policy_dry_run = false
+  cleanup_policies {
+    id     = "delete-untagged"
+    action = "DELETE"
+    condition { tag_state = "UNTAGGED" }
+  }
+  cleanup_policies {
+    id     = "keep-recent"
+    action = "KEEP"
+    most_recent_versions { keep_count = 5 }
+  }
+}
+
+resource "google_storage_bucket" "application" {
+  for_each                    = var.namespaces
+  project                     = var.project_id
+  name                        = "${var.project_id}-${local.prefix}-${each.key}"
+  location                    = var.region
+  storage_class               = "STANDARD"
+  uniform_bucket_level_access = true
+  public_access_prevention    = "enforced"
+  force_destroy               = true
+  labels                      = merge(local.labels, { environment = each.key })
+  lifecycle_rule {
+    condition { age = 7 }
+    action { type = "Delete" }
+  }
+}
+
+resource "google_service_account" "runtime" {
+  for_each     = var.namespaces
+  project      = var.project_id
+  account_id   = substr("${local.prefix}-${each.key}", 0, 30)
+  display_name = "FDE ${each.key} runtime"
+}
+
+resource "google_storage_bucket_iam_member" "runtime_objects" {
+  for_each = var.namespaces
+  bucket   = google_storage_bucket.application[each.key].name
+  role     = "roles/storage.objectAdmin"
+  member   = "serviceAccount:${google_service_account.runtime[each.key].email}"
+}
+
+resource "google_project_iam_member" "runtime_secrets" {
+  for_each = var.namespaces
+  project  = var.project_id
+  role     = "roles/secretmanager.secretAccessor"
+  member   = "serviceAccount:${google_service_account.runtime[each.key].email}"
+}
+
+resource "google_service_account_iam_member" "gke_runtime" {
+  for_each           = var.namespaces
+  service_account_id = google_service_account.runtime[each.key].name
+  role               = "roles/iam.workloadIdentityUser"
+  member             = "serviceAccount:${var.project_id}.svc.id.goog[${each.key}/fde-runtime]"
+}
+
+resource "google_secret_manager_secret" "runtime" {
+  for_each = toset([
+    for pair in setproduct(var.namespaces, ["database-url", "redis-url", "secret-key"]) :
+    "${pair[0]}-${pair[1]}"
+  ])
+  project   = var.project_id
+  secret_id = "${local.prefix}-${each.key}"
+  labels    = local.labels
+  replication {
+    user_managed {
+      replicas {
+        location = var.region
+      }
+    }
+  }
+}
