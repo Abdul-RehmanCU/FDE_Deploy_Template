@@ -70,9 +70,16 @@ def test_bucket_cleanup_covers_versions_replay_and_concurrency() -> None:
 
 def test_scheduler_has_recovery_run_and_bounded_apply_window() -> None:
     text = EXPIRY_MAIN.read_text(encoding="utf-8")
-    assert 'recovery = timeadd(var.expires_at, "10m")' in text
-    assert 'timeadd(timestamp(), "3h50m")' in text
-    assert "resource.name ==" in text
+    assert 'recovery_1 = timeadd(var.expires_at, "10m")' in text
+    assert 'recovery_2 = timeadd(var.expires_at, "20m")' in text
+    assert 'timeadd(timestamp(), "3h40m")' in text
+    assert 'permissions = ["workflows.executions.create"]' in text
+    assert "resource.name ==" not in text
+
+
+def test_expiry_timestamp_must_be_exact_utc_minute() -> None:
+    text = (ROOT / "modules" / "expiry" / "variables.tf").read_text(encoding="utf-8")
+    assert "T[0-9]{2}:[0-9]{2}:00Z" in text
 
 
 def test_workload_identities_have_separate_provider_attributes() -> None:

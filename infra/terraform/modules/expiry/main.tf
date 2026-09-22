@@ -80,21 +80,25 @@ resource "google_service_account" "scheduler" {
   display_name = "Invoke FDE expiry workflow"
 }
 
+resource "google_project_iam_custom_role" "scheduler_invoker" {
+  project     = var.project_id
+  role_id     = replace(substr("fdeExpiryInvoke${title(replace(var.expiry_id, "-", ""))}", 0, 64), "_", "")
+  title       = "FDE expiry invocation ${var.expiry_id}"
+  description = "Create workflow executions; Workflows IAM does not support resource-name conditions"
+  permissions = ["workflows.executions.create"]
+}
+
 resource "google_project_iam_member" "scheduler_invoker" {
   project = var.project_id
-  role    = "roles/workflows.invoker"
+  role    = google_project_iam_custom_role.scheduler_invoker.id
   member  = "serviceAccount:${google_service_account.scheduler.email}"
-  condition {
-    title       = "invoke_only_compiled_expiry_workflow"
-    description = "Limit scheduler invocation to this exact workflow resource"
-    expression  = "resource.name == '${google_workflows_workflow.cleanup.id}'"
-  }
 }
 
 resource "google_cloud_scheduler_job" "expiry" {
   for_each = {
-    primary  = var.expires_at
-    recovery = timeadd(var.expires_at, "10m")
+    primary    = var.expires_at
+    recovery_1 = timeadd(var.expires_at, "10m")
+    recovery_2 = timeadd(var.expires_at, "20m")
   }
   project          = var.project_id
   region           = var.region
@@ -129,9 +133,9 @@ resource "google_cloud_scheduler_job" "expiry" {
     precondition {
       condition = (
         timecmp(var.expires_at, timestamp()) > 0 &&
-        timecmp(var.expires_at, timeadd(timestamp(), "3h50m")) <= 0
+        timecmp(var.expires_at, timeadd(timestamp(), "3h40m")) <= 0
       )
-      error_message = "expires_at must be future and at most 3h50m away, reserving ten minutes for recovery before the four-hour limit."
+      error_message = "expires_at must be future and at most 3h40m away, reserving two recovery executions before the four-hour limit."
     }
   }
 }

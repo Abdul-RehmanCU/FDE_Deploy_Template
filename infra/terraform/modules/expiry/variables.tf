@@ -24,8 +24,11 @@ variable "expires_at" {
   type        = string
   description = "RFC3339 deadline, no more than four hours after paid provisioning begins."
   validation {
-    condition     = can(formatdate("YYYY-MM-DD'T'hh:mm:ss'Z'", var.expires_at))
-    error_message = "expires_at must be an RFC3339 timestamp."
+    condition = (
+      can(formatdate("YYYY-MM-DD'T'hh:mm:ss'Z'", var.expires_at)) &&
+      can(regex("^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:00Z$", var.expires_at))
+    )
+    error_message = "expires_at must be a UTC RFC3339 timestamp on an exact minute (:00Z)."
   }
 }
 variable "cluster_name" {
