@@ -132,8 +132,8 @@ resource "google_iam_workload_identity_pool_provider" "github" {
 }
 
 resource "google_service_account_iam_member" "github_federation" {
-  for_each           = google_service_account.automation
-  service_account_id = each.value.name
+  for_each           = local.identities
+  service_account_id = google_service_account.automation[each.key].name
   role               = "roles/iam.workloadIdentityUser"
   member             = "principalSet://iam.googleapis.com/${google_iam_workload_identity_pool.github.name}/attribute.automation/${each.key}"
 }

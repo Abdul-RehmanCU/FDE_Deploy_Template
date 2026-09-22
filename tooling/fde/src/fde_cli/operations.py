@@ -259,6 +259,22 @@ def collect_plan_contract(plan_json: dict[str, object]) -> tuple[
     )
 
 
+def validate_state_bucket_ownership(
+    config: InstallationConfig,
+    state_bucket: str,
+    metadata: dict[str, object],
+    project_buckets: list[dict[str, object]],
+) -> None:
+    if str(metadata.get("location", "")).lower() != config.region.lower():
+        raise OperationError("existing state bucket is not in the configured Canadian region")
+    owned_names = {str(item.get("name", "")) for item in project_buckets}
+    if state_bucket not in owned_names:
+        raise OperationError("existing state bucket does not belong to the configured project")
+    labels = metadata.get("labels", {})
+    if not isinstance(labels, dict) or labels.get("application") != "fde-template" or labels.get("purpose") != "terraform-state":
+        raise OperationError("existing state bucket is not labeled as FDE Terraform state")
+
+
 def bootstrap_gcp(
     config: InstallationConfig,
     *,
@@ -296,19 +312,26 @@ def bootstrap_gcp(
                 "buckets",
                 "update",
                 bucket_uri,
+                "--clear-soft-delete",
                 "--update-labels=application=fde-template,purpose=terraform-state,managed-by=terraform",
             ]
         )
         described = run([gcloud, "storage", "buckets", "describe", bucket_uri, "--format=json"])
     metadata = json.loads(described.stdout)
-    project = json.loads(run([gcloud, "projects", "describe", config.project, "--format=json"]).stdout)
-    if metadata.get("location", "").lower() != config.region.lower():
-        raise OperationError("existing state bucket is not in the configured Canadian region")
-    if str(metadata.get("projectNumber")) != str(project.get("projectNumber")):
-        raise OperationError("existing state bucket does not belong to the configured project")
-    labels = metadata.get("labels", {})
-    if labels.get("application") != "fde-template" or labels.get("purpose") != "terraform-state":
-        raise OperationError("existing state bucket is not labeled as FDE Terraform state")
+    project_buckets = json.loads(
+        run(
+            [
+                gcloud,
+                "storage",
+                "buckets",
+                "list",
+                f"--project={config.project}",
+                f"--filter=name={state_bucket}",
+                "--format=json(name)",
+            ]
+        ).stdout
+    )
+    validate_state_bucket_ownership(config, state_bucket, metadata, project_buckets)
     terraform = executable("terraform")
     run(
         [

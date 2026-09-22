@@ -14,12 +14,13 @@ from fde_cli.operations import (
     collect_plan_contract,
     deploy_demo,
     destroy_demo,
+    remaining_instance_names,
+    validate_cleanup_manifest,
+    validate_demo_cost_drivers,
     validate_expiry_contract,
     validate_helm_values,
     validate_paid_cost_gate,
-    remaining_instance_names,
-    validate_demo_cost_drivers,
-    validate_cleanup_manifest,
+    validate_state_bucket_ownership,
 )
 from test_config import VALID, write
 
@@ -65,6 +66,24 @@ def test_bootstrap_requires_exact_project_before_cloud_calls(tmp_path: Path) -> 
             github_repository="Abdul-RehmanCU/FDE_Deploy_Template",
             confirm_project="wrong-project",
         )
+
+
+def test_state_bucket_ownership_accepts_actual_gcloud_storage_shape(tmp_path: Path) -> None:
+    cfg = config(tmp_path)
+    metadata = {
+        "name": "fdetemplate-state-test",
+        "location": "NORTHAMERICA-NORTHEAST1",
+        "labels": {"application": "fde-template", "purpose": "terraform-state"},
+        "soft_delete_policy": {"retentionDurationSeconds": "0"},
+    }
+    validate_state_bucket_ownership(
+        cfg,
+        "fdetemplate-state-test",
+        metadata,
+        [{"name": "fdetemplate-state-test"}],
+    )
+    with pytest.raises(OperationError, match="does not belong"):
+        validate_state_bucket_ownership(cfg, "fdetemplate-state-test", metadata, [])
 
 
 def expiry_contract() -> dict[str, object]:
