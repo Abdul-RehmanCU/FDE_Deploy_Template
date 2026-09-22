@@ -113,3 +113,16 @@ def test_workload_identities_have_separate_provider_attributes() -> None:
     assert "demo-infrastructure" in text
     assert "demo-staging" in text
     assert "demo-cleanup" in text
+    assert "demo-build" in text
+    assert "pull_request" not in text
+    assert '"roles/iam.serviceAccountUser"' not in text
+
+
+def test_runtime_secret_and_act_as_bindings_are_resource_scoped() -> None:
+    demo = (ROOT / "modules" / "demo" / "main.tf").read_text(encoding="utf-8")
+    expiry = (ROOT / "modules" / "expiry" / "main.tf").read_text(encoding="utf-8")
+    assert 'resource "google_secret_manager_secret_iam_member" "runtime"' in demo
+    assert 'resource "google_project_iam_member" "runtime_secrets"' not in demo
+    assert 'resource "google_service_account_iam_member" "infra_can_use_nodes"' in demo
+    assert 'resource "google_service_account_iam_member" "infra_can_use_workflow"' in expiry
+    assert 'resource "google_service_account_iam_member" "infra_can_use_scheduler"' in expiry
