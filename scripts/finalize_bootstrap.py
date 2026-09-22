@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import shutil
 import subprocess
 from pathlib import Path
@@ -28,6 +29,8 @@ def main() -> int:
     args = parser.parse_args()
     if args.confirm != "FINALIZE-BOOTSTRAP":
         raise SystemExit("--confirm must exactly equal FINALIZE-BOOTSTRAP")
+    if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", args.github_repository):
+        raise SystemExit("--github-repository must be the exact OWNER/REPOSITORY")
     for executable in ("gcloud", "terraform"):
         if shutil.which(executable) is None:
             raise SystemExit(f"{executable} is required")
@@ -151,7 +154,9 @@ def main() -> int:
         ).stdout
     )
     fde_accounts = [
-        account for account in service_accounts if account.get("email") in expected_accounts
+        account
+        for account in service_accounts
+        if account.get("email") in expected_accounts
     ]
     policy = json.loads(
         run(
