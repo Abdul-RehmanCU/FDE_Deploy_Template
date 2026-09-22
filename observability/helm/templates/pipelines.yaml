@@ -40,10 +40,12 @@ spec:
           volumeMounts:
             - { name: config, mountPath: /etc/alloy/config.alloy, subPath: config.alloy, readOnly: true }
             - { name: pod-logs, mountPath: /var/log/pods, readOnly: true }
+            - { name: data, mountPath: /tmp/alloy }
           securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: ["ALL"] } }
       volumes:
         - { name: config, configMap: { name: fde-alloy-config } }
         - { name: pod-logs, hostPath: { path: /var/log/pods, type: Directory } }
+        - { name: data, emptyDir: {} }
 ---
 apiVersion: apps/v1
 kind: Deployment

@@ -53,9 +53,9 @@ spec:
           ports: [{ name: http, containerPort: 9093 }]
           readinessProbe: { httpGet: { path: /-/ready, port: http } }
           resources: {{- toYaml .Values.resources.small | nindent 12 }}
-          volumeMounts: [{ name: config, mountPath: /etc/alertmanager/alertmanager.yml, subPath: alertmanager.yml, readOnly: true }]
+          volumeMounts: [{ name: config, mountPath: /etc/alertmanager/alertmanager.yml, subPath: alertmanager.yml, readOnly: true }, { name: data, mountPath: /tmp/alertmanager }]
           securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: ["ALL"] } }
-      volumes: [{ name: config, configMap: { name: fde-alertmanager-config } }]
+      volumes: [{ name: config, configMap: { name: fde-alertmanager-config } }, { name: data, emptyDir: {} }]
 ---
 apiVersion: apps/v1
 kind: StatefulSet

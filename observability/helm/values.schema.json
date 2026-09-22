@@ -7,20 +7,40 @@
       "type": "object",
       "required": ["predeclared", "prometheus", "loki", "tempo", "volumeHandles"],
       "properties": {
-        "predeclared": { "const": true },
+        "predeclared": { "type": "boolean" },
         "volumeHandles": {
           "type": "object",
           "required": ["prometheus", "loki", "tempo"],
           "additionalProperties": false,
           "properties": {
-            "prometheus": { "$ref": "#/definitions/volumeHandle" },
-            "loki": { "$ref": "#/definitions/volumeHandle" },
-            "tempo": { "$ref": "#/definitions/volumeHandle" }
+            "prometheus": { "type": "string" },
+            "loki": { "type": "string" },
+            "tempo": { "type": "string" }
           }
         }
       }
     }
   },
+  "allOf": [
+    {
+      "if": { "properties": { "storage": { "properties": { "predeclared": { "const": true } } } } },
+      "then": {
+        "properties": {
+          "storage": {
+            "properties": {
+              "volumeHandles": {
+                "properties": {
+                  "prometheus": { "$ref": "#/definitions/volumeHandle" },
+                  "loki": { "$ref": "#/definitions/volumeHandle" },
+                  "tempo": { "$ref": "#/definitions/volumeHandle" }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
   "definitions": {
     "volumeHandle": {
       "type": "string",

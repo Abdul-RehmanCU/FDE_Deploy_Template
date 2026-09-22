@@ -1,0 +1,16 @@
+storage:
+  predeclared: false
+  prometheus: 1Gi
+  loki: 1Gi
+  tempo: 1Gi
+  volumeHandles:
+    prometheus: ""
+    loki: ""
+    tempo: ""
+resources:
+  small:
+    requests: { cpu: 25m, memory: 64Mi }
+    limits: { cpu: 250m, memory: 256Mi }
+  medium:
+    requests: { cpu: 50m, memory: 128Mi }
+    limits: { cpu: 400m, memory: 512Mi }
