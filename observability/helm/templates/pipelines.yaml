@@ -28,7 +28,13 @@ spec:
     metadata: { labels: { app.kubernetes.io/name: fde-alloy } }
     spec:
       serviceAccountName: fde-observability
-      securityContext: { runAsNonRoot: true, runAsUser: 473, runAsGroup: 473, seccompProfile: { type: RuntimeDefault } }
+      securityContext: { runAsNonRoot: true, runAsUser: 473, runAsGroup: 473, fsGroup: 473, seccompProfile: { type: RuntimeDefault } }
+      initContainers:
+        - name: validate-config
+          image: {{ .Values.images.alloy }}
+          args: ["validate", "/etc/alloy/config.alloy"]
+          volumeMounts: [{ name: config, mountPath: /etc/alloy/config.alloy, subPath: config.alloy, readOnly: true }]
+          securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: ["ALL"] } }
       containers:
         - name: alloy
           image: {{ .Values.images.alloy }}
