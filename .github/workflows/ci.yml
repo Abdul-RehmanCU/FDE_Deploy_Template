@@ -761,6 +761,9 @@ jobs:
         run: |
           helm lint infra/helm/fde --strict
           helm template fde infra/helm/fde --namespace fde-staging > "$RUNNER_TEMP/fde-rendered.yaml"
+          helm lint infra/helm/fde --strict --values infra/helm/fde/values-managed.example.yaml
+          helm template fde-managed infra/helm/fde --namespace production \
+            --values infra/helm/fde/values-managed.example.yaml > "$RUNNER_TEMP/fde-managed-rendered.yaml"
           helm lint observability/helm --strict
           helm template fde-observability observability/helm --namespace observability > "$RUNNER_TEMP/observability-rendered.yaml"
       - name: Validate rendered Kubernetes resources
@@ -768,6 +771,9 @@ jobs:
           docker run --rm -i ghcr.io/yannh/kubeconform:v0.7.0@sha256:85dbef6b4b312b99133decc9c6fc9495e9fc5f92293d4ff3b7e1b30f5611823c
           -strict -summary -ignore-missing-schemas
           < "$RUNNER_TEMP/fde-rendered.yaml"
+          docker run --rm -i ghcr.io/yannh/kubeconform:v0.7.0@sha256:85dbef6b4b312b99133decc9c6fc9495e9fc5f92293d4ff3b7e1b30f5611823c
+          -strict -summary -ignore-missing-schemas
+          < "$RUNNER_TEMP/fde-managed-rendered.yaml"
       - name: Validate rendered observability resources
         run: >-
           docker run --rm -i ghcr.io/yannh/kubeconform:v0.7.0@sha256:85dbef6b4b312b99133decc9c6fc9495e9fc5f92293d4ff3b7e1b30f5611823c
