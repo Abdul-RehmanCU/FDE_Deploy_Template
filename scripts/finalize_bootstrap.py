@@ -14,6 +14,17 @@ def run(
     return subprocess.run(command, cwd=cwd, check=check, text=True, capture_output=True)
 
 
+def all_generation_delete_command(bucket_uri: str) -> list[str]:
+    return [
+        "gcloud",
+        "storage",
+        "rm",
+        "--recursive",
+        "--all-versions",
+        f"{bucket_uri}/**",
+    ]
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Owner-ADC final teardown immediately after runtime and expiry reconciliation"
@@ -118,7 +129,7 @@ def main() -> int:
         ],
         check=False,
     )
-    run(["gcloud", "storage", "rm", "--recursive", f"{bucket_uri}/"])
+    run(all_generation_delete_command(bucket_uri))
     run(["gcloud", "storage", "buckets", "delete", bucket_uri])
 
     pools = json.loads(
@@ -184,6 +195,7 @@ def main() -> int:
         "fde_workload_identity_pools": fde_pools,
         "fde_service_accounts": fde_accounts,
         "fde_project_iam_bindings": fde_bindings,
+        "required_apis_intentionally_left_enabled": True,
     }
     args.evidence_out.parent.mkdir(parents=True, exist_ok=True)
     args.evidence_out.write_text(

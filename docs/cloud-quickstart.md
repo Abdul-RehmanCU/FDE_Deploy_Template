@@ -128,4 +128,4 @@ python scripts/finalize_bootstrap.py \
   --confirm FINALIZE-BOOTSTRAP --evidence-out path/to/private-final-bootstrap-evidence.json
 ```
 
-This command targets only the bootstrap IAM/WIF/API resources, confirms that only the labeled state bucket remains in Terraform state, removes all state-object generations, deletes that exact bucket last, and fails if the FDE WIF pool remains.
+This command targets only bootstrap-managed IAM/WIF/service-state resources, confirms that only the labeled state bucket remains in Terraform state, removes all state-object generations, deletes that exact bucket last, and fails if the FDE WIF pool, four automation service accounts, or their project IAM bindings remain. The selected Google APIs intentionally remain enabled because the Terraform resources set `disable_on_destroy=false`; enabled APIs alone have no runtime charge and disabling them could affect unrelated project defaults.

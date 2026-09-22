@@ -80,11 +80,15 @@ jobs:
           [[ "$CUSTOMER" =~ ^[a-z][a-z0-9-]{1,38}[a-z0-9]$ ]]
           [[ "$EXPIRY_ID" =~ ^[a-z0-9][a-z0-9-]{5,48}[a-z0-9]$ ]]
           mkdir -p "$RUNNER_TEMP/fde-cleanup" cleanup-evidence
+          gcloud storage buckets describe "gs://$STATE_BUCKET" --format=json > "$RUNNER_TEMP/fde-cleanup/state-bucket.json"
+          project_number=$(gcloud projects describe "$PROJECT_ID" --format='value(projectNumber)')
+          jq -e --arg project_number "$project_number" --arg region "$REGION" \
+            '.projectNumber == $project_number and (.location | ascii_downcase) == ($region | ascii_downcase) and .labels.application == "fde-template" and .labels.purpose == "terraform-state"' \
+            "$RUNNER_TEMP/fde-cleanup/state-bucket.json" >/dev/null
           terraform -chdir=infra/terraform/environments/demo init -input=false -reconfigure \
             -backend-config="bucket=$STATE_BUCKET" -backend-config="prefix=demo/$EXPIRY_ID"
           terraform -chdir=infra/terraform/environments/expiry init -input=false -reconfigure \
             -backend-config="bucket=$STATE_BUCKET" -backend-config="prefix=expiry/$EXPIRY_ID"
-          project_number=$(gcloud projects describe "$PROJECT_ID" --format='value(projectNumber)')
           jq -n --arg project_id "$PROJECT_ID" --arg project_number "$project_number" \
             --arg region "$REGION" --arg zone "$ZONE" --arg expiry_id "$EXPIRY_ID" \
             --arg expires_at "$EXPIRES_AT" --arg cluster_name "fde-${CUSTOMER}-demo" \
