@@ -1,0 +1,30 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "fde.fullname" . }}-frontend
+  labels:
+    {{- include "fde.labels" . | nindent 4 }}
+    app.kubernetes.io/component: frontend
+spec:
+  replicas: {{ .Values.frontend.replicas }}
+  selector:
+    matchLabels: { app.kubernetes.io/instance: {{ .Release.Name }}, app.kubernetes.io/component: frontend }
+  template:
+    metadata:
+      labels:
+        {{- include "fde.labels" . | nindent 8 }}
+        app.kubernetes.io/component: frontend
+    spec:
+      securityContext: { runAsNonRoot: true, seccompProfile: { type: RuntimeDefault } }
+      containers:
+        - name: frontend
+          image: {{ include "fde.frontendImage" . }}
+          imagePullPolicy: {{ .Values.images.frontend.pullPolicy }}
+          ports: [{ name: http, containerPort: {{ .Values.frontend.port }} }]
+          readinessProbe: { httpGet: { path: /, port: http }, periodSeconds: 5 }
+          livenessProbe: { httpGet: { path: /, port: http }, periodSeconds: 10 }
+          resources: {{- toYaml .Values.frontend.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }

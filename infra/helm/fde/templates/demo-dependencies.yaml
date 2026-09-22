@@ -1,0 +1,125 @@
+{{- if .Values.demoDependencies.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "fde.fullname" . }}-postgres
+  labels:
+    {{- include "fde.labels" . | nindent 4 }}
+    app.kubernetes.io/component: postgres
+spec:
+  clusterIP: None
+  selector: { app.kubernetes.io/instance: {{ .Release.Name }}, app.kubernetes.io/component: postgres }
+  ports: [{ name: postgres, port: 5432, targetPort: postgres }]
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "fde.fullname" . }}-postgres
+  labels:
+    {{- include "fde.labels" . | nindent 4 }}
+    app.kubernetes.io/component: postgres
+spec:
+  serviceName: {{ include "fde.fullname" . }}-postgres
+  replicas: 1
+  selector:
+    matchLabels: { app.kubernetes.io/instance: {{ .Release.Name }}, app.kubernetes.io/component: postgres }
+  template:
+    metadata:
+      labels:
+        {{- include "fde.labels" . | nindent 8 }}
+        app.kubernetes.io/component: postgres
+    spec:
+      serviceAccountName: {{ .Values.serviceAccount.name }}
+      securityContext: { runAsNonRoot: true, runAsUser: 70, runAsGroup: 70, fsGroup: 70, seccompProfile: { type: RuntimeDefault } }
+      containers:
+        - name: postgres
+          image: {{ .Values.demoDependencies.postgres.image | quote }}
+          imagePullPolicy: IfNotPresent
+          ports: [{ name: postgres, containerPort: 5432 }]
+          env:
+            - { name: POSTGRES_DB, value: app }
+            - { name: POSTGRES_USER, value: app }
+            - { name: POSTGRES_PASSWORD_FILE, value: /var/run/secrets/fde/postgres-password }
+            - { name: PGDATA, value: /var/lib/postgresql/data/pgdata }
+          volumeMounts:
+            - { name: data, mountPath: /var/lib/postgresql/data }
+            {{- include "fde.secretMount" . | nindent 12 }}
+          readinessProbe: { exec: { command: ["pg_isready", "-U", "app", "-d", "app"] }, periodSeconds: 5 }
+          livenessProbe: { exec: { command: ["pg_isready", "-U", "app", "-d", "app"] }, periodSeconds: 10 }
+          resources: {{- toYaml .Values.demoDependencies.postgres.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: ["ALL"] }
+      volumes:
+        {{- include "fde.secretVolume" . | nindent 8 }}
+  volumeClaimTemplates:
+    - metadata: { name: data }
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources: { requests: { storage: {{ .Values.demoDependencies.postgres.storage }} } }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "fde.fullname" . }}-redis
+  labels:
+    {{- include "fde.labels" . | nindent 4 }}
+    app.kubernetes.io/component: redis
+spec:
+  clusterIP: None
+  selector: { app.kubernetes.io/instance: {{ .Release.Name }}, app.kubernetes.io/component: redis }
+  ports: [{ name: redis, port: 6379, targetPort: redis }]
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "fde.fullname" . }}-redis
+  labels:
+    {{- include "fde.labels" . | nindent 4 }}
+    app.kubernetes.io/component: redis
+spec:
+  serviceName: {{ include "fde.fullname" . }}-redis
+  replicas: 1
+  selector:
+    matchLabels: { app.kubernetes.io/instance: {{ .Release.Name }}, app.kubernetes.io/component: redis }
+  template:
+    metadata:
+      labels:
+        {{- include "fde.labels" . | nindent 8 }}
+        app.kubernetes.io/component: redis
+    spec:
+      serviceAccountName: {{ .Values.serviceAccount.name }}
+      securityContext: { runAsNonRoot: true, runAsUser: 999, runAsGroup: 999, fsGroup: 999, seccompProfile: { type: RuntimeDefault } }
+      initContainers:
+        - name: configure
+          image: {{ .Values.demoDependencies.redis.image | quote }}
+          command: ["sh", "-ec", "umask 077; printf 'appendonly yes\\nrequirepass %s\\n' \"$(cat /var/run/secrets/fde/redis-password)\" > /config/redis.conf"]
+          volumeMounts:
+            - { name: config, mountPath: /config }
+            {{- include "fde.secretMount" . | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: ["ALL"] }
+      containers:
+        - name: redis
+          image: {{ .Values.demoDependencies.redis.image | quote }}
+          command: ["redis-server", "/config/redis.conf"]
+          ports: [{ name: redis, containerPort: 6379 }]
+          volumeMounts:
+            - { name: data, mountPath: /data }
+            - { name: config, mountPath: /config, readOnly: true }
+          readinessProbe: { tcpSocket: { port: redis }, periodSeconds: 5 }
+          livenessProbe: { tcpSocket: { port: redis }, periodSeconds: 10 }
+          resources: {{- toYaml .Values.demoDependencies.redis.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: { drop: ["ALL"] }
+      volumes:
+        - { name: config, emptyDir: { medium: Memory } }
+        {{- include "fde.secretVolume" . | nindent 8 }}
+  volumeClaimTemplates:
+    - metadata: { name: data }
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources: { requests: { storage: {{ .Values.demoDependencies.redis.storage }} } }
+{{- end }}

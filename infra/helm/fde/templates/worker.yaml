@@ -1,0 +1,43 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "fde.fullname" . }}-worker
+  labels:
+    {{- include "fde.labels" . | nindent 4 }}
+    app.kubernetes.io/component: worker
+spec:
+  replicas: {{ .Values.worker.replicas }}
+  selector:
+    matchLabels: { app.kubernetes.io/instance: {{ .Release.Name }}, app.kubernetes.io/component: worker }
+  template:
+    metadata:
+      labels:
+        {{- include "fde.labels" . | nindent 8 }}
+        app.kubernetes.io/component: worker
+    spec:
+      serviceAccountName: {{ .Values.serviceAccount.name }}
+      securityContext: { runAsNonRoot: true, seccompProfile: { type: RuntimeDefault } }
+      terminationGracePeriodSeconds: 45
+      containers:
+        - name: worker
+          image: {{ include "fde.backendImage" . }}
+          imagePullPolicy: {{ .Values.images.backend.pullPolicy }}
+          command: ["celery", "-A", "app.worker.celery_app", "worker", "--loglevel=INFO", "--concurrency=2"]
+          env:
+            {{- include "fde.backendEnv" . | nindent 12 }}
+          volumeMounts:
+            {{- include "fde.secretMount" . | nindent 12 }}
+          livenessProbe:
+            exec:
+              command: ["sh", "-ec", "celery -A app.worker.celery_app inspect ping --destination celery@$HOSTNAME --timeout 5 | grep -q pong"]
+            initialDelaySeconds: 20
+            periodSeconds: 20
+            timeoutSeconds: 8
+            failureThreshold: 3
+          resources: {{- toYaml .Values.worker.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+      volumes:
+        {{- include "fde.secretVolume" . | nindent 8 }}

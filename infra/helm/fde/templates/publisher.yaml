@@ -1,0 +1,35 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "fde.fullname" . }}-publisher
+  labels:
+    {{- include "fde.labels" . | nindent 4 }}
+    app.kubernetes.io/component: publisher
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app.kubernetes.io/instance: {{ .Release.Name }}, app.kubernetes.io/component: publisher }
+  template:
+    metadata:
+      labels:
+        {{- include "fde.labels" . | nindent 8 }}
+        app.kubernetes.io/component: publisher
+    spec:
+      serviceAccountName: {{ .Values.serviceAccount.name }}
+      securityContext: { runAsNonRoot: true, seccompProfile: { type: RuntimeDefault } }
+      containers:
+        - name: publisher
+          image: {{ include "fde.backendImage" . }}
+          imagePullPolicy: {{ .Values.images.backend.pullPolicy }}
+          command: ["python", "-m", "app.outbox_publisher"]
+          env:
+            {{- include "fde.backendEnv" . | nindent 12 }}
+          volumeMounts:
+            {{- include "fde.secretMount" . | nindent 12 }}
+          resources: {{- toYaml .Values.publisher.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+      volumes:
+        {{- include "fde.secretVolume" . | nindent 8 }}
