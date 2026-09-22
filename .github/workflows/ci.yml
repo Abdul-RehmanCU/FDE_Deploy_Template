@@ -738,7 +738,7 @@ jobs:
           if ! GRAFANA_URL=http://127.0.0.1:13000 \
             ALERTMANAGER_URL=http://127.0.0.1:19093 \
             GRAFANA_USER=admin GRAFANA_PASSWORD="$grafana_password" \
-            TRACE_ID="$trace_id" OUTPUT_DIR="$evidence_dir" ALERT_PHASE=firing \
+            TRACE_ID="$trace_id" LOKI_NAMESPACE=fde-staging OUTPUT_DIR="$evidence_dir" ALERT_PHASE=firing \
             bun scripts/ci/capture_observability_evidence.ts; then verification_failed=1; fi
           kubectl -n fde-staging scale deployment/fde-ci-demo-staging-api --replicas=2
           kubectl -n fde-staging rollout status deployment/fde-ci-demo-staging-api --timeout=180s
@@ -751,7 +751,7 @@ jobs:
           if ! GRAFANA_URL=http://127.0.0.1:13000 \
             ALERTMANAGER_URL=http://127.0.0.1:19093 \
             GRAFANA_USER=admin GRAFANA_PASSWORD="$grafana_password" \
-            TRACE_ID="$trace_id" OUTPUT_DIR="$evidence_dir" ALERT_PHASE=resolved \
+            TRACE_ID="$trace_id" LOKI_NAMESPACE=fde-staging OUTPUT_DIR="$evidence_dir" ALERT_PHASE=resolved \
             bun scripts/ci/capture_observability_evidence.ts; then verification_failed=1; fi
           for component in api publisher worker; do
             kubectl -n fde-staging logs --all-containers --prefix --tail=1000 \
