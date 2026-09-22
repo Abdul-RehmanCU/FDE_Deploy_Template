@@ -11,7 +11,9 @@ grafana_password=$(kubectl -n observability get secret fde-grafana-admin -o json
 echo "::add-mask::$grafana_password"
 pids=()
 cleanup() {
-  if declare -F restore_production >/dev/null; then restore_production; fi
+  if declare -F restore_production_best_effort >/dev/null && test "${production_restored:-0}" -ne 1; then
+    restore_production_best_effort
+  fi
   for pid in "${pids[@]}"; do kill "$pid" 2>/dev/null || true; done
 }
 trap cleanup EXIT
@@ -82,13 +84,21 @@ verify_trace() {
   grep -qx fde-outbox-publisher <<<"$services"
   grep -qx fde-worker <<<"$services"
 
-  curl --fail --silent --get \
-    --data-urlencode "query={namespace=\"$namespace\"} | json | trace_id=\"$trace_id\"" \
-    --data-urlencode "start=$(date -u -d '60 minutes ago' +%s)000000000" \
-    http://127.0.0.1:23100/loki/api/v1/query_range > "$RUNNER_TEMP/${namespace}-trace-logs.json"
-  api_logs=$(jq '[.data.result[] | select(.stream.container | test("api")) | .values[]] | length' "$RUNNER_TEMP/${namespace}-trace-logs.json")
-  publisher_logs=$(jq '[.data.result[] | select(.stream.container | test("publisher")) | .values[]] | length' "$RUNNER_TEMP/${namespace}-trace-logs.json")
-  worker_logs=$(jq '[.data.result[] | select(.stream.container | test("worker")) | .values[]] | length' "$RUNNER_TEMP/${namespace}-trace-logs.json")
+  trace_logs="$evidence_dir/${namespace}-loki-trace-last.json"
+  printf '{"data":{"result":[]}}\n' > "$trace_logs"
+  for _ in {1..60}; do
+    if ! curl --fail --silent --get \
+      --data-urlencode "query={namespace=\"$namespace\"} | json | trace_id=\"$trace_id\"" \
+      --data-urlencode "start=$(date -u -d '60 minutes ago' +%s)000000000" \
+      http://127.0.0.1:23100/loki/api/v1/query_range > "$trace_logs"; then
+      printf '{"data":{"result":[]}}\n' > "$trace_logs"
+    fi
+    api_logs=$(jq '[.data.result[] | select(.stream.container | test("api")) | .values[]] | length' "$trace_logs")
+    publisher_logs=$(jq '[.data.result[] | select(.stream.container | test("publisher")) | .values[]] | length' "$trace_logs")
+    worker_logs=$(jq '[.data.result[] | select(.stream.container | test("worker")) | .values[]] | length' "$trace_logs")
+    if test "$api_logs" -gt 0 && test "$publisher_logs" -gt 0 && test "$worker_logs" -gt 0; then break; fi
+    sleep 2
+  done
   test "$api_logs" -gt 0 && test "$publisher_logs" -gt 0 && test "$worker_logs" -gt 0
   jq -n --arg namespace "$namespace" --arg trace_id "$trace_id" \
     --argjson api "$api_logs" --argjson publisher "$publisher_logs" --argjson worker "$worker_logs" \
@@ -98,28 +108,47 @@ verify_trace() {
 
 verify_trace staging "$staging_trace"
 verify_trace production-demo "$production_trace"
+for namespace in staging production-demo; do
+  trace_id=$staging_trace
+  test "$namespace" = production-demo && trace_id=$production_trace
+  for component in api publisher worker; do
+    kubectl -n "$namespace" logs --all-containers --prefix --tail=1000 \
+      --selector="app.kubernetes.io/component=$component" | grep "$trace_id" \
+      > "$evidence_dir/${namespace}-${component}-trace-logs.txt" || true
+  done
+done
 
 release="fde-${customer}-production-demo"
-restore_production() {
+production_restored=0
+restore_production_best_effort() {
   kubectl -n production-demo scale "deployment/${release}-api" --replicas=2 >/dev/null 2>&1 || true
   kubectl -n production-demo rollout status "deployment/${release}-api" --timeout=180s >/dev/null 2>&1 || true
+}
+restore_production_strict() {
+  kubectl -n production-demo scale "deployment/${release}-api" --replicas=2
+  kubectl -n production-demo rollout status "deployment/${release}-api" --timeout=180s
+  production_restored=1
 }
 kubectl -n production-demo scale "deployment/${release}-api" --replicas=0
 for _ in {1..120}; do
   staging_up=$(prom_value 'sum(up{job="fde-api",namespace="staging"})')
   curl --fail --silent http://127.0.0.1:29093/api/v2/alerts > "$evidence_dir/gke-alert-firing.json"
   if awk -v value="$staging_up" 'BEGIN { exit !(value>=2) }' && \
-     jq -e 'any(.[]; .labels.alertname == "FDEApiUnavailable" and .labels.namespace == "production-demo")' "$evidence_dir/gke-alert-firing.json" >/dev/null; then break; fi
+     jq -e 'any(.[]; .labels.alertname == "FDEApiUnavailable" and .labels.namespace == "production-demo") and (any(.[]; .labels.alertname == "FDEApiUnavailable" and .labels.namespace == "staging") | not)' "$evidence_dir/gke-alert-firing.json" >/dev/null; then break; fi
   sleep 3
 done
 awk -v value="$staging_up" 'BEGIN { exit !(value>=2) }'
 jq -e 'any(.[]; .labels.alertname == "FDEApiUnavailable" and .labels.namespace == "production-demo")' "$evidence_dir/gke-alert-firing.json" >/dev/null
+jq -e 'any(.[]; .labels.alertname == "FDEApiUnavailable" and .labels.namespace == "staging") | not' "$evidence_dir/gke-alert-firing.json" >/dev/null
+jq -n --arg staging_up "$staging_up" '{production_demo_firing:true,staging_alert_absent:true,staging_api_up:($staging_up|tonumber)}' \
+  > "$evidence_dir/gke-alert-isolation.json"
 GRAFANA_URL=http://127.0.0.1:23000 ALERTMANAGER_URL=http://127.0.0.1:29093 \
   GRAFANA_USER=admin GRAFANA_PASSWORD="$grafana_password" TRACE_ID="$production_trace" \
   LOKI_NAMESPACE=production-demo OUTPUT_DIR="$evidence_dir" ALERT_PHASE=firing \
   bun scripts/ci/capture_observability_evidence.ts
 
-restore_production
+restore_production_strict
+jq -n '{production_demo_api_restored:true,replicas:2,rollout_ready:true}' > "$evidence_dir/gke-production-restoration.json"
 for _ in {1..60}; do
   curl --fail --silent http://127.0.0.1:29093/api/v2/alerts > "$evidence_dir/gke-alert-resolved.json"
   if ! jq -e 'any(.[]; .labels.alertname == "FDEApiUnavailable" and .labels.namespace == "production-demo")' "$evidence_dir/gke-alert-resolved.json" >/dev/null; then break; fi
