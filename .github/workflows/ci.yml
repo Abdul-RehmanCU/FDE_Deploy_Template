@@ -560,9 +560,28 @@ jobs:
             --from-literal=password="$grafana_password"
           helm upgrade --install fde-observability observability/helm \
             --namespace observability \
-            --values observability/helm/values-kind.yaml \
-            --wait \
-            --timeout 8m
+            --values observability/helm/values-kind.yaml
+          for attempt in {1..90}; do
+            alloy_pod=$(kubectl -n observability get pod -l app.kubernetes.io/name=fde-alloy -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)
+            if test -n "$alloy_pod"; then
+              init_exit=$(kubectl -n observability get pod "$alloy_pod" -o jsonpath='{.status.initContainerStatuses[0].state.terminated.exitCode}' 2>/dev/null || true)
+              if test -n "$init_exit" && test "$init_exit" -ne 0; then
+                kubectl -n observability logs "$alloy_pod" -c validate-config --tail=200 || true
+                exit 1
+              fi
+              ready=$(kubectl -n observability get pod "$alloy_pod" -o jsonpath='{.status.containerStatuses[0].ready}' 2>/dev/null || true)
+              restarts=$(kubectl -n observability get pod "$alloy_pod" -o jsonpath='{.status.containerStatuses[0].restartCount}' 2>/dev/null || true)
+              if test "$ready" = true; then break; fi
+              if test -n "$restarts" && test "$restarts" -ge 2; then
+                kubectl -n observability logs "$alloy_pod" -c alloy --tail=200 || true
+                kubectl -n observability logs "$alloy_pod" -c alloy --previous --tail=200 || true
+                exit 1
+              fi
+            fi
+            sleep 2
+          done
+          kubectl -n observability rollout status daemonset/fde-alloy --timeout=30s
+          kubectl -n observability rollout status deployment/fde-otel-collector --timeout=180s
           helm upgrade fde infra/helm/fde \
             --namespace fde-staging \
             --values infra/helm/fde/values-kind.yaml \
