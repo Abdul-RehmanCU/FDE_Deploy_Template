@@ -70,6 +70,8 @@ def test_admin_user_lifecycle_and_role_matrix() -> None:
         admin_headers = auth(admin)
         operator_headers = auth(operator)
         viewer_headers = auth(viewer)
+        assert admin.is_superuser is True
+        assert operator.is_superuser is False
 
     with TestClient(app) as client:
         assert client.get("/api/v1/users", headers=operator_headers).status_code == 403

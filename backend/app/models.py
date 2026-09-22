@@ -87,6 +87,9 @@ class User(UserBase, table=True):
     __table_args__ = (Index("ix_user_role", "role"),)
     id: uuid.UUID = Field(default_factory=uuid.uuid4, primary_key=True)
     hashed_password: str = Field(max_length=255)
+    # Retained for rollback compatibility with the imported upstream release.
+    # API responses use `role` and never expose this legacy projection.
+    is_superuser: bool = False
     must_change_password: bool = True
     token_version: int = 0
     created_at: datetime = Field(

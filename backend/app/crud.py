@@ -4,7 +4,7 @@ import uuid
 from sqlmodel import Session, select
 
 from app.core.security import get_password_hash, verify_password
-from app.models import User, UserCreate, UserUpdate, utc_now
+from app.models import User, UserCreate, UserRole, UserUpdate, utc_now
 
 
 def generate_temporary_password() -> str:
@@ -20,6 +20,7 @@ def create_user(
         update={
             "hashed_password": get_password_hash(password),
             "must_change_password": True,
+            "is_superuser": user_create.role == UserRole.ADMIN,
         },
     )
     session.add(db_obj)
@@ -32,6 +33,8 @@ def update_user(*, session: Session, db_user: User, user_in: UserUpdate) -> User
     changes = user_in.model_dump(exclude_unset=True)
     if changes:
         db_user.sqlmodel_update(changes)
+        if "role" in changes:
+            db_user.is_superuser = db_user.role == UserRole.ADMIN
         db_user.updated_at = utc_now()
         if "is_active" in changes or "role" in changes:
             db_user.token_version += 1
