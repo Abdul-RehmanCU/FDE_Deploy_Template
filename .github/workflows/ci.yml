@@ -583,14 +583,18 @@ jobs:
           done
           test "$api_targets" -ge 2
           test "$worker_up" -ge 1
-          printf '{"api_targets":%s,"worker_up":%s}\n' "$api_targets" "$worker_up" > "$evidence_dir/metrics-summary.json"
-
-          loki_streams=$(curl --fail --silent --get \
-            --data-urlencode 'query={namespace="fde-staging"}' \
-            --data-urlencode "start=$(date -u -d '10 minutes ago' +%s)000000000" \
-            http://127.0.0.1:13100/loki/api/v1/query_range | jq '.data.result | length')
-          test "$loki_streams" -gt 0
-          printf '{"fde_staging_streams":%s}\n' "$loki_streams" > "$evidence_dir/loki-summary.json"
+          http_count=$(curl --fail --silent --get --data-urlencode 'query=sum(http_server_request_duration_seconds_count)' http://127.0.0.1:19090/api/v1/query | jq -r '.data.result[0].value[1] // "0"')
+          http_buckets=$(curl --fail --silent --get --data-urlencode 'query=count(http_server_request_duration_seconds_bucket)' http://127.0.0.1:19090/api/v1/query | jq -r '.data.result[0].value[1] // "0"')
+          for metric in fde_import_rows fde_oldest_queued_job_seconds fde_database_connections fde_job_attempts; do
+            count=$(curl --fail --silent --get --data-urlencode "query=count($metric)" http://127.0.0.1:19090/api/v1/query | jq -r '.data.result[0].value[1] // "0"')
+            awk -v value="$count" 'BEGIN { exit !(value > 0) }'
+          done
+          awk -v value="$http_count" 'BEGIN { exit !(value > 0) }'
+          awk -v value="$http_buckets" 'BEGIN { exit !(value > 0) }'
+          jq -n --argjson api_targets "$api_targets" --argjson worker_up "$worker_up" \
+            --arg http_count "$http_count" --arg http_buckets "$http_buckets" \
+            '{api_targets:$api_targets,worker_up:$worker_up,http_request_count:($http_count|tonumber),http_histogram_buckets:($http_buckets|tonumber),required_worker_metrics:true}' \
+            > "$evidence_dir/metrics-summary.json"
 
           grafana_password=kind-grafana-password-2026
           curl --fail --silent --user "admin:$grafana_password" \
@@ -601,7 +605,6 @@ jobs:
             --data-urlencode username=kind-admin@example.com \
             --data-urlencode password=Kind-Admin-Password-2026! \
             http://127.0.0.1:18083/api/v1/login/access-token | jq --raw-output .access_token)
-          trace_id=4bf92f3577b34da6a3ce929d0e0e4736
           import_id=$(curl --fail --silent \
             --header "Authorization: Bearer $token" \
             --form file=@fixtures/customer-data/formula-like.csv \
@@ -611,10 +614,11 @@ jobs:
             --header "Content-Type: application/json" \
             --data '{"mapping":{"email":"Email","first_name":"First Name","last_name":"Last Name","company":"Company","country_code":"Country","external_id":"External ID"}}' \
             "http://127.0.0.1:18083/api/v1/imports/$import_id/mapping" >/dev/null
-          curl --fail --silent --request POST \
+          curl --fail --silent --dump-header "$RUNNER_TEMP/validate-response-headers.txt" --request POST \
             --header "Authorization: Bearer $token" \
-            --header "traceparent: 00-$trace_id-00f067aa0ba902b7-01" \
             "http://127.0.0.1:18083/api/v1/imports/$import_id/validate" >/dev/null
+          trace_id=$(awk 'tolower($1) == "x-trace-id:" {gsub("\\r", "", $2); print $2}' "$RUNNER_TEMP/validate-response-headers.txt" | tail -1)
+          [[ "$trace_id" =~ ^[0-9a-f]{32}$ ]]
           for attempt in {1..60}; do
             status=$(curl --fail --silent --header "Authorization: Bearer $token" "http://127.0.0.1:18083/api/v1/imports/$import_id" | jq --raw-output .status)
             test "$status" = validated && break
@@ -623,12 +627,24 @@ jobs:
           test "$status" = validated
           for attempt in {1..60}; do
             services=$(curl --fail --silent "http://127.0.0.1:13200/api/traces/$trace_id" | jq -r '.. | objects | select(.key? == "service.name") | .value.stringValue? // empty' | sort -u || true)
-            if grep -qx fde-api <<<"$services" && grep -qx fde-worker <<<"$services"; then break; fi
+            if grep -qx fde-api <<<"$services" && grep -qx fde-outbox-publisher <<<"$services" && grep -qx fde-worker <<<"$services"; then break; fi
             sleep 2
           done
           grep -qx fde-api <<<"$services"
+          grep -qx fde-outbox-publisher <<<"$services"
           grep -qx fde-worker <<<"$services"
           printf '%s\n' "$services" > "$evidence_dir/trace-services.txt"
+
+          curl --fail --silent --get \
+            --data-urlencode "query={namespace=\"fde-staging\"} | json | trace_id=\"$trace_id\"" \
+            --data-urlencode "start=$(date -u -d '10 minutes ago' +%s)000000000" \
+            http://127.0.0.1:13100/loki/api/v1/query_range > "$RUNNER_TEMP/trace-logs.json"
+          log_containers=$(jq -r '.data.result[].stream.container' "$RUNNER_TEMP/trace-logs.json" | sort -u)
+          grep -Eq 'api' <<<"$log_containers"
+          grep -Eq 'worker' <<<"$log_containers"
+          jq -n --arg trace_id "$trace_id" --arg containers "$log_containers" \
+            '{trace_id:$trace_id,containers:($containers|split("\n")|map(select(length>0))),pii_included:false}' \
+            > "$evidence_dir/loki-trace-summary.json"
 
           kubectl -n fde-staging scale deployment/fde-ci-demo-staging-api --replicas=0
           sleep 150
