@@ -65,7 +65,7 @@ jobs:
       REDIS_URL: redis://localhost:6379/0
       FRONTEND_HOST: http://localhost:5173
       STORAGE_BACKEND: local
-      STORAGE_LOCAL_ROOT: ${{ runner.temp }}/fde-storage
+      STORAGE_LOCAL_ROOT: /tmp/fde-storage
       RUN_POSTGRES_TESTS: "1"
     steps:
       - name: Check out repository
