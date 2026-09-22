@@ -107,7 +107,7 @@ jobs:
           fi
           jq '{project_id,project_number,region,zone,expiry_id,expires_at,cluster_name,artifact_repository,bucket_names,disk_names:[.disk_resources[].name],address_resources}' \
             "$RUNNER_TEMP/fde-cleanup/manifest.json" > "$RUNNER_TEMP/fde-cleanup/expiry.auto.tfvars.json"
-          python - <<'PY'
+          uv run --project tooling/fde python - <<'PY'
           import os, yaml
           data = {
               "customer": os.environ["CUSTOMER"], "environment": "staging",

@@ -130,7 +130,7 @@ jobs:
             exit 1
           }
           mkdir -p "$RUNNER_TEMP/fde-private"
-          python - <<'PY'
+          uv run --project tooling/fde python - <<'PY'
           import os, yaml
           data = {
               "customer": os.environ["CUSTOMER"], "environment": "staging",

@@ -199,7 +199,7 @@ jobs:
           private_dir="$RUNNER_TEMP/fde-provision"
           mkdir -p "$private_dir"
           printf '%s' "$COST_EVIDENCE_JSON" > "$private_dir/cost.yaml"
-          python - <<'PY'
+          uv run --project tooling/fde python - <<'PY'
           import os, yaml
           data = {
               "customer": os.environ["CUSTOMER"], "environment": "staging", "project": os.environ["PROJECT_ID"],
