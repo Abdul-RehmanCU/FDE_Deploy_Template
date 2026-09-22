@@ -108,7 +108,8 @@ def test_readiness_requires_application_schema_but_allows_additive_revision(
     target_url = database_url(target_name)
     with psycopg.connect(admin_url, autocommit=True) as admin:
         admin.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(target_name)))
-    target_engine = create_engine(target_url)
+    target_sqlalchemy_url = make_url(target_url).set(drivername="postgresql+psycopg")
+    target_engine = create_engine(target_sqlalchemy_url)
 
     class HealthyRedis:
         def ping(self) -> bool:
