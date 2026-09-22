@@ -38,7 +38,7 @@ spec:
       containers:
         - name: alloy
           image: {{ .Values.images.alloy }}
-          args: ["run", "/etc/alloy/config.alloy", "--storage.path=/tmp/alloy"]
+          args: ["run", "--server.http.listen-addr=0.0.0.0:12345", "--storage.path=/tmp/alloy", "/etc/alloy/config.alloy"]
           env: [{ name: HOSTNAME, valueFrom: { fieldRef: { fieldPath: spec.nodeName } } }]
           ports: [{ name: http, containerPort: 12345 }]
           readinessProbe: { httpGet: { path: /-/ready, port: http } }
