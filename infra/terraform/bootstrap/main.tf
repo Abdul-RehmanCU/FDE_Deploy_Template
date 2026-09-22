@@ -76,6 +76,7 @@ resource "google_storage_bucket" "terraform_state" {
   force_destroy               = false
 
   versioning { enabled = true }
+  soft_delete_policy { retention_duration_seconds = 0 }
 
   lifecycle_rule {
     condition { num_newer_versions = 5 }

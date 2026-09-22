@@ -155,3 +155,13 @@ def test_runtime_secret_and_act_as_bindings_are_resource_scoped() -> None:
     assert 'resource "google_service_account_iam_member" "infra_can_use_scheduler"' in expiry
     assert "disk_names" in expiry
     assert "expiry_id = var.expiry_id" in expiry
+
+
+def test_bounded_demo_buckets_disable_soft_delete_but_keep_version_inventory() -> None:
+    bootstrap = BOOTSTRAP_MAIN.read_text(encoding="utf-8")
+    demo = (ROOT / "modules" / "demo" / "main.tf").read_text(encoding="utf-8")
+    policy = "soft_delete_policy { retention_duration_seconds = 0 }"
+    assert "versioning { enabled = true }" in bootstrap
+    assert policy in bootstrap
+    assert "versioning { enabled = true }" in demo
+    assert policy in demo
