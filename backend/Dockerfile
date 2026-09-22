@@ -40,9 +40,10 @@ RUN --mount=type=cache,target=/root/.cache/uv \
     --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
     uv sync --frozen --no-dev --package app
 
-# The upstream Python runtime bundles package metadata that scanners inspect.
-# Keep those distributions on fixed versions even though the app does not import them.
-RUN UV_NO_CACHE=1 uv pip install --system "msgpack==1.2.2" "setuptools==84.0.0"
+# Editable/build tooling leaves package metadata in the application environment.
+# Keep those distributions on fixed versions and assert the exact scanned environment.
+RUN UV_NO_CACHE=1 uv pip install --python /app/.venv/bin/python "msgpack==1.2.2" "setuptools==84.0.0" && \
+    /app/.venv/bin/python -c "from importlib.metadata import version; assert version('msgpack') == '1.2.2'; assert version('setuptools') == '84.0.0'"
 
 WORKDIR /app/backend/
 
