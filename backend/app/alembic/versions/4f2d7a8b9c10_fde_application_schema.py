@@ -54,6 +54,7 @@ def upgrade() -> None:
     op.execute(
         "UPDATE \"user\" SET role = CASE WHEN is_superuser THEN 'admin' ELSE 'viewer' END"
     )
+    op.execute('UPDATE "user" SET created_at = now() WHERE created_at IS NULL')
     op.alter_column(
         "user",
         "created_at",
