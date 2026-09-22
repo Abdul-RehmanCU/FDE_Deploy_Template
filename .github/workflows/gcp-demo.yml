@@ -95,6 +95,7 @@ jobs:
           ci=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$ci_run_id")
           test "$(jq -r .head_sha <<<"$ci")" = "$GITHUB_SHA"
           test "$(jq -r .conclusion <<<"$ci")" = success
+          test "$(jq -r .path <<<"$ci")" = .github/workflows/ci.yml
           security_count=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/security.yml/runs?branch=main&status=success&per_page=20" \
             --jq "[.workflow_runs[] | select(.head_sha == \"$GITHUB_SHA\")] | length")
           test "$security_count" -ge 1
@@ -111,15 +112,52 @@ jobs:
             echo "ci_run_id=$ci_run_id"
           } >> "$GITHUB_OUTPUT"
 
+  authorize-run:
+    name: Consume single paid-run authorization
+    needs: preflight
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: demo-infrastructure
+    permissions:
+      contents: read # required to identify the selected revision
+      id-token: write # required for keyless GCP Workload Identity Federation
+    env:
+      PROJECT_ID: ${{ needs.preflight.outputs.project_id }}
+      STATE_BUCKET: ${{ needs.preflight.outputs.state_bucket }}
+      EXPIRY_ID: ${{ needs.preflight.outputs.expiry_id }}
+    steps:
+      - name: Authenticate infrastructure identity
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_INFRA_SERVICE_ACCOUNT }}
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3
+      - name: Atomically retain the one permitted paid attempt
+        shell: bash
+        run: |
+          set -euo pipefail
+          authorization="$RUNNER_TEMP/single-paid-demo.json"
+          jq -n --arg project "$PROJECT_ID" --arg expiry_id "$EXPIRY_ID" \
+            --arg revision "$GITHUB_SHA" --arg run_id "$GITHUB_RUN_ID" \
+            --arg created_at "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" \
+            '{project:$project,expiry_id:$expiry_id,revision:$revision,run_id:$run_id,created_at:$created_at,consumed:true}' \
+            > "$authorization"
+          object="gs://${STATE_BUCKET}/authorizations/single-paid-demo.json"
+          gcloud storage cp --if-generation-match=0 "$authorization" "$object"
+          gcloud storage objects update "$object" --temporary-hold
+          echo "Paid-run authorization consumed once and retained in the state bucket." >> "$GITHUB_STEP_SUMMARY"
+
   expiry:
     name: Install and prove independent expiry
-    needs: preflight
+    needs: [preflight, authorize-run]
     uses: ./.github/workflows/gcp-expiry.yml
     with:
       project_id: ${{ needs.preflight.outputs.project_id }}
       customer: ${{ needs.preflight.outputs.customer }}
       state_bucket: ${{ needs.preflight.outputs.state_bucket }}
       expiry_id: ${{ needs.preflight.outputs.expiry_id }}
+      expires_at: ${{ needs.preflight.outputs.expires_at }}
       expires_at: ${{ needs.preflight.outputs.expires_at }}
 
   provision:
@@ -489,11 +527,14 @@ jobs:
         uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
         with: { version: v4.1.1 }
       - name: Download immutable release inputs
+        id: release-inputs
+        continue-on-error: true
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: release-inputs-${{ github.sha }}
           path: release-inputs
       - name: Restore any release with a previous good revision
+        if: steps.release-inputs.outcome == 'success'
         env:
           PROJECT_ID: ${{ needs.preflight.outputs.project_id }}
           CUSTOMER: ${{ needs.preflight.outputs.customer }}
@@ -525,11 +566,13 @@ jobs:
           CUSTOMER: ${{ needs.preflight.outputs.customer }}
           STAGING_RESULT: ${{ needs.deploy-staging.result }}
           PROMOTION_RESULT: ${{ needs.promote-demo-prod.result }}
+          RELEASE_INPUTS_AVAILABLE: ${{ steps.release-inputs.outcome == 'success' }}
         run: |
           mkdir -p rollback-evidence
           jq -n --arg project "$PROJECT_ID" --arg customer "$CUSTOMER" \
             --arg staging "$STAGING_RESULT" --arg promotion "$PROMOTION_RESULT" \
-            '{project:$project,customer:$customer,staging_result:$staging,promotion_result:$promotion,automatic_database_downgrade:false,cleanup_follows_unconditionally:true}' \
+            --argjson release_inputs_available "$RELEASE_INPUTS_AVAILABLE" \
+            '{project:$project,customer:$customer,staging_result:$staging,promotion_result:$promotion,release_inputs_available:$release_inputs_available,automatic_database_downgrade:false,cleanup_follows_unconditionally:true}' \
             > rollback-evidence/failure-boundary.json
       - name: Upload rollback report
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
@@ -541,8 +584,8 @@ jobs:
 
   cleanup:
     name: Unconditional exact cleanup
-    if: always() && needs.expiry.result == 'success'
-    needs: [preflight, expiry, provision, build-images, deploy-staging, promote-demo-prod, rollback-report]
+    if: always() && needs.preflight.result == 'success' && needs.authorize-run.result == 'success'
+    needs: [preflight, authorize-run, expiry, provision, build-images, deploy-staging, promote-demo-prod, rollback-report]
     uses: ./.github/workflows/gcp-cleanup.yml
     with:
       project_id: ${{ needs.preflight.outputs.project_id }}

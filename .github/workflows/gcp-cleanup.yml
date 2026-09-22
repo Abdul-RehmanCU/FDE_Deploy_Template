@@ -7,12 +7,14 @@ on:
       customer: { required: true, type: string }
       state_bucket: { required: true, type: string }
       expiry_id: { required: true, type: string }
+      expires_at: { required: true, type: string }
   workflow_dispatch:
     inputs:
       project_id: { description: Dedicated GCP project ID, required: true, type: string }
       customer: { description: Exact demo customer slug, required: true, type: string }
       state_bucket: { description: Exact Terraform state bucket, required: true, type: string }
       expiry_id: { description: Exact cleanup ownership ID, required: true, type: string }
+      expires_at: { description: Exact expiry UTC minute used by the guard state, required: true, type: string }
       confirm_cleanup:
         description: Type DESTROY-DEMO to authorize exact owned-resource cleanup
         required: true
@@ -40,6 +42,7 @@ jobs:
       CUSTOMER: ${{ inputs.customer }}
       STATE_BUCKET: ${{ inputs.state_bucket }}
       EXPIRY_ID: ${{ inputs.expiry_id }}
+      EXPIRES_AT: ${{ inputs.expires_at }}
       REGION: northamerica-northeast1
       ZONE: northamerica-northeast1-a
     steps:
@@ -81,8 +84,20 @@ jobs:
             -backend-config="bucket=$STATE_BUCKET" -backend-config="prefix=demo/$EXPIRY_ID"
           terraform -chdir=infra/terraform/environments/expiry init -input=false -reconfigure \
             -backend-config="bucket=$STATE_BUCKET" -backend-config="prefix=expiry/$EXPIRY_ID"
-          terraform -chdir=infra/terraform/environments/expiry output -json compiled_manifest \
-            > "$RUNNER_TEMP/fde-cleanup/manifest.json"
+          project_number=$(gcloud projects describe "$PROJECT_ID" --format='value(projectNumber)')
+          jq -n --arg project_id "$PROJECT_ID" --arg project_number "$project_number" \
+            --arg region "$REGION" --arg zone "$ZONE" --arg expiry_id "$EXPIRY_ID" \
+            --arg expires_at "$EXPIRES_AT" --arg cluster_name "fde-${CUSTOMER}-demo" \
+            --arg repository "fde-${CUSTOMER}-images" \
+            --arg staging_bucket "${PROJECT_ID}-fde-${CUSTOMER}-staging" \
+            --arg production_bucket "${PROJECT_ID}-fde-${CUSTOMER}-production-demo" \
+            --arg prefix "fde-${CUSTOMER}" \
+            '{project_id:$project_id,project_number:$project_number,region:$region,zone:$zone,expiry_id:$expiry_id,expires_at:$expires_at,cluster_name:$cluster_name,artifact_repository:$repository,bucket_names:[$staging_bucket,$production_bucket],disk_resources:[{name:($prefix+"-observability-loki")},{name:($prefix+"-observability-prometheus")},{name:($prefix+"-observability-tempo")},{name:($prefix+"-production-demo-postgres")},{name:($prefix+"-production-demo-redis")},{name:($prefix+"-staging-postgres")},{name:($prefix+"-staging-redis")}],address_resources:[]}' \
+            > "$RUNNER_TEMP/fde-cleanup/fallback-manifest.json"
+          if ! terraform -chdir=infra/terraform/environments/expiry output -json compiled_manifest \
+            > "$RUNNER_TEMP/fde-cleanup/manifest.json" 2>/dev/null; then
+            cp "$RUNNER_TEMP/fde-cleanup/fallback-manifest.json" "$RUNNER_TEMP/fde-cleanup/manifest.json"
+          fi
           jq '{project_id,project_number,region,zone,expiry_id,expires_at,cluster_name,artifact_repository,bucket_names,disk_names:[.disk_resources[].name],address_resources}' \
             "$RUNNER_TEMP/fde-cleanup/manifest.json" > "$RUNNER_TEMP/fde-cleanup/expiry.auto.tfvars.json"
           python - <<'PY'
@@ -120,13 +135,14 @@ jobs:
             --terraform-dir infra/terraform/environments/demo \
             --confirm-customer "$CUSTOMER" --expiry-id "$EXPIRY_ID" \
             --expiry-terraform-dir infra/terraform/environments/expiry \
+            --manifest-file "$RUNNER_TEMP/fde-cleanup/fallback-manifest.json" \
             > cleanup-evidence/runtime-destroy.json
       - name: Destroy expiry guard after runtime reconciliation
         shell: bash
         run: |
           set -euo pipefail
-          workflow_name=$(terraform -chdir=infra/terraform/environments/expiry output -raw workflow_name)
-          mapfile -t scheduler_jobs < <(terraform -chdir=infra/terraform/environments/expiry output -json scheduler_jobs | jq -r '.[]')
+          workflow_name="fde-expiry-${EXPIRY_ID}"
+          scheduler_jobs=("fde-expiry-${EXPIRY_ID}-primary" "fde-expiry-${EXPIRY_ID}-recovery-1" "fde-expiry-${EXPIRY_ID}-recovery-2")
           terraform -chdir=infra/terraform/environments/expiry destroy -input=false -auto-approve -lock-timeout=60s \
             -var-file="$RUNNER_TEMP/fde-cleanup/expiry.auto.tfvars.json"
           if gcloud workflows describe "$workflow_name" --project="$PROJECT_ID" --location="$REGION" >/dev/null 2>&1; then
