@@ -132,6 +132,9 @@ jobs:
   expiry:
     name: Install and prove independent expiry
     needs: [preflight, authorize-run]
+    permissions:
+      contents: read # required by the called workflow checkout
+      id-token: write # required by called keyless GCP authentication
     uses: ./.github/workflows/gcp-expiry.yml
     with:
       project_id: ${{ needs.preflight.outputs.project_id }}
@@ -232,6 +235,9 @@ jobs:
   build-images:
     name: Build immutable application images
     needs: [preflight, provision]
+    permissions:
+      contents: read # required by the called workflow checkout
+      id-token: write # required by called keyless GCP authentication
     uses: ./.github/workflows/build-images.yml
     with:
       project_id: ${{ needs.preflight.outputs.project_id }}
@@ -574,6 +580,9 @@ jobs:
     name: Unconditional exact cleanup
     if: always() && needs.preflight.result == 'success'
     needs: [preflight, authorize-run, expiry, provision, build-images, deploy-staging, promote-demo-prod, rollback-report]
+    permissions:
+      contents: read # required by the called workflow checkout
+      id-token: write # required by called keyless GCP authentication
     uses: ./.github/workflows/gcp-cleanup.yml
     with:
       project_id: ${{ needs.preflight.outputs.project_id }}
