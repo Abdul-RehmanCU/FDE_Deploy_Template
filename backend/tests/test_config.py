@@ -22,3 +22,4 @@ def test_secret_files_take_precedence(tmp_path: Path) -> None:
     assert configured.SECRET_KEY == "f" * 40
     assert configured.DATABASE_URL == "postgresql://file:file@db/app"
     assert configured.REDIS_URL == "redis://redis:6379/0"
+    assert configured.sqlalchemy_database_url == "postgresql+psycopg://file:file@db/app"
