@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "type": "object",
+  "required": ["profile", "customer", "environment", "images", "serviceAccount", "storage", "secretProvider"],
+  "properties": {
+    "profile": { "type": "string", "enum": ["demo", "managed"] },
+    "customer": { "type": "string", "pattern": "^[a-z][a-z0-9-]{1,30}[a-z0-9]$" },
+    "environment": { "type": "string", "enum": ["staging", "production-demo", "production"] },
+    "appVersion": { "type": "string", "minLength": 1 },
+    "images": {
+      "type": "object",
+      "required": ["backend", "frontend"],
+      "additionalProperties": false,
+      "properties": {
+        "backend": { "$ref": "#/definitions/image" },
+        "frontend": { "$ref": "#/definitions/image" }
+      }
+    },
+    "serviceAccount": {
+      "type": "object",
+      "required": ["name", "gcpServiceAccount"],
+      "properties": {
+        "name": { "type": "string", "pattern": "^[a-z][a-z0-9-]+$" },
+        "gcpServiceAccount": { "type": "string", "pattern": "^[^@]+@[^@]+\\.iam\\.gserviceaccount\\.com$" }
+      }
+    },
+    "storage": {
+      "type": "object",
+      "required": ["backend", "gcsBucket"],
+      "properties": {
+        "backend": { "type": "string", "enum": ["local", "gcs"] },
+        "gcsBucket": { "type": "string", "minLength": 3 }
+      }
+    },
+    "secretProvider": {
+      "type": "object",
+      "required": ["enabled", "projectId", "secretNames"],
+      "properties": {
+        "enabled": { "const": true },
+        "projectId": { "type": "string", "pattern": "^[a-z][a-z0-9-]{4,28}[a-z0-9]$" },
+        "secretNames": {
+          "type": "object",
+          "required": ["databaseUrl", "redisUrl", "appSecretKey", "postgresPassword", "redisPassword"],
+          "additionalProperties": false,
+          "properties": {
+            "databaseUrl": { "$ref": "#/definitions/secretName" },
+            "redisUrl": { "$ref": "#/definitions/secretName" },
+            "appSecretKey": { "$ref": "#/definitions/secretName" },
+            "postgresPassword": { "$ref": "#/definitions/secretName" },
+            "redisPassword": { "$ref": "#/definitions/secretName" }
+          }
+        }
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "profile": { "const": "managed" } } },
+      "then": {
+        "properties": {
+          "environment": { "const": "production" },
+          "demoDependencies": { "properties": { "enabled": { "const": false } } }
+        }
+      }
+    }
+  ],
+  "definitions": {
+    "image": {
+      "type": "object",
+      "required": ["repository", "digest"],
+      "properties": {
+        "repository": { "type": "string", "minLength": 3 },
+        "digest": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+        "pullPolicy": { "type": "string", "enum": ["IfNotPresent", "Always", "Never"] }
+      }
+    },
+    "secretName": { "type": "string", "pattern": "^[A-Za-z0-9_-]{1,255}$" }
+  }
+}

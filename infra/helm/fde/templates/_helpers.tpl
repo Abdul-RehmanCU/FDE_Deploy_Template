@@ -1,0 +1,38 @@
+{{- define "fde.name" -}}fde{{- end -}}
+{{- define "fde.fullname" -}}{{ printf "fde-%s-%s" .Values.customer .Values.environment | trunc 63 | trimSuffix "-" }}{{- end -}}
+{{- define "fde.labels" -}}
+app.kubernetes.io/name: {{ include "fde.name" . }}
+app.kubernetes.io/instance: {{ .Release.Name }}
+app.kubernetes.io/version: {{ .Values.appVersion | quote }}
+app.kubernetes.io/managed-by: {{ .Release.Service }}
+fde.dev/customer: {{ .Values.customer | quote }}
+fde.dev/environment: {{ .Values.environment | quote }}
+{{- end -}}
+{{- define "fde.backendImage" -}}{{ printf "%s@%s" .Values.images.backend.repository .Values.images.backend.digest }}{{- end -}}
+{{- define "fde.frontendImage" -}}{{ printf "%s@%s" .Values.images.frontend.repository .Values.images.frontend.digest }}{{- end -}}
+{{- define "fde.secretVolume" -}}
+- name: runtime-secrets
+  csi:
+    driver: secrets-store-gke.csi.k8s.io
+    readOnly: true
+    volumeAttributes:
+      secretProviderClass: {{ include "fde.fullname" . }}
+{{- end -}}
+{{- define "fde.secretMount" -}}
+- name: runtime-secrets
+  mountPath: /var/run/secrets/fde
+  readOnly: true
+{{- end -}}
+{{- define "fde.backendEnv" -}}
+- { name: DATABASE_URL_FILE, value: /var/run/secrets/fde/database-url }
+- { name: REDIS_URL_FILE, value: /var/run/secrets/fde/redis-url }
+- { name: SECRET_KEY_FILE, value: /var/run/secrets/fde/secret-key }
+- { name: BACKEND_CORS_ORIGINS, value: {{ .Values.backend.corsOrigins | quote }} }
+- { name: DB_POOL_SIZE, value: {{ .Values.backend.dbPoolSize | quote }} }
+- { name: DB_MAX_OVERFLOW, value: {{ .Values.backend.dbMaxOverflow | quote }} }
+- { name: STORAGE_BACKEND, value: {{ .Values.storage.backend | quote }} }
+- { name: STORAGE_LOCAL_ROOT, value: {{ .Values.storage.localRoot | quote }} }
+- { name: GCS_BUCKET, value: {{ .Values.storage.gcsBucket | quote }} }
+- { name: APP_ENVIRONMENT, value: {{ .Values.environment | quote }} }
+- { name: APP_VERSION, value: {{ .Values.appVersion | quote }} }
+{{- end -}}

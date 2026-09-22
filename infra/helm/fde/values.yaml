@@ -1,0 +1,93 @@
+profile: demo
+customer: replace-me
+environment: staging
+appVersion: dev
+
+images:
+  backend:
+    repository: northamerica-northeast1-docker.pkg.dev/fdetemplate/fde/api
+    digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+    pullPolicy: IfNotPresent
+  frontend:
+    repository: northamerica-northeast1-docker.pkg.dev/fdetemplate/fde/frontend
+    digest: sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+    pullPolicy: IfNotPresent
+
+serviceAccount:
+  name: fde-runtime
+  gcpServiceAccount: replace-me@fdetemplate.iam.gserviceaccount.com
+
+backend:
+  replicas: 2
+  port: 8000
+  corsOrigins: "http://localhost:8080"
+  dbPoolSize: 5
+  dbMaxOverflow: 2
+  resources:
+    requests: { cpu: 250m, memory: 384Mi }
+    limits: { cpu: 750m, memory: 768Mi }
+
+worker:
+  replicas: 1
+  resources:
+    requests: { cpu: 250m, memory: 384Mi }
+    limits: { cpu: 750m, memory: 768Mi }
+
+publisher:
+  resources:
+    requests: { cpu: 50m, memory: 128Mi }
+    limits: { cpu: 250m, memory: 256Mi }
+
+frontend:
+  replicas: 1
+  port: 8080
+  resources:
+    requests: { cpu: 50m, memory: 64Mi }
+    limits: { cpu: 250m, memory: 128Mi }
+
+storage:
+  backend: gcs
+  localRoot: /data/uploads
+  gcsBucket: replace-me
+
+secretProvider:
+  enabled: true
+  projectId: fdetemplate
+  secretNames:
+    databaseUrl: replace-me-database-url
+    redisUrl: replace-me-redis-url
+    appSecretKey: replace-me-secret-key
+    postgresPassword: replace-me-postgres-password
+    redisPassword: replace-me-redis-password
+
+demoDependencies:
+  enabled: true
+  postgres:
+    image: postgres:17.6-alpine3.22
+    storage: 10Gi
+    resources:
+      requests: { cpu: 150m, memory: 256Mi }
+      limits: { cpu: 500m, memory: 512Mi }
+  redis:
+    image: redis:8.2.1-alpine3.22
+    storage: 5Gi
+    resources:
+      requests: { cpu: 50m, memory: 96Mi }
+      limits: { cpu: 250m, memory: 256Mi }
+
+ingress:
+  enabled: false
+  className: nginx
+  host: ""
+  tlsSecretName: ""
+
+networkPolicy:
+  enabled: true
+
+namespaceControls:
+  enabled: true
+  requestsCpu: "3"
+  requestsMemory: 6Gi
+  limitsCpu: "6"
+  limitsMemory: 10Gi
+  persistentVolumeClaims: "8"

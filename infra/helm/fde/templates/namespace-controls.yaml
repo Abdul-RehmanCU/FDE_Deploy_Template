@@ -1,0 +1,27 @@
+{{- if .Values.namespaceControls.enabled }}
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: fde-budget
+  labels:
+    {{- include "fde.labels" . | nindent 4 }}
+spec:
+  hard:
+    requests.cpu: {{ .Values.namespaceControls.requestsCpu | quote }}
+    requests.memory: {{ .Values.namespaceControls.requestsMemory | quote }}
+    limits.cpu: {{ .Values.namespaceControls.limitsCpu | quote }}
+    limits.memory: {{ .Values.namespaceControls.limitsMemory | quote }}
+    persistentvolumeclaims: {{ .Values.namespaceControls.persistentVolumeClaims | quote }}
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: fde-defaults
+  labels:
+    {{- include "fde.labels" . | nindent 4 }}
+spec:
+  limits:
+    - type: Container
+      defaultRequest: { cpu: 50m, memory: 64Mi }
+      default: { cpu: 250m, memory: 256Mi }
+{{- end }}
