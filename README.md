@@ -1,88 +1,183 @@
-# Full Stack FastAPI Template
+![FDE Deploy — customer-scoped delivery, observability, and recovery](docs/media/banner.svg)
 
-[![Test Docker Compose](../../actions/workflows/test-docker-compose.yml/badge.svg)](../../actions/workflows/test-docker-compose.yml)
-[![Test Backend](../../actions/workflows/test-backend.yml/badge.svg)](../../actions/workflows/test-backend.yml)
+# FDE Deploy
 
-## Technology Stack and Features
+[![CI](https://github.com/Abdul-RehmanCU/FDE_Deploy_Template/actions/workflows/ci.yml/badge.svg)](https://github.com/Abdul-RehmanCU/FDE_Deploy_Template/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-0b67c9.svg)](LICENSE)
+[![Python 3.14](https://img.shields.io/badge/Python-3.14-0b67c9.svg)](.python-version)
+[![GCP Montréal](https://img.shields.io/badge/GCP-northamerica--northeast1-0f9f85.svg)](PLAN.md)
 
-- ⚡ [**FastAPI**](https://fastapi.tiangolo.com) for the Python backend API.
-  - 🧰 [SQLModel](https://sqlmodel.tiangolo.com) for the Python SQL database interactions (ORM).
-  - 🔍 [Pydantic](https://docs.pydantic.dev), used by FastAPI, for the data validation and settings management.
-  - 💾 [PostgreSQL](https://www.postgresql.org) as the SQL database.
-- 🚀 [React](https://react.dev) for the frontend.
-  - 🧩 Built into the backend application and served by FastAPI on the same domain as the API.
-  - 💃 Using TypeScript, hooks, [Vite](https://vitejs.dev), and other parts of a modern frontend stack.
-  - 🎨 [Tailwind CSS](https://tailwindcss.com) and [shadcn/ui](https://ui.shadcn.com) for the frontend components.
-  - 🤖 An automatically generated frontend client.
-  - 🧪 [Playwright](https://playwright.dev) for end-to-end testing.
-  - 🦇 Dark mode support.
-- ☁️ [FastAPI Cloud](https://fastapicloud.com) for deployment.
-- 🐋 [Docker Compose](https://www.docker.com) for local services and self-hosted deployment.
-  - 📞 [Traefik](https://traefik.io) as a reverse proxy with automatic HTTPS.
-- 🔒 Secure password hashing by default.
-- 🔑 JWT (JSON Web Token) authentication.
-- 📫 Email-based password recovery.
-- ✉️ [React Email](https://react.email) for email templates.
-- 📬 [Mailpit](https://mailpit.axllent.org) for local email testing during development.
-- ✅ Tests with [Pytest](https://pytest.org).
-- 🏭 CI (continuous integration) and CD (continuous deployment) based on GitHub Actions.
+FDE Deploy is a reusable field deployment template for taking a customer data application from source to a customer-scoped environment. It demonstrates the work around the application as carefully as the application itself: validation, identity, immutable releases, telemetry, failure recovery, bounded cost, evidence collection, and teardown.
 
-### Dashboard Login
+The product is a guided contact onboarding workflow. Administrators and operators upload a CSV, map its columns, review row-level validation outcomes, explicitly confirm valid records, and search the resulting directory. Viewers have read-only access. PostgreSQL is the durable authority for users, imports, jobs, contacts, the transactional outbox, and audit activity.
 
-![Dashboard login screenshot](img/login.png)
+> [!IMPORTANT]
+> The application and inexpensive CI paths are implemented and exercised. The managed GCP profile is implemented and statically validated but has not been deployed. A paid GKE rehearsal remains gated by the cost, expiry, CI, kind, and review evidence defined in [PLAN.md](PLAN.md).
 
-### Dashboard - Admin
+## Contents
 
-![Admin dashboard screenshot](img/dashboard.png)
+- [What is implemented](#what-is-implemented)
+- [Architecture](#architecture)
+- [Proven evidence](#proven-evidence)
+- [Repository map](#repository-map)
+- [Cloud-first quickstart](#cloud-first-quickstart)
+- [Optional local setup](#optional-local-setup)
+- [Release and recovery](#release-and-recovery)
+- [Cost and teardown](#cost-and-teardown)
+- [Security model](#security-model)
+- [Current limitations](#current-limitations)
+- [Provenance](#provenance)
 
-### Dashboard - Items
+## What is implemented
 
-![Items dashboard screenshot](img/dashboard-items.png)
+| Capability | Behavior | Evidence state |
+| --- | --- | --- |
+| Managed identity | Administrator, operator, and viewer roles; no public signup; one-time temporary passwords; token invalidation after account changes | Real PostgreSQL/Redis CI |
+| CSV onboarding | UTF-8/BOM-aware upload, 10 MiB and 10,000-row bounds, source preview, explicit mapping, validation before mutation | Unit, contract, real-service, and browser CI |
+| Data safety | Normalized email matching, within-file and directory deduplication, formula-safe report exports, transactional confirmation | Real PostgreSQL CI |
+| Durable jobs | PostgreSQL outbox, Celery transport, bounded retries, cancellation, replay safety, stalled-job reconciliation | Real PostgreSQL/Redis CI |
+| Customer UI | Responsive overview, imports, mapping, validation review, jobs, directory, user administration, audit activity, loading/error/empty states | Desktop/mobile browser CI |
+| Delivery controls | Immutable customer configuration, cost and evidence gates, explicit plan/deploy/verify/rollback/evidence/destroy commands | CLI tests |
+| GCP demo profile | Montréal zonal GKE, fixed node, Artifact Registry, regional storage, Workload Identity, exact-resource expiry cleanup | Terraform validation; live proof pending |
+| Managed profile | Private regional GKE, HA Cloud SQL, HA Redis, regional storage, Secret Manager, deletion protection | Implemented, not live-tested |
+| Observability | OpenTelemetry, Prometheus, Loki, Tempo, Grafana, internal services, five alert classes | Helm/render validation; runtime screenshots pending |
 
-### Dashboard - Dark Mode
+## Architecture
 
-![Dark mode dashboard screenshot](img/dashboard-dark.png)
+```mermaid
+flowchart LR
+  User[Administrator / Operator / Viewer] --> Frontend[React frontend\nNginx proxy :8080]
+  Frontend --> API[FastAPI :8000]
+  API --> Postgres[(PostgreSQL\ndurable authority)]
+  API --> Storage[(Local PVC or regional GCS)]
+  API --> Outbox[Transactional outbox]
+  Outbox --> Publisher[Outbox publisher]
+  Publisher --> Redis[(Redis broker)]
+  Redis --> Worker[Celery worker]
+  Worker --> Postgres
+  Worker --> Storage
+  API --> OTel[OpenTelemetry collector]
+  Worker --> OTel
+  OTel --> Stack[Prometheus · Loki · Tempo · Grafana]
+```
 
-### React Email Templates
+Each customer installation has explicit customer, environment, project, namespace, image, region, sizing, and secret references. Staging and production-demo use separate namespaces, credentials, databases, and Redis instances on the short-lived demo cluster. The managed profile uses separate durable regional services and remains opt-in.
 
-![Email templates screenshot](img/react-email.png)
+The detailed contracts live in [application workflow](docs/application.md), [data contract](docs/data-contract.md), [API guide](docs/api.md), and [security model](docs/security-model.md).
 
-### Mailpit - Local Email Testing
+## Proven evidence
 
-![Mailpit screenshot](img/mailpit.png)
+The [implementation ledger](docs/implementation-ledger.md) separates real execution from static checks and pending work. It records tested SHAs, workflow URLs, commit accounting, external changes, and every acceptance criterion.
 
-### Interactive API Documentation
+The latest fully green pre-kind baseline is [CI run 35702605568](https://github.com/Abdul-RehmanCU/FDE_Deploy_Template/actions/runs/35702605568) at `eebc040`. It passed Python 3.14 lint/types, Alembic against PostgreSQL, real PostgreSQL/Redis tests, frontend lint/build, CLI tests, Terraform initialization/validation, Helm lint/render, and kubeconform.
 
-![API docs](img/docs.png)
+The first real-stack browser run at `a9b7c6d` passed all five setup/admin/operator/viewer/mobile journeys and produced synthetic screenshots and videos. The next current-head run adds container-image and kind rehearsal evidence; use the ledger for its terminal result rather than assuming it passed.
 
-## How to Use It
+## Repository map
 
-Click the **Use this template** button at the top of this page to create a new repository.
+```text
+backend/                 FastAPI, SQLModel, Alembic, workers, tests
+frontend/                React, TypeScript, generated API client, Playwright
+fixtures/customer-data/  Deterministic CSV acceptance fixtures
+infra/helm/fde/          Application and demo dependency chart
+infra/terraform/         Bootstrap, demo, expiry, and managed profiles
+observability/helm/      Compact metrics, logs, traces, dashboards, alerts
+tooling/fde/             Guardrailed cross-platform deployment CLI
+docs/                    Contracts, operations, evidence, handover
+```
 
-## Backend Development
+## Cloud-first quickstart
 
-Backend docs: [backend/README.md](./backend/README.md).
+Prerequisites are GitHub, a dedicated GCP project, `gcloud`, Terraform 1.15.8, Helm, `kubectl`, and Python 3.14/uv. GCP authentication uses Workload Identity Federation; do not create or download service-account keys.
 
-## Frontend Development
+1. Copy [the demo customer example](infra/config/customers/demo.example.yaml) and replace every placeholder with the dedicated project, customer, immutable image digests, and secret references.
+2. Validate configuration and local prerequisites:
 
-Frontend docs: [frontend/README.md](./frontend/README.md).
+   ```bash
+   uv run --project tooling/fde fde validate-config path/to/customer.yaml
+   uv run --project tooling/fde fde doctor path/to/customer.yaml
+   ```
 
-## Deployment
+3. Confirm the [cost estimate](infra/cost/demo-estimate.yaml) and [cost ledger](infra/cost/ledger.demo.json). The paid gate requires an estimate at or below USD 10, current CI/kind evidence, an independently reviewed exact resource manifest, and expiry no later than four hours from the first paid action.
+4. Apply the expiry state and prove its sentinel before the demo state. The separate roots are under `infra/terraform/environments/expiry` and `infra/terraform/environments/demo`.
+5. Use a reviewed saved plan and the guarded CLI:
 
-FastAPI Cloud deployment: [deployment.md](./deployment.md).
+   ```bash
+   uv run --project tooling/fde fde plan path/to/customer.yaml
+   uv run --project tooling/fde fde deploy path/to/customer.yaml
+   uv run --project tooling/fde fde verify path/to/customer.yaml
+   uv run --project tooling/fde fde evidence path/to/customer.yaml
+   uv run --project tooling/fde fde destroy path/to/customer.yaml
+   ```
 
-Self-hosted deployment with Docker Compose: [deployment-docker-compose.md](./deployment-docker-compose.md).
+The repository does not authorize a paid run by itself. Follow the exact sequence and evidence gates in [PLAN.md](PLAN.md).
 
-## Development
+## Optional local setup
 
-General development docs: [development.md](./development.md).
+Local execution is for development convenience. GitHub-hosted CI is the canonical inexpensive integration path.
 
-This includes the local FastAPI and Vite workflow, Docker Compose services, `.env` configuration, and more.
+```bash
+cp .env.example .env
+uv sync --locked --all-groups
+bun install --frozen-lockfile
+docker compose up -d db redis
+cd backend && uv run alembic upgrade head
+uv run fastapi run app/main.py --port 8000
+```
 
-## Release Notes
+In separate terminals, start the publisher, worker, and frontend:
 
-Check the file [release-notes.md](./release-notes.md).
+```bash
+cd backend && uv run python -m app.outbox_publisher
+cd backend && uv run celery -A app.worker.celery_app worker
+bun run --filter frontend dev
+```
 
-## License
+Create the first administrator with `cd backend && uv run python -m app.bootstrap_admin admin@example.com`. The command prints a one-time password that must be changed after sign-in. Never commit it.
 
-The Full Stack FastAPI Template is licensed under the terms of the MIT license.
+## Release and recovery
+
+The intended release flow builds once, identifies immutable image digests, migrates before rollout, verifies readiness and a business-flow smoke test, and promotes the same digests. A failed application rollout returns to the previous Helm release; database migrations are not automatically reversed.
+
+```mermaid
+flowchart LR
+  Commit --> CI[Lint · test · scan · kind]
+  CI --> Build[Build immutable images]
+  Build --> Stage[Deploy staging]
+  Stage --> Smoke[Migration + business smoke]
+  Smoke --> Promote[Promote exact digests]
+  Promote --> Verify[Measure rollout]
+  Verify -->|failure| Rollback[Helm rollback app]
+  Verify -->|success| Evidence[Capture evidence]
+  Evidence --> Destroy[Verified teardown]
+```
+
+See [database recovery](docs/database-recovery.md) for backup/restore boundaries and [backend testing](docs/backend-testing.md) for reproducible checks.
+
+## Cost and teardown
+
+- Total authorized GCP spend is USD 25, with at most USD 10 estimated for the single demo and USD 15 reserved for delayed charges and cleanup.
+- The planned demo estimate is USD 4.50619304; billing was CA$0 at the captured baseline, with an explicit reporting-delay caveat.
+- Primary expiry is planned at two hours. Three exact-minute scheduler attempts must begin within the four-hour maximum.
+- Cleanup targets an allowlisted resource manifest and never deletes the project.
+- A successful destroy command is insufficient: evidence must include the remaining cluster, VM, disk, IP, registry, bucket, workflow, scheduler, Helm, and Kubernetes inventory.
+
+## Security model
+
+Secrets are environment variables only for local/CI use. GKE workloads read mounted Secret Manager values through Workload Identity. Logs, metrics, traces, and evidence must exclude tokens, passwords, CSV contents, contact PII, raw Terraform state, and kubeconfigs. Browser evidence publishing is restricted to synthetic screenshots and WebM recordings; authentication storage and traces are excluded.
+
+Report downloads always pass API authorization, and viewer accounts cannot mutate imports or download reports. Prometheus endpoints and operational dashboards remain internal. See [security model](docs/security-model.md) for the full role and trust-boundary description.
+
+## Current limitations
+
+- The short-lived demo uses a shared zonal cluster with in-cluster PostgreSQL and Redis. Namespace separation demonstrates release isolation, not independent production failure domains.
+- The managed profile is implemented and statically validated but not live-tested.
+- GKE release, rollback, alert, trace, backup/restore, and final teardown evidence must come from the bounded live rehearsal.
+- No public load balancer, paid domain, SMTP provider, CRM, or public signup is included.
+- The repository makes no compliance certification or guaranteed zero-downtime claim.
+
+## Provenance
+
+The source baseline is FastAPI's Full Stack FastAPI Template pinned to `cb740b656d7a0a6c5e12c7bf8e50343ec94ee9c7`. Its MIT notice is retained. [Upstream provenance](docs/upstream-provenance.md) lists imported and excluded material. Upstream history is not present and is not counted toward this repository's substantive-commit requirement.
+
+Licensed under the [MIT License](LICENSE).
