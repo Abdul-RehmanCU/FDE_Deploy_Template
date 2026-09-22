@@ -1,0 +1,551 @@
+name: Bounded GCP demo rehearsal
+
+on:
+  workflow_dispatch:
+    inputs:
+      project_id: { description: Dedicated GCP project ID, required: true, type: string }
+      customer: { description: DNS-safe customer slug, required: true, default: demo, type: string }
+      state_bucket: { description: Exact labeled Terraform state bucket, required: true, type: string }
+      expiry_id: { description: Unique expiry ownership ID, required: true, type: string }
+      expires_at: { description: Exact UTC minute at most 3h40m away, required: true, type: string }
+      ci_run_id: { description: Successful CI run for this exact revision, required: true, type: string }
+      independent_review_accepted: { description: Independent cleanup and release review accepted, required: true, type: boolean }
+      confirm_paid_run: { description: Start the single bounded paid rehearsal, required: true, type: boolean }
+  schedule:
+    - cron: "17 5 * * *"
+
+permissions:
+  contents: read
+  actions: read # required to verify exact-revision CI and security runs
+
+concurrency:
+  group: bounded-gcp-demo
+  cancel-in-progress: false
+
+jobs:
+  preflight:
+    name: Authorize exact revision and budget
+    if: github.event_name == 'workflow_dispatch' || vars.OVERNIGHT_DEMO_ENABLED == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    environment: demo-infrastructure
+    outputs:
+      project_id: ${{ steps.scope.outputs.project_id }}
+      customer: ${{ steps.scope.outputs.customer }}
+      state_bucket: ${{ steps.scope.outputs.state_bucket }}
+      expiry_id: ${{ steps.scope.outputs.expiry_id }}
+      expires_at: ${{ steps.scope.outputs.expires_at }}
+      ci_run_id: ${{ steps.scope.outputs.ci_run_id }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      DISPATCH_PROJECT: ${{ inputs.project_id }}
+      DISPATCH_CUSTOMER: ${{ inputs.customer }}
+      DISPATCH_STATE_BUCKET: ${{ inputs.state_bucket }}
+      DISPATCH_EXPIRY_ID: ${{ inputs.expiry_id }}
+      DISPATCH_EXPIRES_AT: ${{ inputs.expires_at }}
+      DISPATCH_CI_RUN_ID: ${{ inputs.ci_run_id }}
+      DISPATCH_REVIEW_ACCEPTED: ${{ inputs.independent_review_accepted }}
+      DISPATCH_PAID_CONFIRMATION: ${{ inputs.confirm_paid_run }}
+      SCHEDULED_PROJECT: ${{ vars.DEMO_PROJECT_ID }}
+      SCHEDULED_CUSTOMER: ${{ vars.DEMO_CUSTOMER }}
+      SCHEDULED_STATE_BUCKET: ${{ vars.DEMO_STATE_BUCKET }}
+      SCHEDULED_ENABLED: ${{ vars.OVERNIGHT_DEMO_ENABLED }}
+      SCHEDULED_REVIEW_ACCEPTED: ${{ vars.DEMO_REVIEW_ACCEPTED }}
+      COST_EVIDENCE_JSON: ${{ secrets.DEMO_COST_EVIDENCE_JSON }}
+    steps:
+      - name: Check out selected main revision
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.14"
+      - name: Set up uv
+        uses: astral-sh/setup-uv@d0d8abe699bfb85fec6de9f7adb5ae17292296ff # v6
+        with:
+          version: "0.9.18"
+      - name: Resolve scope and validate current evidence
+        id: scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = main
+          if test "$GITHUB_EVENT_NAME" = schedule; then
+            test "$SCHEDULED_ENABLED" = true
+            test "$SCHEDULED_REVIEW_ACCEPTED" = true
+            project_id=$SCHEDULED_PROJECT
+            customer=${SCHEDULED_CUSTOMER:-demo}
+            state_bucket=$SCHEDULED_STATE_BUCKET
+            expiry_id="${customer}-$(date -u +%Y%m%d%H%M)-${GITHUB_RUN_ID}"
+            expires_at=$(date -u -d '+2 hours' +'%Y-%m-%dT%H:%M:00Z')
+            ci_run_id=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs?branch=main&status=success&per_page=20" \
+              --jq ".workflow_runs[] | select(.head_sha == \"$GITHUB_SHA\") | .id" | head -1)
+          else
+            test "$DISPATCH_PAID_CONFIRMATION" = true
+            test "$DISPATCH_REVIEW_ACCEPTED" = true
+            project_id=$DISPATCH_PROJECT
+            customer=$DISPATCH_CUSTOMER
+            state_bucket=$DISPATCH_STATE_BUCKET
+            expiry_id=$DISPATCH_EXPIRY_ID
+            expires_at=$DISPATCH_EXPIRES_AT
+            ci_run_id=$DISPATCH_CI_RUN_ID
+          fi
+          test -n "$project_id" && test -n "$customer" && test -n "$state_bucket" && test -n "$ci_run_id"
+          ci=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$ci_run_id")
+          test "$(jq -r .head_sha <<<"$ci")" = "$GITHUB_SHA"
+          test "$(jq -r .conclusion <<<"$ci")" = success
+          security_count=$(gh api "repos/$GITHUB_REPOSITORY/actions/workflows/security.yml/runs?branch=main&status=success&per_page=20" \
+            --jq "[.workflow_runs[] | select(.head_sha == \"$GITHUB_SHA\")] | length")
+          test "$security_count" -ge 1
+          test -n "$COST_EVIDENCE_JSON"
+          printf '%s' "$COST_EVIDENCE_JSON" > "$RUNNER_TEMP/paid-cost-evidence.yaml"
+          uv run --project tooling/fde python -c \
+            "from fde_cli.cost import load_cost_gate; from fde_cli.operations import validate_paid_cost_gate; validate_paid_cost_gate(load_cost_gate('$RUNNER_TEMP/paid-cost-evidence.yaml'))"
+          {
+            echo "project_id=$project_id"
+            echo "customer=$customer"
+            echo "state_bucket=$state_bucket"
+            echo "expiry_id=$expiry_id"
+            echo "expires_at=$expires_at"
+            echo "ci_run_id=$ci_run_id"
+          } >> "$GITHUB_OUTPUT"
+
+  expiry:
+    name: Install and prove independent expiry
+    needs: preflight
+    uses: ./.github/workflows/gcp-expiry.yml
+    with:
+      project_id: ${{ needs.preflight.outputs.project_id }}
+      customer: ${{ needs.preflight.outputs.customer }}
+      state_bucket: ${{ needs.preflight.outputs.state_bucket }}
+      expiry_id: ${{ needs.preflight.outputs.expiry_id }}
+      expires_at: ${{ needs.preflight.outputs.expires_at }}
+
+  provision:
+    name: Apply gated demo infrastructure
+    needs: [preflight, expiry]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    environment: demo-infrastructure
+    permissions:
+      contents: read # required to check out the selected revision
+      id-token: write # required for keyless GCP Workload Identity Federation
+      actions: read # required to download expiry evidence
+    env:
+      PROJECT_ID: ${{ needs.preflight.outputs.project_id }}
+      CUSTOMER: ${{ needs.preflight.outputs.customer }}
+      STATE_BUCKET: ${{ needs.preflight.outputs.state_bucket }}
+      EXPIRY_ID: ${{ needs.preflight.outputs.expiry_id }}
+      EXPIRES_AT: ${{ needs.preflight.outputs.expires_at }}
+      MANIFEST_SHA: ${{ needs.expiry.outputs.manifest_sha }}
+      EXPIRY_ARTIFACT: ${{ needs.expiry.outputs.evidence_artifact }}
+      COST_EVIDENCE_JSON: ${{ secrets.DEMO_COST_EVIDENCE_JSON }}
+      REGION: northamerica-northeast1
+      ZONE: northamerica-northeast1-a
+    steps:
+      - name: Check out selected revision
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with: { python-version: "3.14" }
+      - name: Set up uv
+        uses: astral-sh/setup-uv@d0d8abe699bfb85fec6de9f7adb5ae17292296ff # v6
+        with: { version: "0.9.18" }
+      - name: Install deployment CLI
+        run: uv sync --frozen --project tooling/fde
+      - name: Authenticate infrastructure identity
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_INFRA_SERVICE_ACCOUNT }}
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
+        with: { terraform_version: 1.15.8, terraform_wrapper: false }
+      - name: Download expiry evidence
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ${{ needs.expiry.outputs.evidence_artifact }}
+          path: ${{ runner.temp }}/expiry-evidence
+      - name: Plan and apply only the reviewed infrastructure
+        shell: bash
+        run: |
+          set -euo pipefail
+          private_dir="$RUNNER_TEMP/fde-provision"
+          mkdir -p "$private_dir"
+          printf '%s' "$COST_EVIDENCE_JSON" > "$private_dir/cost.yaml"
+          python - <<'PY'
+          import os, yaml
+          data = {
+              "customer": os.environ["CUSTOMER"], "environment": "staging", "project": os.environ["PROJECT_ID"],
+              "region": os.environ["REGION"], "zone": os.environ["ZONE"], "profile": "demo", "namespace": "staging",
+              "image_repository": f"{os.environ['REGION']}-docker.pkg.dev/{os.environ['PROJECT_ID']}/placeholder/backend",
+              "image_digest": "sha256:" + "a" * 64,
+              "frontend_image_repository": f"{os.environ['REGION']}-docker.pkg.dev/{os.environ['PROJECT_ID']}/placeholder/frontend",
+              "frontend_image_digest": "sha256:" + "b" * 64,
+              "app_version": os.environ["GITHUB_SHA"], "branding": {"name": "FDE Demo"},
+              "sizing": {"api_replicas": 2, "worker_replicas": 1, "api_cpu": "250m", "api_memory": "384Mi", "worker_cpu": "250m", "worker_memory": "384Mi"},
+          }
+          with open(os.path.join(os.environ["RUNNER_TEMP"], "fde-provision", "config.yaml"), "w", encoding="utf-8") as stream:
+              yaml.safe_dump(data, stream, sort_keys=False)
+          PY
+          terraform -chdir=infra/terraform/environments/expiry init -input=false -reconfigure \
+            -backend-config="bucket=$STATE_BUCKET" -backend-config="prefix=expiry/$EXPIRY_ID"
+          uv run --project tooling/fde fde plan \
+            --config "$private_dir/config.yaml" --customer "$CUSTOMER" --environment staging --project "$PROJECT_ID" \
+            --terraform-dir infra/terraform/environments/demo --backend-bucket "$STATE_BUCKET" \
+            --state-prefix "demo/$EXPIRY_ID" --out "$private_dir/demo.tfplan" --expiry-id "$EXPIRY_ID"
+          estimate=$(uv run --project tooling/fde python -c "from fde_cli.cost import load_cost_gate; print(load_cost_gate('$private_dir/cost.yaml').estimated_total_usd)")
+          jq -n --arg project "$PROJECT_ID" --arg customer "$CUSTOMER" --arg revision "$GITHUB_SHA" \
+            --arg expires_at "$EXPIRES_AT" --argjson estimate_total_usd "$estimate" --arg manifest_sha "$MANIFEST_SHA" \
+            '{project:$project,customer:$customer,revision:$revision,expires_at:$expires_at,estimate_total_usd:$estimate_total_usd,ci_kind_passed:true,expiry_sentinel_passed:true,independent_review_accepted:true,exact_manifest_sha:$manifest_sha}' \
+            > "$private_dir/release-gate.json"
+          uv run --project tooling/fde fde deploy-infrastructure \
+            --config "$private_dir/config.yaml" --customer "$CUSTOMER" --environment staging --project "$PROJECT_ID" \
+            --gate "$private_dir/release-gate.json" --cost "$private_dir/cost.yaml" \
+            --terraform-dir infra/terraform/environments/demo --plan "$private_dir/demo.tfplan" \
+            --expiry-terraform-dir infra/terraform/environments/expiry \
+            --expiry-evidence "$RUNNER_TEMP/expiry-evidence/expiry-evidence.json"
+
+  build-images:
+    name: Build immutable application images
+    needs: [preflight, provision]
+    uses: ./.github/workflows/build-images.yml
+    with:
+      project_id: ${{ needs.preflight.outputs.project_id }}
+      artifact_repository: fde-${{ needs.preflight.outputs.customer }}-images
+
+  deploy-staging:
+    name: Deploy and smoke staging
+    needs: [preflight, provision, build-images]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: demo-staging
+    permissions:
+      contents: read # required to check out the selected revision
+      id-token: write # required for keyless GCP Workload Identity Federation
+      actions: read # required to consume the signed image manifest
+    env:
+      PROJECT_ID: ${{ needs.preflight.outputs.project_id }}
+      CUSTOMER: ${{ needs.preflight.outputs.customer }}
+      STATE_BUCKET: ${{ needs.preflight.outputs.state_bucket }}
+      EXPIRY_ID: ${{ needs.preflight.outputs.expiry_id }}
+      MANIFEST_SHA: ${{ needs.build-images.outputs.manifest_sha256 }}
+      REGION: northamerica-northeast1
+      ZONE: northamerica-northeast1-a
+    steps:
+      - name: Check out selected revision
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with: { persist-credentials: false }
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with: { python-version: "3.14" }
+      - name: Set up uv
+        uses: astral-sh/setup-uv@d0d8abe699bfb85fec6de9f7adb5ae17292296ff # v6
+        with: { version: "0.9.18" }
+      - name: Install deployment CLI
+        run: uv sync --frozen --project tooling/fde
+      - name: Authenticate deploy identity
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3
+      - name: Set up Helm
+        uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
+        with: { version: v4.1.1 }
+      - name: Set up Terraform
+        uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
+        with: { terraform_version: 1.15.8, terraform_wrapper: false }
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6 # v4.1.2
+      - name: Download signed image manifest
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: image-digests-${{ github.sha }}
+          path: ${{ runner.temp }}/image-manifest
+      - name: Verify manifest and render both releases from live outputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          manifest="$RUNNER_TEMP/image-manifest/image-digests.json"
+          test "$(sha256sum "$manifest" | cut -d' ' -f1)" = "$MANIFEST_SHA"
+          cosign verify-blob --bundle "$RUNNER_TEMP/image-manifest/image-digests.sigstore.json" \
+            --certificate-identity-regexp="^https://github.com/${GITHUB_REPOSITORY}/.github/workflows/build-images.yml@refs/heads/main$" \
+            --certificate-oidc-issuer=https://token.actions.githubusercontent.com "$manifest"
+          test "$(jq -r .commit "$manifest")" = "$GITHUB_SHA"
+          terraform -chdir=infra/terraform/environments/demo init -input=false -reconfigure \
+            -backend-config="bucket=$STATE_BUCKET" -backend-config="prefix=demo/$EXPIRY_ID"
+          terraform -chdir=infra/terraform/environments/demo output -json > "$RUNNER_TEMP/demo-outputs.json"
+          mkdir -p release-bundle
+          for environment in staging production-demo; do
+            uv run --project tooling/fde python scripts/ci/render_demo_release.py \
+              --manifest "$manifest" --terraform-outputs "$RUNNER_TEMP/demo-outputs.json" \
+              --project "$PROJECT_ID" --customer "$CUSTOMER" --environment "$environment" \
+              --brand-name "FDE Demonstration Directory" --revision "$GITHUB_SHA" \
+              --config-out "release-bundle/${environment}-config.yaml" \
+              --values-out "release-bundle/${environment}-values.yaml" \
+              --observability-values-out release-bundle/observability-values.yaml
+          done
+          cp "$manifest" release-bundle/image-digests.json
+          cp "$RUNNER_TEMP/image-manifest/image-digests.sigstore.json" release-bundle/image-digests.sigstore.json
+      - name: Upload immutable release inputs before deployment
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-inputs-${{ github.sha }}
+          path: release-bundle
+          if-no-files-found: error
+          retention-days: 30
+      - name: Populate staging secret versions outside Terraform state
+        shell: bash
+        run: |
+          set -euo pipefail
+          postgres_password=$(openssl rand -hex 24)
+          redis_password=$(openssl rand -hex 24)
+          secret_key=$(openssl rand -hex 32)
+          prefix="fde-${CUSTOMER}-staging"
+          printf 'postgresql://app:%s@fde-%s-staging-postgres:5432/app' "$postgres_password" "$CUSTOMER" | gcloud secrets versions add "$prefix-database-url" --project="$PROJECT_ID" --data-file=- >/dev/null
+          printf 'redis://:%s@fde-%s-staging-redis:6379/0' "$redis_password" "$CUSTOMER" | gcloud secrets versions add "$prefix-redis-url" --project="$PROJECT_ID" --data-file=- >/dev/null
+          printf '%s' "$postgres_password" | gcloud secrets versions add "$prefix-postgres-password" --project="$PROJECT_ID" --data-file=- >/dev/null
+          printf '%s' "$redis_password" | gcloud secrets versions add "$prefix-redis-password" --project="$PROJECT_ID" --data-file=- >/dev/null
+          printf '%s' "$secret_key" | gcloud secrets versions add "$prefix-secret-key" --project="$PROJECT_ID" --data-file=- >/dev/null
+      - name: Install observability and staging release
+        shell: bash
+        run: |
+          set -euo pipefail
+          gcloud container clusters get-credentials "fde-${CUSTOMER}-demo" --zone="$ZONE" --project="$PROJECT_ID"
+          kubectl create namespace observability --dry-run=client -o yaml | kubectl apply -f -
+          grafana_password=$(openssl rand -hex 24)
+          echo "::add-mask::$grafana_password"
+          kubectl -n observability create secret generic fde-grafana-admin \
+            --from-literal=username=admin --from-literal=password="$grafana_password" \
+            --dry-run=client -o yaml | kubectl apply -f -
+          helm upgrade --install fde-observability observability/helm --namespace observability \
+            --values release-bundle/observability-values.yaml --atomic --wait --timeout 8m
+          uv run --project tooling/fde fde deploy-release \
+            --config release-bundle/staging-config.yaml --customer "$CUSTOMER" --environment staging --project "$PROJECT_ID" \
+            --chart infra/helm/fde --values release-bundle/staging-values.yaml
+          uv run --project tooling/fde fde verify \
+            --config release-bundle/staging-config.yaml --customer "$CUSTOMER" --environment staging --project "$PROJECT_ID"
+          bash scripts/ci/gke_business_smoke.sh staging "fde-${CUSTOMER}-staging" 18080 release-bundle/staging-smoke.json
+      - name: Upload immutable release bundle and staging evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-bundle-${{ github.sha }}
+          path: release-bundle
+          if-no-files-found: error
+          retention-days: 30
+
+  promote-demo-prod:
+    name: Promote same digests to demo-prod
+    needs: [preflight, build-images, deploy-staging]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: demo-prod
+    permissions:
+      contents: read # required to check out the selected revision
+      id-token: write # required for keyless GCP Workload Identity Federation
+      actions: read # required to consume the release bundle
+    env:
+      PROJECT_ID: ${{ needs.preflight.outputs.project_id }}
+      CUSTOMER: ${{ needs.preflight.outputs.customer }}
+      REGION: northamerica-northeast1
+      ZONE: northamerica-northeast1-a
+    steps:
+      - name: Check out selected revision
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with: { persist-credentials: false }
+      - name: Set up Python and uv
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with: { python-version: "3.14" }
+      - name: Set up uv
+        uses: astral-sh/setup-uv@d0d8abe699bfb85fec6de9f7adb5ae17292296ff # v6
+        with: { version: "0.9.18" }
+      - name: Install deployment CLI
+        run: uv sync --frozen --project tooling/fde
+      - name: Authenticate deploy identity
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3
+      - name: Set up Helm
+        uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
+        with: { version: v4.1.1 }
+      - name: Download immutable release bundle
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-bundle-${{ github.sha }}
+          path: release-bundle
+      - name: Prove digest identity and populate isolated production-demo secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv run --project tooling/fde python - <<'PY'
+          from pathlib import Path
+          import yaml
+          staging = yaml.safe_load(Path("release-bundle/staging-config.yaml").read_text())
+          production = yaml.safe_load(Path("release-bundle/production-demo-config.yaml").read_text())
+          assert staging["image_digest"] == production["image_digest"]
+          assert staging["frontend_image_digest"] == production["frontend_image_digest"]
+          assert staging["app_version"] == production["app_version"]
+          PY
+          postgres_password=$(openssl rand -hex 24)
+          redis_password=$(openssl rand -hex 24)
+          secret_key=$(openssl rand -hex 32)
+          prefix="fde-${CUSTOMER}-production-demo"
+          printf 'postgresql://app:%s@fde-%s-production-demo-postgres:5432/app' "$postgres_password" "$CUSTOMER" | gcloud secrets versions add "$prefix-database-url" --project="$PROJECT_ID" --data-file=- >/dev/null
+          printf 'redis://:%s@fde-%s-production-demo-redis:6379/0' "$redis_password" "$CUSTOMER" | gcloud secrets versions add "$prefix-redis-url" --project="$PROJECT_ID" --data-file=- >/dev/null
+          printf '%s' "$postgres_password" | gcloud secrets versions add "$prefix-postgres-password" --project="$PROJECT_ID" --data-file=- >/dev/null
+          printf '%s' "$redis_password" | gcloud secrets versions add "$prefix-redis-password" --project="$PROJECT_ID" --data-file=- >/dev/null
+          printf '%s' "$secret_key" | gcloud secrets versions add "$prefix-secret-key" --project="$PROJECT_ID" --data-file=- >/dev/null
+      - name: Deploy exact production-demo digests and smoke isolated data
+        shell: bash
+        run: |
+          set -euo pipefail
+          uv run --project tooling/fde fde deploy-release \
+            --config release-bundle/production-demo-config.yaml --customer "$CUSTOMER" --environment production-demo --project "$PROJECT_ID" \
+            --chart infra/helm/fde --values release-bundle/production-demo-values.yaml
+          uv run --project tooling/fde fde verify \
+            --config release-bundle/production-demo-config.yaml --customer "$CUSTOMER" --environment production-demo --project "$PROJECT_ID"
+          bash scripts/ci/gke_business_smoke.sh production-demo "fde-${CUSTOMER}-production-demo" 18081 release-bundle/production-demo-smoke.json
+      - name: Measure rolling requests and recover an unhealthy release
+        shell: bash
+        run: |
+          set -euo pipefail
+          release="fde-${CUSTOMER}-production-demo"
+          kubectl -n production-demo run fde-rolling-probe --image=curlimages/curl:8.16.0@sha256:463eaf6072688fe96ac64fa623fe73e1dbe25d8ad6c34404a669ad3ce1f104b6 \
+            --labels=fde.dev/probe=true --restart=Never --command -- sh -ec \
+            'while test ! -f /tmp/stop; do curl --fail --silent --max-time 2 http://'"$release"'-api:8000/api/v1/health/live >/dev/null && echo success || echo error; sleep 0.2; done'
+          kubectl -n production-demo wait --for=condition=Ready pod/fde-rolling-probe --timeout=120s
+          kubectl -n production-demo patch "deployment/${release}-api" --type merge \
+            --patch "{\"spec\":{\"template\":{\"metadata\":{\"annotations\":{\"fde.dev/gke-rollout\":\"$(date +%s)\"}}}}}"
+          kubectl -n production-demo rollout status "deployment/${release}-api" --timeout=180s
+          kubectl -n production-demo exec fde-rolling-probe -- touch /tmp/stop
+          kubectl -n production-demo wait --for=jsonpath='{.status.phase}'=Succeeded pod/fde-rolling-probe --timeout=30s
+          kubectl -n production-demo logs fde-rolling-probe > release-bundle/gke-rolling-probe.txt
+          successes=$(grep -c '^success$' release-bundle/gke-rolling-probe.txt || true)
+          errors=$(grep -c '^error$' release-bundle/gke-rolling-probe.txt || true)
+          test "$successes" -gt 0
+          set +e
+          helm upgrade "$release" infra/helm/fde --namespace production-demo \
+            --values release-bundle/production-demo-values.yaml \
+            --set-string images.backend.digest="sha256:$(printf '0%.0s' {1..64})" \
+            --no-hooks --wait --timeout 90s
+          unhealthy_status=$?
+          set -e
+          test "$unhealthy_status" -ne 0
+          uv run --project tooling/fde fde rollback \
+            --config release-bundle/production-demo-config.yaml --customer "$CUSTOMER" --environment production-demo --project "$PROJECT_ID" \
+            > release-bundle/rollback-result.json
+          jq -n --argjson successes "$successes" --argjson errors "$errors" \
+            '{successful_requests:$successes,failed_requests:$errors,unhealthy_release_rejected:true,previous_release_restored:true,database_migration_reversed:false}' \
+            > release-bundle/release-recovery.json
+      - name: Upload promotion and recovery evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: gke-demo-evidence-${{ github.sha }}
+          path: release-bundle
+          if-no-files-found: error
+          retention-days: 30
+
+  rollback-report:
+    name: Report failed release rollback
+    if: failure() && needs.deploy-staging.result != 'skipped'
+    needs: [preflight, deploy-staging, promote-demo-prod]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    environment: demo-staging
+    permissions:
+      contents: read # required to check out the selected revision
+      id-token: write # required for keyless GCP Workload Identity Federation
+      actions: read # required to retrieve release configuration
+    steps:
+      - name: Check out selected revision
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with: { persist-credentials: false }
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with: { python-version: "3.14" }
+      - name: Set up uv
+        uses: astral-sh/setup-uv@d0d8abe699bfb85fec6de9f7adb5ae17292296ff # v6
+        with: { version: "0.9.18" }
+      - name: Install deployment CLI
+        run: uv sync --frozen --project tooling/fde
+      - name: Authenticate deploy identity
+        uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3
+      - name: Set up Helm
+        uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
+        with: { version: v4.1.1 }
+      - name: Download immutable release inputs
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: release-inputs-${{ github.sha }}
+          path: release-inputs
+      - name: Restore any release with a previous good revision
+        env:
+          PROJECT_ID: ${{ needs.preflight.outputs.project_id }}
+          CUSTOMER: ${{ needs.preflight.outputs.customer }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p rollback-evidence
+          gcloud container clusters get-credentials "fde-${CUSTOMER}-demo" \
+            --zone=northamerica-northeast1-a --project="$PROJECT_ID"
+          printf '[]' > rollback-evidence/restored-releases.json
+          for environment in staging production-demo; do
+            release="fde-${CUSTOMER}-${environment}"
+            if helm status "$release" --namespace "$environment" >/dev/null 2>&1; then
+              revisions=$(helm history "$release" --namespace "$environment" --output json | jq 'length')
+              if test "$revisions" -gt 1; then
+                uv run --project tooling/fde fde rollback \
+                  --config "release-inputs/${environment}-config.yaml" \
+                  --customer "$CUSTOMER" --environment "$environment" --project "$PROJECT_ID" \
+                  > "rollback-evidence/${environment}-rollback.json"
+                jq --arg release "$release" '. + [$release]' rollback-evidence/restored-releases.json \
+                  > rollback-evidence/restored-releases.tmp
+                mv rollback-evidence/restored-releases.tmp rollback-evidence/restored-releases.json
+              fi
+            fi
+          done
+      - name: Capture failure boundary
+        env:
+          PROJECT_ID: ${{ needs.preflight.outputs.project_id }}
+          CUSTOMER: ${{ needs.preflight.outputs.customer }}
+          STAGING_RESULT: ${{ needs.deploy-staging.result }}
+          PROMOTION_RESULT: ${{ needs.promote-demo-prod.result }}
+        run: |
+          mkdir -p rollback-evidence
+          jq -n --arg project "$PROJECT_ID" --arg customer "$CUSTOMER" \
+            --arg staging "$STAGING_RESULT" --arg promotion "$PROMOTION_RESULT" \
+            '{project:$project,customer:$customer,staging_result:$staging,promotion_result:$promotion,automatic_database_downgrade:false,cleanup_follows_unconditionally:true}' \
+            > rollback-evidence/failure-boundary.json
+      - name: Upload rollback report
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: rollback-report-${{ github.run_id }}
+          path: rollback-evidence
+          if-no-files-found: error
+          retention-days: 30
+
+  cleanup:
+    name: Unconditional exact cleanup
+    if: always() && needs.expiry.result == 'success'
+    needs: [preflight, expiry, provision, build-images, deploy-staging, promote-demo-prod, rollback-report]
+    uses: ./.github/workflows/gcp-cleanup.yml
+    with:
+      project_id: ${{ needs.preflight.outputs.project_id }}
+      customer: ${{ needs.preflight.outputs.customer }}
+      state_bucket: ${{ needs.preflight.outputs.state_bucket }}
+      expiry_id: ${{ needs.preflight.outputs.expiry_id }}
