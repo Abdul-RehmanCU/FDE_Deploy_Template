@@ -127,11 +127,20 @@ resource "google_container_cluster" "demo" {
   subnetwork               = google_compute_subnetwork.demo.id
   remove_default_node_pool = true
   initial_node_count       = 1
+  enable_shielded_nodes    = true
   # GKE briefly creates the default pool even when Terraform removes it.
   # Give that transient pool the same scoped node identity as the real pool.
   node_config {
+    machine_type    = var.machine_type
+    disk_type       = "pd-standard"
+    disk_size_gb    = var.node_disk_size_gb
+    image_type      = "COS_CONTAINERD"
     service_account = google_service_account.gke_nodes.email
     oauth_scopes    = ["https://www.googleapis.com/auth/cloud-platform"]
+    shielded_instance_config {
+      enable_integrity_monitoring = true
+      enable_secure_boot          = true
+    }
   }
   deletion_protection         = false
   resource_labels             = local.labels

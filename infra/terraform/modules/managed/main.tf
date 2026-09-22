@@ -138,8 +138,16 @@ resource "google_container_cluster" "managed" {
   remove_default_node_pool = true
   initial_node_count       = 1
   node_config {
+    machine_type    = "e2-standard-2"
+    disk_type       = "pd-balanced"
+    disk_size_gb    = 50
+    image_type      = "COS_CONTAINERD"
     service_account = google_service_account.nodes.email
     oauth_scopes    = ["https://www.googleapis.com/auth/cloud-platform"]
+    shielded_instance_config {
+      enable_integrity_monitoring = true
+      enable_secure_boot          = true
+    }
   }
   deletion_protection         = true
   resource_labels             = local.labels
