@@ -23,16 +23,23 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
-      - name: Scan locked dependencies, secrets, and configuration
+      - name: Scan locked dependencies and secrets
         uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           scan-type: fs
           scan-ref: .
-          scanners: vuln,secret,misconfig
+          scanners: vuln,secret
           severity: HIGH,CRITICAL
           ignore-unfixed: true
           format: table
           exit-code: "1"
+      - name: Scan Terraform and Kubernetes configuration
+        uses: bridgecrewio/checkov-action@444c9db6fa75e2d9c19ebf1fde7322089be9009e # v12.3125.0
+        with:
+          directory: infra
+          framework: terraform,kubernetes,helm
+          quiet: true
+          soft_fail: false
 
   dependency-review:
     name: Pull request dependency review
