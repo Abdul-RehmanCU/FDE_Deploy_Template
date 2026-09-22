@@ -10,9 +10,10 @@
   },
   "estimate": {
     "source": "demo-estimate.yaml",
-    "amount_usd": 4.50619304,
+    "amount_usd": 4.72619304,
     "maximum_runtime_hours": 4,
-    "planned_primary_expiry_hours": 2
+    "planned_primary_expiry_hours": 2,
+    "precluster_phase_ceiling_usd": 0.43
   },
   "events": [
     {

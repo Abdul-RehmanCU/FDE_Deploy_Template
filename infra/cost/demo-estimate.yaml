@@ -71,17 +71,23 @@ items:
     estimated_usd: 0.24
     basis: "Conservative two-GiB internet egress allowance; normal port-forwarded demo traffic should be lower."
   - id: cloud-scheduler
-    quantity: 1
+    quantity: 3
     unit: job-month
     unit_price_usd: 0.10
-    estimated_usd: 0.10
-    basis: "One expiry job for a full month; ignores free jobs and early teardown."
+    estimated_usd: 0.30
+    basis: "Primary and two recovery jobs for a full month; ignores free jobs and early teardown."
   - id: cloud-workflows
     quantity: 1
     unit: 1000-internal-step-increment
     unit_price_usd: 0.01
     estimated_usd: 0.01
     basis: "One billed increment; ignores 5,000 free internal steps."
+  - id: bootstrap-sentinel-storage
+    quantity: 1
+    unit: allowance
+    unit_price_usd: 0.02
+    estimated_usd: 0.02
+    basis: "Regional state object plus two tiny ownership fixtures and bounded storage operations."
   - id: operations-and-requests
     quantity: 1
     unit: allowance
@@ -94,7 +100,14 @@ items:
     unit_price_usd: 1.50
     estimated_usd: 1.50
     basis: "Rounding, price drift, cleanup latency, and usage-estimation uncertainty."
-estimated_total_usd: 4.50619304
+estimated_total_usd: 4.72619304
+precluster_phase:
+  ceiling_usd: 0.43
+  includes:
+    - three Scheduler job-months at 0.10 each
+    - one billed Workflows internal-step increment at 0.01
+    - state and two tiny GCS ownership fixtures at 0.02
+    - 0.10 contingency for requests and delayed fixture cleanup
 gate:
   passes_estimate_cap: true
   paid_provisioning_allowed: false
