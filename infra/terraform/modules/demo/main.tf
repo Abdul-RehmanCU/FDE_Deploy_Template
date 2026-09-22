@@ -96,6 +96,7 @@ resource "google_service_account" "gke_nodes" {
 resource "google_project_iam_member" "node_roles" {
   for_each = toset([
     "roles/artifactregistry.reader",
+    "roles/container.defaultNodeServiceAccount",
     "roles/logging.logWriter",
     "roles/monitoring.metricWriter",
     "roles/stackdriver.resourceMetadata.writer",
@@ -119,13 +120,19 @@ resource "google_container_cluster" "demo" {
   #checkov:skip=CKV_GCP_69: The separately managed node pool sets workload_metadata_config mode GKE_METADATA; this check does not follow that resource relationship.
   #checkov:skip=CKV_GCP_21: resource_labels is the current provider field and includes the mandatory expiry ownership label; this check expects the legacy field.
   #checkov:skip=CKV_GCP_66: The demo publishes digests but does not create Binary Authorization attestations; enabling enforcement without a real signing policy would be misleading and could block every image.
-  project                     = var.project_id
-  name                        = var.cluster_name
-  location                    = var.zone
-  network                     = google_compute_network.demo.id
-  subnetwork                  = google_compute_subnetwork.demo.id
-  remove_default_node_pool    = true
-  initial_node_count          = 1
+  project                  = var.project_id
+  name                     = var.cluster_name
+  location                 = var.zone
+  network                  = google_compute_network.demo.id
+  subnetwork               = google_compute_subnetwork.demo.id
+  remove_default_node_pool = true
+  initial_node_count       = 1
+  # GKE briefly creates the default pool even when Terraform removes it.
+  # Give that transient pool the same scoped node identity as the real pool.
+  node_config {
+    service_account = google_service_account.gke_nodes.email
+    oauth_scopes    = ["https://www.googleapis.com/auth/cloud-platform"]
+  }
   deletion_protection         = false
   resource_labels             = local.labels
   networking_mode             = "VPC_NATIVE"
@@ -166,7 +173,7 @@ resource "google_container_cluster" "demo" {
       error_message = "Refusing a demo cluster larger or different than the approved machine."
     }
   }
-  depends_on = [google_compute_disk.data]
+  depends_on = [google_compute_disk.data, google_project_iam_member.node_roles, google_service_account_iam_member.infra_can_use_nodes]
 }
 
 resource "google_container_node_pool" "demo" {
@@ -263,6 +270,7 @@ resource "google_service_account_iam_member" "gke_runtime" {
   service_account_id = google_service_account.runtime[each.key].name
   role               = "roles/iam.workloadIdentityUser"
   member             = "serviceAccount:${var.project_id}.svc.id.goog[${each.key}/fde-runtime]"
+  depends_on         = [google_container_node_pool.demo]
 }
 
 resource "google_service_account_iam_member" "infra_can_use_runtime" {
@@ -294,7 +302,7 @@ resource "google_secret_manager_secret_iam_member" "runtime" {
   member    = "principal://iam.googleapis.com/projects/${data.google_project.current.number}/locations/global/workloadIdentityPools/${var.project_id}.svc.id.goog/subject/ns/${each.value.namespace}/sa/fde-runtime"
 
   # The managed CSI add-on authenticates the Kubernetes principal directly.
-  depends_on = [google_container_cluster.demo]
+  depends_on = [google_container_node_pool.demo]
 }
 
 resource "google_secret_manager_secret_iam_member" "deploy_add_versions" {

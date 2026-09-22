@@ -109,6 +109,7 @@ resource "google_service_account" "nodes" {
 resource "google_project_iam_member" "node_roles" {
   for_each = toset([
     "roles/artifactregistry.reader",
+    "roles/container.defaultNodeServiceAccount",
     "roles/logging.logWriter",
     "roles/monitoring.metricWriter",
     "roles/stackdriver.resourceMetadata.writer",
@@ -129,13 +130,17 @@ resource "google_container_cluster" "managed" {
   #checkov:skip=CKV_GCP_21: resource_labels is the current provider field and is populated from mandatory installation labels; this check expects the legacy field.
   #checkov:skip=CKV_GCP_69: The separately managed node pool sets workload_metadata_config mode GKE_METADATA; this check does not follow that resource relationship.
   #checkov:skip=CKV_GCP_66: Image attestors and signing authority are customer prerequisites; silently enforcing an absent project policy could block every workload.
-  project                     = var.project_id
-  name                        = var.cluster_name
-  location                    = var.region
-  network                     = google_compute_network.managed.id
-  subnetwork                  = google_compute_subnetwork.managed.id
-  remove_default_node_pool    = true
-  initial_node_count          = 1
+  project                  = var.project_id
+  name                     = var.cluster_name
+  location                 = var.region
+  network                  = google_compute_network.managed.id
+  subnetwork               = google_compute_subnetwork.managed.id
+  remove_default_node_pool = true
+  initial_node_count       = 1
+  node_config {
+    service_account = google_service_account.nodes.email
+    oauth_scopes    = ["https://www.googleapis.com/auth/cloud-platform"]
+  }
   deletion_protection         = true
   resource_labels             = local.labels
   networking_mode             = "VPC_NATIVE"
@@ -170,7 +175,7 @@ resource "google_container_cluster" "managed" {
   }
   logging_config { enable_components = ["SYSTEM_COMPONENTS", "WORKLOADS", "APISERVER"] }
   monitoring_config { enable_components = ["SYSTEM_COMPONENTS", "APISERVER", "SCHEDULER", "CONTROLLER_MANAGER"] }
-  depends_on = [google_compute_router_nat.managed]
+  depends_on = [google_compute_router_nat.managed, google_project_iam_member.node_roles, google_service_account_iam_member.infra_can_use_nodes]
 }
 
 resource "google_container_node_pool" "managed" {
@@ -357,6 +362,7 @@ resource "google_service_account_iam_member" "gke_runtime" {
   service_account_id = google_service_account.runtime.name
   role               = "roles/iam.workloadIdentityUser"
   member             = "serviceAccount:${var.project_id}.svc.id.goog[production/fde-runtime]"
+  depends_on         = [google_container_node_pool.managed]
 }
 
 resource "google_storage_bucket_iam_member" "runtime_objects" {
@@ -395,5 +401,5 @@ resource "google_secret_manager_secret_iam_member" "runtime" {
   member    = "principal://iam.googleapis.com/projects/${data.google_project.current.number}/locations/global/workloadIdentityPools/${var.project_id}.svc.id.goog/subject/ns/production/sa/fde-runtime"
 
   # The managed CSI add-on authenticates the Kubernetes principal directly.
-  depends_on = [google_container_cluster.managed]
+  depends_on = [google_container_node_pool.managed]
 }
