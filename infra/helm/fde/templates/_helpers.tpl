@@ -60,6 +60,7 @@ fde.dev/environment: {{ .Values.environment | quote }}
 - { name: GCS_BUCKET, value: {{ .Values.storage.gcsBucket | quote }} }
 - { name: APP_ENVIRONMENT, value: {{ .Values.environment | quote }} }
 - { name: APP_VERSION, value: {{ .Values.appVersion | quote }} }
+- { name: PROJECT_NAME, value: {{ .Values.branding.name | quote }} }
 - { name: TMPDIR, value: /tmp }
 {{- if .Values.observability.enabled }}
 - { name: OTEL_EXPORTER_OTLP_ENDPOINT, value: {{ .Values.observability.otlpEndpoint | quote }} }

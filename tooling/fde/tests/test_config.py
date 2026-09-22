@@ -15,6 +15,9 @@ profile: demo
 namespace: acme-staging
 image_repository: northamerica-northeast1-docker.pkg.dev/fdetemplate/fde/api
 image_digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+frontend_image_repository: northamerica-northeast1-docker.pkg.dev/fdetemplate/fde/frontend
+frontend_image_digest: sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+app_version: test-version
 branding:
   name: Acme Directory
 sizing:
@@ -54,3 +57,8 @@ def test_demo_location_is_fixed(tmp_path: Path) -> None:
 def test_requires_digest(tmp_path: Path) -> None:
     with pytest.raises(ConfigurationError, match="immutable"):
         load_config(write(tmp_path, VALID.replace("sha256:" + "a" * 64, "latest")))
+
+
+def test_demo_rejects_public_domain(tmp_path: Path) -> None:
+    with pytest.raises(ConfigurationError, match="forbids a domain"):
+        load_config(write(tmp_path, VALID + "\ndomain: demo.example.ca\n"))

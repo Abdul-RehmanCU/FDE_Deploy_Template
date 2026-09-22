@@ -8,6 +8,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Iterable
 
+import yaml
+
 from .config import InstallationConfig
 from .cost import load_cost_gate
 from .gate import load_release_gate
@@ -16,6 +18,70 @@ from .process import executable, redact, run
 
 class OperationError(RuntimeError):
     pass
+
+
+def validate_helm_values(config: InstallationConfig, path: Path) -> None:
+    try:
+        values = yaml.safe_load(path.read_text(encoding="utf-8"))
+    except (OSError, yaml.YAMLError) as exc:
+        raise OperationError(f"cannot read Helm values: {exc}") from exc
+    if not isinstance(values, dict):
+        raise OperationError("Helm values must be a mapping")
+    for key, expected in {
+        "profile": config.profile,
+        "customer": config.customer,
+        "environment": config.environment,
+        "appVersion": config.app_version,
+    }.items():
+        if values.get(key) != expected:
+            raise OperationError(f"Helm value {key} does not match installation config")
+    if values.get("branding", {}).get("name") != config.branding_name:
+        raise OperationError("Helm branding name does not match installation config")
+    images = values.get("images", {})
+    for name, (repository, digest) in {
+        "backend": (config.image_repository, config.image_digest),
+        "frontend": (config.frontend_image_repository, config.frontend_image_digest),
+    }.items():
+        image = images.get(name, {})
+        if image.get("repository") != repository or image.get("digest") != digest:
+            raise OperationError(f"Helm {name} image does not match immutable installation image")
+    if values.get("backend", {}).get("replicas") != config.sizing.api_replicas:
+        raise OperationError("Helm API replica count differs from installation sizing")
+    if values.get("worker", {}).get("replicas") != config.sizing.worker_replicas:
+        raise OperationError("Helm worker replica count differs from installation sizing")
+    for component, cpu, memory in (
+        ("backend", config.sizing.api_cpu, config.sizing.api_memory),
+        ("worker", config.sizing.worker_cpu, config.sizing.worker_memory),
+    ):
+        requests = values.get(component, {}).get("resources", {}).get("requests", {})
+        if requests.get("cpu") != cpu or requests.get("memory") != memory:
+            raise OperationError(f"Helm {component} requests differ from installation sizing")
+    account_id = ("fde-" + config.customer + "-" + config.environment)[:30]
+    expected_account = f"{account_id}@{config.project}.iam.gserviceaccount.com"
+    if values.get("serviceAccount", {}).get("gcpServiceAccount") != expected_account:
+        raise OperationError("Helm runtime service account differs from Terraform identity")
+    storage = values.get("storage", {})
+    if storage.get("backend") != "gcs" or storage.get("gcsBucket") != f"{config.project}-fde-{config.customer}-{config.environment}":
+        raise OperationError("Helm storage does not match the environment GCS bucket")
+    provider = values.get("secretProvider", {})
+    prefix = f"fde-{config.customer}-{config.environment}"
+    expected_secrets = {
+        "databaseUrl": f"{prefix}-database-url",
+        "redisUrl": f"{prefix}-redis-url",
+        "appSecretKey": f"{prefix}-secret-key",
+        "postgresPassword": f"{prefix}-postgres-password",
+        "redisPassword": f"{prefix}-redis-password",
+    }
+    if provider.get("enabled") is not True or provider.get("projectId") != config.project:
+        raise OperationError("Helm Secret Manager provider differs from installation project")
+    if provider.get("secretNames") != expected_secrets:
+        raise OperationError("Helm secret references differ from Terraform secret IDs")
+    ingress = values.get("ingress", {})
+    if config.domain:
+        if ingress.get("enabled") is not True or ingress.get("host") != config.domain:
+            raise OperationError("Helm ingress does not match configured domain")
+    elif ingress.get("enabled") is True:
+        raise OperationError("Helm ingress cannot be enabled without a configured domain")
 
 
 def validate_expiry_contract(
@@ -286,6 +352,7 @@ def deploy_demo(
 ) -> None:
     if config.profile != "demo":
         raise OperationError("managed profile deployment is forbidden under the USD 25 demo authorization")
+    validate_helm_values(config, values)
     cost = load_cost_gate(cost_path)
     gate = load_release_gate(gate_path)
     if cost.project != config.project or gate.project != config.project or gate.customer != config.customer:

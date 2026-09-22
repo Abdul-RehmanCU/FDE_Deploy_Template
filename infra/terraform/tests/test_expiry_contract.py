@@ -129,6 +129,17 @@ def test_workload_identities_have_separate_provider_attributes() -> None:
     assert "demo-build" in text
     assert "pull_request" not in text
     assert '"roles/iam.serviceAccountUser"' not in text
+    assert "Abdul-RehmanCU" not in text
+    assert 'github_owner = split("/", var.github_repository)[0]' in text
+
+
+def test_wif_owner_derives_from_reusable_repository_variable() -> None:
+    repository = "ExampleOrg/template-fork"
+    derived_owner = repository.split("/")[0]
+    text = BOOTSTRAP_MAIN.read_text(encoding="utf-8")
+    assert derived_owner == "ExampleOrg"
+    assert "assertion.repository_owner == '${local.github_owner}'" in text
+    assert "assertion.repository == '${var.github_repository}'" in text
 
 
 def test_runtime_secret_and_act_as_bindings_are_resource_scoped() -> None:

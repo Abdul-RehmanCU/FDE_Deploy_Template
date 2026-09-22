@@ -7,6 +7,9 @@ profile: demo
 namespace: staging
 image_repository: northamerica-northeast1-docker.pkg.dev/fdetemplate/fde-demo-images/api
 image_digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+frontend_image_repository: northamerica-northeast1-docker.pkg.dev/fdetemplate/fde-demo-images/frontend
+frontend_image_digest: sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+app_version: v1.0.0-demo
 branding:
   name: FDE Demonstration Directory
 sizing:

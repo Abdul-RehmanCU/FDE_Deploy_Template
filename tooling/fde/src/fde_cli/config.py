@@ -11,6 +11,7 @@ import yaml
 _SLUG = re.compile(r"^[a-z][a-z0-9-]{1,38}[a-z0-9]$")
 _PROJECT = re.compile(r"^[a-z][a-z0-9-]{4,28}[a-z0-9]$")
 _DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
+_BRAND = re.compile(r"^[A-Za-z0-9 ._-]{1,80}$")
 _ALLOWED_PROFILES = {"demo", "managed"}
 _ALLOWED_DEMO_REGION = "northamerica-northeast1"
 _ALLOWED_DEMO_ZONE = "northamerica-northeast1-a"
@@ -41,6 +42,9 @@ class InstallationConfig:
     namespace: str
     image_repository: str
     image_digest: str
+    frontend_image_repository: str
+    frontend_image_digest: str
+    app_version: str
     branding_name: str
     sizing: ResourceSizing
     domain: str | None = None
@@ -54,9 +58,21 @@ class InstallationConfig:
         return f"{self.image_repository}@{self.image_digest}"
 
     @property
+    def immutable_frontend_image(self) -> str:
+        return f"{self.frontend_image_repository}@{self.frontend_image_digest}"
+
+    @property
     def fingerprint(self) -> str:
         value = "\n".join(
-            (self.customer, self.environment, self.project, self.profile, self.image_digest)
+            (
+                self.customer,
+                self.environment,
+                self.project,
+                self.profile,
+                self.image_digest,
+                self.frontend_image_digest,
+                self.app_version,
+            )
         )
         return hashlib.sha256(value.encode()).hexdigest()[:16]
 
@@ -91,6 +107,9 @@ def load_config(path: str | Path) -> InstallationConfig:
     namespace = _required_text(data, "namespace")
     image_repository = _required_text(data, "image_repository")
     image_digest = _required_text(data, "image_digest")
+    frontend_image_repository = _required_text(data, "frontend_image_repository")
+    frontend_image_digest = _required_text(data, "frontend_image_digest")
+    app_version = _required_text(data, "app_version")
 
     for field, value in (("customer", customer), ("environment", environment), ("namespace", namespace)):
         if not _SLUG.fullmatch(value):
@@ -108,6 +127,12 @@ def load_config(path: str | Path) -> InstallationConfig:
     expected_prefix = f"{region}-docker.pkg.dev/{project}/"
     if not image_repository.startswith(expected_prefix):
         raise ConfigurationError("image_repository must be regional and belong to project")
+    if not _DIGEST.fullmatch(frontend_image_digest):
+        raise ConfigurationError("frontend_image_digest must be an immutable sha256 digest")
+    if not frontend_image_repository.startswith(expected_prefix):
+        raise ConfigurationError("frontend_image_repository must be regional and belong to project")
+    if frontend_image_repository == image_repository or frontend_image_digest == image_digest:
+        raise ConfigurationError("backend and frontend require distinct immutable images")
 
     sizing_data = _mapping(data.get("sizing"), "sizing")
     sizing = ResourceSizing(
@@ -125,9 +150,15 @@ def load_config(path: str | Path) -> InstallationConfig:
 
     branding = _mapping(data.get("branding", {}), "branding")
     branding_name = str(branding.get("name", customer)).strip()
+    if not _BRAND.fullmatch(branding_name):
+        raise ConfigurationError("branding.name must contain 1-80 safe display characters")
     domain = data.get("domain")
     if domain is not None and (not isinstance(domain, str) or not domain.strip()):
         raise ConfigurationError("domain must be omitted or a non-empty string")
+    if profile == "demo" and domain is not None:
+        raise ConfigurationError("demo profile uses private port-forward access and forbids a domain")
+    if profile == "managed" and domain is None:
+        raise ConfigurationError("managed profile requires a customer-controlled domain")
 
     forbidden = {"password", "secret", "token", "private_key", "api_key"}
     present = forbidden.intersection(data)
@@ -144,6 +175,9 @@ def load_config(path: str | Path) -> InstallationConfig:
         namespace=namespace,
         image_repository=image_repository,
         image_digest=image_digest,
+        frontend_image_repository=frontend_image_repository,
+        frontend_image_digest=frontend_image_digest,
+        app_version=app_version,
         branding_name=branding_name,
         sizing=sizing,
         domain=domain.strip() if isinstance(domain, str) else None,

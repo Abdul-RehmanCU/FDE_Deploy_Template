@@ -7,6 +7,13 @@
     "customer": { "type": "string", "pattern": "^[a-z][a-z0-9-]{1,30}[a-z0-9]$" },
     "environment": { "type": "string", "enum": ["staging", "production-demo", "production"] },
     "appVersion": { "type": "string", "minLength": 1 },
+    "branding": {
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1, "maxLength": 80, "pattern": "^[A-Za-z0-9 ._-]+$" }
+      }
+    },
     "images": {
       "type": "object",
       "required": ["backend", "frontend"],

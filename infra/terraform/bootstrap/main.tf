@@ -1,4 +1,5 @@
 locals {
+  github_owner = split("/", var.github_repository)[0]
   required_services = toset([
     "artifactregistry.googleapis.com",
     "cloudasset.googleapis.com",
@@ -103,10 +104,10 @@ resource "google_iam_workload_identity_pool" "github" {
 
 resource "google_iam_workload_identity_pool_provider" "github" {
   for_each = {
-    build   = "assertion.repository == '${var.github_repository}' && assertion.repository_owner == 'Abdul-RehmanCU' && assertion.ref == 'refs/heads/main' && assertion.environment == 'demo-build'"
-    infra   = "assertion.repository == '${var.github_repository}' && assertion.repository_owner == 'Abdul-RehmanCU' && assertion.ref == 'refs/heads/main' && assertion.environment == 'demo-infrastructure'"
-    deploy  = "assertion.repository == '${var.github_repository}' && assertion.repository_owner == 'Abdul-RehmanCU' && assertion.ref == 'refs/heads/main' && assertion.environment in ['demo-staging', 'demo-prod']"
-    cleanup = "assertion.repository == '${var.github_repository}' && assertion.repository_owner == 'Abdul-RehmanCU' && assertion.ref == 'refs/heads/main' && assertion.environment == 'demo-cleanup'"
+    build   = "assertion.repository == '${var.github_repository}' && assertion.repository_owner == '${local.github_owner}' && assertion.ref == 'refs/heads/main' && assertion.environment == 'demo-build'"
+    infra   = "assertion.repository == '${var.github_repository}' && assertion.repository_owner == '${local.github_owner}' && assertion.ref == 'refs/heads/main' && assertion.environment == 'demo-infrastructure'"
+    deploy  = "assertion.repository == '${var.github_repository}' && assertion.repository_owner == '${local.github_owner}' && assertion.ref == 'refs/heads/main' && assertion.environment in ['demo-staging', 'demo-prod']"
+    cleanup = "assertion.repository == '${var.github_repository}' && assertion.repository_owner == '${local.github_owner}' && assertion.ref == 'refs/heads/main' && assertion.environment == 'demo-cleanup'"
   }
   project                            = var.project_id
   workload_identity_pool_id          = google_iam_workload_identity_pool.github.workload_identity_pool_id

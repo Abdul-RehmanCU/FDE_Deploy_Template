@@ -2,6 +2,8 @@ profile: demo
 customer: replace-me
 environment: staging
 appVersion: dev
+branding:
+  name: FDE Contact Directory
 
 images:
   backend:

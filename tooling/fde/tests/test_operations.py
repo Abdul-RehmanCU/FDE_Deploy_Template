@@ -2,6 +2,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
+import yaml
 
 from fde_cli.config import load_config
 from fde_cli.operations import (
@@ -12,6 +13,7 @@ from fde_cli.operations import (
     deploy_demo,
     destroy_demo,
     validate_expiry_contract,
+    validate_helm_values,
     validate_demo_cost_drivers,
 )
 from test_config import VALID, write
@@ -29,7 +31,7 @@ def test_explicit_scope_must_match_configuration(tmp_path: Path) -> None:
 
 
 def test_managed_profile_cannot_deploy_under_demo_authorization(tmp_path: Path) -> None:
-    cfg = load_config(write(tmp_path, VALID.replace("profile: demo", "profile: managed").replace("environment: staging", "environment: production")))
+    cfg = load_config(write(tmp_path, VALID.replace("profile: demo", "profile: managed").replace("environment: staging", "environment: production") + "\ndomain: directory.example.ca\n"))
     with pytest.raises(OperationError, match="forbidden"):
         deploy_demo(
             cfg,
@@ -175,3 +177,71 @@ def test_cost_driver_gate_rejects_larger_machine() -> None:
     pool["values"]["node_config"][0]["machine_type"] = "e2-standard-8"  # type: ignore[index]
     with pytest.raises(OperationError, match="machine"):
         validate_demo_cost_drivers(resources, zone="northamerica-northeast1-a")
+
+
+def valid_helm_values(tmp_path: Path) -> tuple[object, Path, dict[str, object]]:
+    cfg = config(tmp_path)
+    prefix = "fde-acme-staging"
+    values: dict[str, object] = {
+        "profile": "demo",
+        "customer": "acme",
+        "environment": "staging",
+        "appVersion": "test-version",
+        "branding": {"name": "Acme Directory"},
+        "images": {
+            "backend": {"repository": cfg.image_repository, "digest": cfg.image_digest},
+            "frontend": {"repository": cfg.frontend_image_repository, "digest": cfg.frontend_image_digest},
+        },
+        "backend": {"replicas": 2, "resources": {"requests": {"cpu": "250m", "memory": "384Mi"}}},
+        "worker": {"replicas": 1, "resources": {"requests": {"cpu": "250m", "memory": "384Mi"}}},
+        "serviceAccount": {"gcpServiceAccount": "fde-acme-staging@fdetemplate.iam.gserviceaccount.com"},
+        "storage": {"backend": "gcs", "gcsBucket": "fdetemplate-fde-acme-staging"},
+        "secretProvider": {
+            "enabled": True,
+            "projectId": "fdetemplate",
+            "secretNames": {
+                "databaseUrl": f"{prefix}-database-url",
+                "redisUrl": f"{prefix}-redis-url",
+                "appSecretKey": f"{prefix}-secret-key",
+                "postgresPassword": f"{prefix}-postgres-password",
+                "redisPassword": f"{prefix}-redis-password",
+            },
+        },
+        "ingress": {"enabled": False},
+    }
+    path = tmp_path / "values.yaml"
+    path.write_text(yaml.safe_dump(values), encoding="utf-8")
+    return cfg, path, values
+
+
+def test_helm_values_match_complete_installation_contract(tmp_path: Path) -> None:
+    cfg, path, _ = valid_helm_values(tmp_path)
+    validate_helm_values(cfg, path)  # type: ignore[arg-type]
+
+
+@pytest.mark.parametrize(
+    ("section", "key", "value"),
+    [
+        ("root", "customer", "other"),
+        ("branding", "name", "Other Directory"),
+        ("images.backend", "digest", "sha256:" + "c" * 64),
+        ("images.frontend", "repository", "northamerica-northeast1-docker.pkg.dev/fdetemplate/fde/other"),
+        ("backend", "replicas", 3),
+        ("worker.resources.requests", "cpu", "500m"),
+        ("storage", "gcsBucket", "wrong"),
+        ("serviceAccount", "gcpServiceAccount", "other@fdetemplate.iam.gserviceaccount.com"),
+        ("secretProvider", "projectId", "other-project"),
+    ],
+)
+def test_helm_values_reject_contract_drift(
+    tmp_path: Path, section: str, key: str, value: object
+) -> None:
+    cfg, path, values = valid_helm_values(tmp_path)
+    target = values if section == "root" else values
+    if section != "root":
+        for part in section.split("."):
+            target = target[part]  # type: ignore[index,assignment]
+    target[key] = value  # type: ignore[index]
+    path.write_text(yaml.safe_dump(values), encoding="utf-8")
+    with pytest.raises(OperationError):
+        validate_helm_values(cfg, path)  # type: ignore[arg-type]
