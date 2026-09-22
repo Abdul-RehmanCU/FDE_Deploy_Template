@@ -1,7 +1,6 @@
 from typing import Any
 
 from sqlalchemy import event
-from sqlalchemy.engine import Engine
 from sqlmodel import Session, create_engine
 
 from app.core.config import settings
@@ -15,12 +14,15 @@ engine = create_engine(
 )
 
 
-@event.listens_for(Engine, "connect")
+@event.listens_for(engine, "connect")
 def set_postgres_statement_timeout(dbapi_connection: Any, connection_record: object) -> None:
     del connection_record
     cursor = dbapi_connection.cursor()
     try:
-        cursor.execute("SET statement_timeout = %s", (settings.DB_STATEMENT_TIMEOUT_MS,))
+        cursor.execute(
+            "SELECT set_config('statement_timeout', %s, false)",
+            (str(settings.DB_STATEMENT_TIMEOUT_MS),),
+        )
     finally:
         cursor.close()
 
