@@ -1,4 +1,5 @@
 import json
+import re
 import subprocess
 from pathlib import Path
 
@@ -22,8 +23,8 @@ def rendered_workflow() -> str:
         "cluster_name": "fde-demo",
         "artifact_repository": "fde-demo-images",
         "bucket_names": ["fdetemplate-fde-demo-staging"],
-        "disk_names": ["pvc-exact-name"],
-        "address_names": [],
+        "disk_resources": [{"name": "pvc-exact-name", "creation_timestamp": "2026-09-22T10:00:00Z"}],
+        "address_resources": [],
     }
     return WORKFLOW.read_text(encoding="utf-8").replace("${manifest_json}", json.dumps(manifest)).replace("$${", "${")
 
@@ -48,7 +49,12 @@ def test_probe_guards_precede_all_delete_calls() -> None:
     assert text.index("compiled project number does not match") < first_delete
     assert text.index("status: \"sentinel-ok\"") < first_delete
     assert text.index("status: \"not-due\"") < first_delete
-    assert text.index("status: \"stale-window\"") < first_delete
+    assert "status: \"stale-window\"" not in text
+    assert 'mode in ["sentinel", "dry-run"]' in text
+    assert 'mode in ["cleanup", "recovery"] and sys.now() < time.parse(manifest.expires_at)' in text
+    assert '"recovery"' in text
+    cluster_function = text[text.index("delete_gke_cluster:") : text.index("delete_compute_resource:")]
+    assert cluster_function.index("verify_owner") < cluster_function.index("request_delete")
 
 
 def test_cleanup_polls_operations_and_retries_http() -> None:
@@ -68,6 +74,10 @@ def test_bucket_cleanup_covers_versions_replay_and_concurrency() -> None:
     assert "e.code == 409" in text
     assert "list_first_page" in text
     assert "pageToken" not in text
+    assert text.index("verify_bucket_owner") < text.index("list_first_page")
+    assert "verify_repository_owner" in text
+    assert "creationTimestamp != creation_timestamp" in text
+    assert "cleanup-incomplete" in text
 
 
 def test_scheduler_has_recovery_run_and_bounded_apply_window() -> None:
@@ -93,7 +103,8 @@ def terraform_console(expression: str) -> str:
         text=True,
         check=True,
     )
-    return completed.stdout.strip().strip('"')
+    plain = re.sub(r"\x1b\[[0-9;]*m", "", completed.stdout)
+    return plain.strip().splitlines()[-1].strip('"')
 
 
 def test_real_terraform_trigger_rendering_stays_on_or_after_deadline() -> None:

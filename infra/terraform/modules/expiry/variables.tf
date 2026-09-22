@@ -55,27 +55,39 @@ variable "bucket_names" {
     error_message = "bucket_names must be unique valid exact bucket names."
   }
 }
-variable "disk_names" {
-  type        = list(string)
+variable "disk_resources" {
+  type = list(object({
+    name               = string
+    creation_timestamp = string
+  }))
   default     = []
-  description = "Exact zonal persistent disk names discovered after workloads start."
+  description = "Exact zonal disk names and immutable creation timestamps discovered after workloads start."
   validation {
     condition = (
-      length(var.disk_names) == length(distinct(var.disk_names)) &&
-      alltrue([for name in var.disk_names : can(regex("^[a-z][a-z0-9-]{1,61}[a-z0-9]$", name))])
+      length(var.disk_resources) == length(distinct([for resource in var.disk_resources : resource.name])) &&
+      [for resource in var.disk_resources : resource.name] == sort([for resource in var.disk_resources : resource.name]) &&
+      alltrue([for resource in var.disk_resources :
+        can(regex("^[a-z][a-z0-9-]{1,61}[a-z0-9]$", resource.name)) && can(formatdate("YYYY", resource.creation_timestamp))
+      ])
     )
-    error_message = "disk_names must be unique valid exact disk names."
+    error_message = "disk_resources must contain unique exact names and RFC3339 creation timestamps."
   }
 }
-variable "address_names" {
-  type        = list(string)
+variable "address_resources" {
+  type = list(object({
+    name               = string
+    creation_timestamp = string
+  }))
   default     = []
-  description = "Exact regional address names, normally empty because demo has no load balancer."
+  description = "Exact regional address names and immutable creation timestamps; normally empty."
   validation {
     condition = (
-      length(var.address_names) == length(distinct(var.address_names)) &&
-      alltrue([for name in var.address_names : can(regex("^[a-z][a-z0-9-]{1,61}[a-z0-9]$", name))])
+      length(var.address_resources) == length(distinct([for resource in var.address_resources : resource.name])) &&
+      [for resource in var.address_resources : resource.name] == sort([for resource in var.address_resources : resource.name]) &&
+      alltrue([for resource in var.address_resources :
+        can(regex("^[a-z][a-z0-9-]{1,61}[a-z0-9]$", resource.name)) && can(formatdate("YYYY", resource.creation_timestamp))
+      ])
     )
-    error_message = "address_names must be unique valid exact address names."
+    error_message = "address_resources must contain unique exact names and RFC3339 creation timestamps."
   }
 }

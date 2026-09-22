@@ -17,6 +17,100 @@ class OperationError(RuntimeError):
     pass
 
 
+def bootstrap_gcp(
+    config: InstallationConfig,
+    *,
+    terraform_dir: Path,
+    state_bucket: str,
+    github_repository: str,
+    confirm_project: str,
+) -> None:
+    if config.project != confirm_project:
+        raise OperationError("--confirm-project must exactly match the configured project")
+    gcloud = executable("gcloud")
+    bucket_uri = f"gs://{state_bucket}"
+    described = run([gcloud, "storage", "buckets", "describe", bucket_uri, "--format=json"], check=False)
+    if described.returncode:
+        detail = (described.stderr or described.stdout).lower()
+        if "not found" not in detail and "404" not in detail:
+            raise OperationError(redact(described.stderr or described.stdout))
+        run(
+            [
+                gcloud,
+                "storage",
+                "buckets",
+                "create",
+                bucket_uri,
+                f"--project={config.project}",
+                f"--location={config.region}",
+                "--uniform-bucket-level-access",
+                "--public-access-prevention",
+            ]
+        )
+        run(
+            [
+                gcloud,
+                "storage",
+                "buckets",
+                "update",
+                bucket_uri,
+                "--update-labels=application=fde-template,purpose=terraform-state,managed-by=terraform",
+            ]
+        )
+        described = run([gcloud, "storage", "buckets", "describe", bucket_uri, "--format=json"])
+    metadata = json.loads(described.stdout)
+    project = json.loads(run([gcloud, "projects", "describe", config.project, "--format=json"]).stdout)
+    if metadata.get("location", "").lower() != config.region.lower():
+        raise OperationError("existing state bucket is not in the configured Canadian region")
+    if str(metadata.get("projectNumber")) != str(project.get("projectNumber")):
+        raise OperationError("existing state bucket does not belong to the configured project")
+    labels = metadata.get("labels", {})
+    if labels.get("application") != "fde-template" or labels.get("purpose") != "terraform-state":
+        raise OperationError("existing state bucket is not labeled as FDE Terraform state")
+    terraform = executable("terraform")
+    run(
+        [
+            terraform,
+            "init",
+            "-input=false",
+            "-reconfigure",
+            f"-backend-config=bucket={state_bucket}",
+            "-backend-config=prefix=bootstrap",
+        ],
+        cwd=terraform_dir,
+    )
+    state = run([terraform, "state", "list"], cwd=terraform_dir)
+    if "google_storage_bucket.terraform_state" not in state.stdout.splitlines():
+        run(
+            [
+                terraform,
+                "import",
+                "-input=false",
+                f"-var=project_id={config.project}",
+                f"-var=region={config.region}",
+                f"-var=github_repository={github_repository}",
+                f"-var=state_bucket_name={state_bucket}",
+                "google_storage_bucket.terraform_state",
+                state_bucket,
+            ],
+            cwd=terraform_dir,
+        )
+    run(
+        [
+            terraform,
+            "apply",
+            "-input=false",
+            "-lock-timeout=60s",
+            f"-var=project_id={config.project}",
+            f"-var=region={config.region}",
+            f"-var=github_repository={github_repository}",
+            f"-var=state_bucket_name={state_bucket}",
+            "-auto-approve",
+        ],
+        cwd=terraform_dir,
+    )
+
+
 def assert_scope(config: InstallationConfig, customer: str, environment: str, project: str) -> None:
     supplied = (customer, environment, project)
     expected = (config.customer, config.environment, config.project)
@@ -30,6 +124,7 @@ def terraform_plan(
     backend_bucket: str,
     state_prefix: str,
     output: Path,
+    expiry_id: str,
 ) -> None:
     terraform = executable("terraform")
     run([terraform, "init", "-input=false", f"-backend-config=bucket={backend_bucket}", f"-backend-config=prefix={state_prefix}"], cwd=terraform_dir)
@@ -43,6 +138,7 @@ def terraform_plan(
             f"-var=project_id={config.project}",
             f"-var=customer={config.customer}",
             f"-var=cluster_name=fde-{config.customer}-demo",
+            f"-var=expiry_id={expiry_id}",
             f"-out={output.resolve()}",
         ],
         cwd=terraform_dir,
@@ -145,11 +241,16 @@ def collect_evidence(config: InstallationConfig, output_dir: Path) -> Path:
     return path
 
 
-def destroy_demo(config: InstallationConfig, terraform_dir: Path, confirm_customer: str) -> list[dict[str, object]]:
+def destroy_demo(
+    config: InstallationConfig,
+    terraform_dir: Path,
+    confirm_customer: str,
+    expiry_id: str,
+) -> list[dict[str, object]]:
     if confirm_customer != config.customer:
         raise OperationError("--confirm-customer must exactly match the configured customer")
     terraform = executable("terraform")
-    run([terraform, "destroy", "-input=false", "-auto-approve", "-lock-timeout=60s", f"-var=project_id={config.project}", f"-var=customer={config.customer}", f"-var=cluster_name=fde-{config.customer}-demo"], cwd=terraform_dir)
+    run([terraform, "destroy", "-input=false", "-auto-approve", "-lock-timeout=60s", f"-var=project_id={config.project}", f"-var=customer={config.customer}", f"-var=cluster_name=fde-{config.customer}-demo", f"-var=expiry_id={expiry_id}"], cwd=terraform_dir)
     gcloud = executable("gcloud")
     inventory_commands: Iterable[tuple[str, list[str]]] = (
         ("clusters", [gcloud, "container", "clusters", "list", f"--project={config.project}", "--format=json"]),

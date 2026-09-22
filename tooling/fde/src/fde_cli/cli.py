@@ -10,6 +10,7 @@ from .doctor import checks, serialise
 from .operations import (
     OperationError,
     assert_scope,
+    bootstrap_gcp,
     collect_evidence,
     deploy_demo,
     destroy_demo,
@@ -43,6 +44,13 @@ def parser() -> argparse.ArgumentParser:
     plan.add_argument("--backend-bucket", required=True)
     plan.add_argument("--state-prefix", required=True)
     plan.add_argument("--out", required=True)
+    plan.add_argument("--expiry-id", required=True)
+
+    bootstrap = cloud_command("bootstrap", "Create the bounded state/WIF bootstrap in the configured project")
+    bootstrap.add_argument("--terraform-dir", required=True)
+    bootstrap.add_argument("--state-bucket", required=True)
+    bootstrap.add_argument("--github-repository", required=True)
+    bootstrap.add_argument("--confirm-project", required=True)
 
     deploy = cloud_command("deploy", "Apply an approved demo plan and deploy its chart")
     deploy.add_argument("--gate", required=True)
@@ -63,6 +71,7 @@ def parser() -> argparse.ArgumentParser:
     destroy = cloud_command("destroy", "Destroy the exact Terraform demo and inventory residues")
     destroy.add_argument("--terraform-dir", required=True)
     destroy.add_argument("--confirm-customer", required=True)
+    destroy.add_argument("--expiry-id", required=True)
     return result
 
 
@@ -79,7 +88,23 @@ def main(argv: list[str] | None = None) -> int:
             return 0 if all(item.ok for item in results) else 2
         assert_scope(config, args.customer, args.environment, args.project)
         if args.command == "plan":
-            terraform_plan(config, Path(args.terraform_dir), args.backend_bucket, args.state_prefix, Path(args.out))
+            terraform_plan(
+                config,
+                Path(args.terraform_dir),
+                args.backend_bucket,
+                args.state_prefix,
+                Path(args.out),
+                args.expiry_id,
+            )
+            return 0
+        if args.command == "bootstrap":
+            bootstrap_gcp(
+                config,
+                terraform_dir=Path(args.terraform_dir),
+                state_bucket=args.state_bucket,
+                github_repository=args.github_repository,
+                confirm_project=args.confirm_project,
+            )
             return 0
         if args.command == "deploy":
             deploy_demo(
@@ -102,7 +127,7 @@ def main(argv: list[str] | None = None) -> int:
             print(collect_evidence(config, Path(args.output_dir)))
             return 0
         if args.command == "destroy":
-            print(json.dumps(destroy_demo(config, Path(args.terraform_dir), args.confirm_customer), indent=2))
+            print(json.dumps(destroy_demo(config, Path(args.terraform_dir), args.confirm_customer, args.expiry_id), indent=2))
             return 0
     except (ConfigurationError, OperationError, RuntimeError) as exc:
         print(json.dumps({"error": str(exc)}, indent=2), file=sys.stderr)

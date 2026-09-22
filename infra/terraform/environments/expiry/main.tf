@@ -9,6 +9,6 @@ module "expiry" {
   cluster_name        = var.cluster_name
   artifact_repository = var.artifact_repository
   bucket_names        = var.bucket_names
-  disk_names          = var.disk_names
-  address_names       = var.address_names
+  disk_resources      = var.disk_resources
+  address_resources   = var.address_resources
 }

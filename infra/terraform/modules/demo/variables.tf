@@ -22,6 +22,14 @@ variable "customer" {
     error_message = "customer must be a lowercase DNS-safe slug."
   }
 }
+variable "expiry_id" {
+  type        = string
+  description = "Unique run identity compiled into cleanup and resource labels."
+  validation {
+    condition     = can(regex("^[a-z][a-z0-9-]{3,40}$", var.expiry_id))
+    error_message = "expiry_id must be a unique lowercase run identifier."
+  }
+}
 variable "cluster_name" { type = string }
 variable "machine_type" {
   type    = string

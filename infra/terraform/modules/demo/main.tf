@@ -5,6 +5,7 @@ locals {
     customer    = var.customer
     profile     = "demo"
     managed-by  = "terraform"
+    expiry-id   = var.expiry_id
   })
   secret_specs = merge([
     for namespace in var.namespaces : {

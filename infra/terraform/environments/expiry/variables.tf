@@ -13,11 +13,17 @@ variable "expires_at" { type = string }
 variable "cluster_name" { type = string }
 variable "artifact_repository" { type = string }
 variable "bucket_names" { type = list(string) }
-variable "disk_names" {
-  type    = list(string)
+variable "disk_resources" {
+  type = list(object({
+    name               = string
+    creation_timestamp = string
+  }))
   default = []
 }
-variable "address_names" {
-  type    = list(string)
+variable "address_resources" {
+  type = list(object({
+    name               = string
+    creation_timestamp = string
+  }))
   default = []
 }

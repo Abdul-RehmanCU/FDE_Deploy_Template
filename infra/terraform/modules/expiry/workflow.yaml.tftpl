@@ -13,7 +13,7 @@ main:
             raise: "manifest fingerprint mismatch"
           - condition: $${manifest.project_id != sys.get_env("GOOGLE_CLOUD_PROJECT_ID")}
             raise: "compiled project does not match workflow project"
-          - condition: $${not(mode in ["sentinel", "dry-run", "cleanup"])}
+          - condition: $${not(mode in ["sentinel", "dry-run", "cleanup", "recovery"])}
             raise: "unsupported cleanup mode"
     - read_project:
         try:
@@ -34,29 +34,33 @@ main:
           text: $${"FDE expiry target=" + manifest.project_id + " manifest=" + expected_sha + " mode=" + mode}
     - stop_probe:
         switch:
-          - condition: $${mode != "cleanup"}
+          - condition: $${mode in ["sentinel", "dry-run"]}
             return:
               status: "sentinel-ok"
               manifest_sha: $${expected_sha}
               project_number: $${project_result.body.name}
-          - condition: $${sys.now() > time.parse(manifest.expires_at) + 3600}
-            return:
-              status: "stale-window"
-              manifest_sha: $${expected_sha}
-          - condition: $${sys.now() < time.parse(manifest.expires_at)}
+          - condition: $${mode in ["cleanup", "recovery"] and sys.now() < time.parse(manifest.expires_at)}
             return:
               status: "not-due"
               manifest_sha: $${expected_sha}
+    - init_results:
+        assign:
+          - cleanup_results: []
     - delete_cluster:
         call: delete_gke_cluster
         args:
           project: $${manifest.project_id}
           zone: $${manifest.zone}
           name: $${manifest.cluster_name}
+          expiry_id: $${manifest.expiry_id}
+        result: cluster_result
+    - record_cluster:
+        assign:
+          - cleanup_results: $${list.concat(cleanup_results, cluster_result)}
     - delete_disks:
         for:
           value: disk
-          in: $${manifest.disk_names}
+          in: $${manifest.disk_resources}
           steps:
             - delete_one_disk:
                 call: delete_compute_resource
@@ -65,11 +69,16 @@ main:
                   scope_kind: "zones"
                   scope_name: $${manifest.zone}
                   collection: "disks"
-                  name: $${disk}
+                  name: $${disk.name}
+                  creation_timestamp: $${disk.creation_timestamp}
+                result: disk_result
+            - record_disk:
+                assign:
+                  - cleanup_results: $${list.concat(cleanup_results, disk_result)}
     - delete_addresses:
         for:
           value: address
-          in: $${manifest.address_names}
+          in: $${manifest.address_resources}
           steps:
             - delete_one_address:
                 call: delete_compute_resource
@@ -78,7 +87,12 @@ main:
                   scope_kind: "regions"
                   scope_name: $${manifest.region}
                   collection: "addresses"
-                  name: $${address}
+                  name: $${address.name}
+                  creation_timestamp: $${address.creation_timestamp}
+                result: address_result
+            - record_address:
+                assign:
+                  - cleanup_results: $${list.concat(cleanup_results, address_result)}
     - empty_buckets:
         for:
           value: bucket
@@ -88,20 +102,59 @@ main:
                 call: empty_bucket
                 args:
                   bucket: $${bucket}
+                  expiry_id: $${manifest.expiry_id}
+                result: bucket_result
+            - record_bucket:
+                assign:
+                  - cleanup_results: $${list.concat(cleanup_results, bucket_result)}
     - delete_artifact_repository:
         call: delete_repository
         args:
           project: $${manifest.project_id}
           region: $${manifest.region}
           repository: $${manifest.artifact_repository}
+          expiry_id: $${manifest.expiry_id}
+        result: repository_result
+    - record_repository:
+        assign:
+          - cleanup_results: $${list.concat(cleanup_results, repository_result)}
+    - incomplete:
+        switch:
+          - condition: $${"ownership-mismatch" in cleanup_results}
+            return:
+              status: "cleanup-incomplete"
+              manifest_sha: $${expected_sha}
+              results: $${cleanup_results}
     - complete:
         return:
           status: "cleanup-complete"
           manifest_sha: $${expected_sha}
+          results: $${cleanup_results}
 
 delete_gke_cluster:
-  params: [project, zone, name]
+  params: [project, zone, name, expiry_id]
   steps:
+    - read_resource:
+        try:
+          call: http.get
+          args:
+            url: $${"https://container.googleapis.com/v1/projects/" + project + "/zones/" + zone + "/clusters/" + name}
+            auth: { type: OAuth2 }
+          result: existing
+        retry: $${http.default_retry}
+        except:
+          as: e
+          steps:
+            - tolerate_missing_read:
+                switch:
+                  - condition: $${e.code == 404}
+                    return: "already-absent"
+                  - condition: true
+                    raise: $${e}
+    - verify_owner:
+        switch:
+          - condition: $${map.get(default(map.get(existing.body, "resourceLabels"), {}), "expiry-id") != expiry_id}
+            return: "ownership-mismatch"
     - request_delete:
         try:
           call: http.delete
@@ -148,8 +201,29 @@ delete_gke_cluster:
         next: poll
 
 delete_compute_resource:
-  params: [project, scope_kind, scope_name, collection, name]
+  params: [project, scope_kind, scope_name, collection, name, creation_timestamp]
   steps:
+    - read_resource:
+        try:
+          call: http.get
+          args:
+            url: $${"https://compute.googleapis.com/compute/v1/projects/" + project + "/" + scope_kind + "/" + scope_name + "/" + collection + "/" + name}
+            auth: { type: OAuth2 }
+          result: existing
+        retry: $${http.default_retry}
+        except:
+          as: e
+          steps:
+            - tolerate_missing_read:
+                switch:
+                  - condition: $${e.code == 404}
+                    return: "already-absent"
+                  - condition: true
+                    raise: $${e}
+    - verify_fingerprint:
+        switch:
+          - condition: $${existing.body.creationTimestamp != creation_timestamp}
+            return: "ownership-mismatch"
     - request_delete:
         try:
           call: http.delete
@@ -196,8 +270,29 @@ delete_compute_resource:
         next: poll
 
 empty_bucket:
-  params: [bucket]
+  params: [bucket, expiry_id]
   steps:
+    - read_bucket:
+        try:
+          call: http.get
+          args:
+            url: $${"https://storage.googleapis.com/storage/v1/b/" + bucket}
+            auth: { type: OAuth2 }
+          result: existing_bucket
+        retry: $${http.default_retry}
+        except:
+          as: e
+          steps:
+            - tolerate_missing_bucket_read:
+                switch:
+                  - condition: $${e.code == 404}
+                    return: "already-absent"
+                  - condition: true
+                    raise: $${e}
+    - verify_bucket_owner:
+        switch:
+          - condition: $${map.get(default(map.get(existing_bucket.body, "labels"), {}), "expiry-id") != expiry_id}
+            return: "ownership-mismatch"
     - initialise:
         assign:
           - rounds: 0
@@ -290,8 +385,29 @@ delete_gcs_object:
         return: "deleted"
 
 delete_repository:
-  params: [project, region, repository]
+  params: [project, region, repository, expiry_id]
   steps:
+    - read_repository:
+        try:
+          call: http.get
+          args:
+            url: $${"https://artifactregistry.googleapis.com/v1/projects/" + project + "/locations/" + region + "/repositories/" + repository}
+            auth: { type: OAuth2 }
+          result: existing_repository
+        retry: $${http.default_retry}
+        except:
+          as: e
+          steps:
+            - tolerate_missing_repository_read:
+                switch:
+                  - condition: $${e.code == 404}
+                    return: "already-absent"
+                  - condition: true
+                    raise: $${e}
+    - verify_repository_owner:
+        switch:
+          - condition: $${map.get(default(map.get(existing_repository.body, "labels"), {}), "expiry-id") != expiry_id}
+            return: "ownership-mismatch"
     - request_delete:
         try:
           call: http.delete

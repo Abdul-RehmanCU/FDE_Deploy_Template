@@ -9,8 +9,8 @@ locals {
     cluster_name        = var.cluster_name
     artifact_repository = var.artifact_repository
     bucket_names        = sort(var.bucket_names)
-    disk_names          = sort(var.disk_names)
-    address_names       = sort(var.address_names)
+    disk_resources      = var.disk_resources
+    address_resources   = var.address_resources
   }
   manifest_json = jsonencode(local.manifest)
   manifest_sha  = sha256(local.manifest_json)

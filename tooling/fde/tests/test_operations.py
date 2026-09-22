@@ -3,7 +3,13 @@ from pathlib import Path
 import pytest
 
 from fde_cli.config import load_config
-from fde_cli.operations import OperationError, assert_scope, deploy_demo, destroy_demo
+from fde_cli.operations import (
+    OperationError,
+    assert_scope,
+    bootstrap_gcp,
+    deploy_demo,
+    destroy_demo,
+)
 from test_config import VALID, write
 
 
@@ -34,4 +40,15 @@ def test_managed_profile_cannot_deploy_under_demo_authorization(tmp_path: Path) 
 
 def test_destroy_requires_exact_customer_before_running_tools(tmp_path: Path) -> None:
     with pytest.raises(OperationError, match="exactly match"):
-        destroy_demo(config(tmp_path), tmp_path, "wrong")
+        destroy_demo(config(tmp_path), tmp_path, "wrong", "demo-test-run")
+
+
+def test_bootstrap_requires_exact_project_before_cloud_calls(tmp_path: Path) -> None:
+    with pytest.raises(OperationError, match="exactly match"):
+        bootstrap_gcp(
+            config(tmp_path),
+            terraform_dir=tmp_path,
+            state_bucket="fdetemplate-state-test",
+            github_repository="Abdul-RehmanCU/FDE_Deploy_Template",
+            confirm_project="wrong-project",
+        )

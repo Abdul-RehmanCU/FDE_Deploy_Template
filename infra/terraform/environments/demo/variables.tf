@@ -1,5 +1,6 @@
 variable "project_id" { type = string }
 variable "customer" { type = string }
+variable "expiry_id" { type = string }
 variable "region" {
   type    = string
   default = "northamerica-northeast1"
