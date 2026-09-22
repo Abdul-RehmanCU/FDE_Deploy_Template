@@ -1,4 +1,6 @@
 namespace: observability
+rbac:
+  create: true
 retention: 6h
 grafanaAdminSecret: fde-grafana-admin
 monitoredNamespaces: [staging, production-demo]

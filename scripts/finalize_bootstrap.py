@@ -175,6 +175,7 @@ def main() -> int:
     targets = (
         "google_project_iam_member.automation_roles",
         "google_storage_bucket_iam_member.infra_state",
+        "google_storage_bucket_iam_member.deploy_state",
         "google_service_account_iam_member.github_federation",
         "google_iam_workload_identity_pool_provider.github",
         "google_iam_workload_identity_pool.github",

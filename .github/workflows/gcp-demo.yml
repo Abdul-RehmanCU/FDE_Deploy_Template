@@ -114,6 +114,7 @@ jobs:
           service_account: ${{ vars.GCP_INFRA_SERVICE_ACCOUNT }}
       - name: Set up gcloud
         uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3
+        with: { install_components: gke-gcloud-auth-plugin }
       - name: Atomically retain the one permitted paid attempt
         shell: bash
         run: |
@@ -184,6 +185,7 @@ jobs:
           service_account: ${{ vars.GCP_INFRA_SERVICE_ACCOUNT }}
       - name: Set up gcloud
         uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3
+        with: { install_components: gke-gcloud-auth-plugin }
       - name: Set up Terraform
         uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
         with: { terraform_version: 1.15.8, terraform_wrapper: false }
@@ -231,6 +233,19 @@ jobs:
             --terraform-dir infra/terraform/environments/demo --plan "$private_dir/demo.tfplan" \
             --expiry-terraform-dir infra/terraform/environments/expiry \
             --expiry-evidence "$RUNNER_TEMP/expiry-evidence/expiry-evidence.json"
+
+
+      - name: Set up Helm for infrastructure-owned monitoring discovery
+        uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
+        with: { version: v4.1.1 }
+      - name: Provision monitoring discovery permissions with infrastructure identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          gcloud container clusters get-credentials "fde-${CUSTOMER}-demo" --zone="$ZONE" --project="$PROJECT_ID"
+          kubectl create namespace observability --dry-run=client -o yaml | kubectl apply -f -
+          helm template fde-observability observability/helm --namespace observability \
+            --show-only templates/rbac.yaml | kubectl apply -f -
 
   build-images:
     name: Build immutable application images
@@ -280,6 +295,7 @@ jobs:
           service_account: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
       - name: Set up gcloud
         uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3
+        with: { install_components: gke-gcloud-auth-plugin }
       - name: Connect to the exact demo cluster
         run: gcloud container clusters get-credentials "fde-${CUSTOMER}-demo" --zone="$ZONE" --project="$PROJECT_ID"
       - name: Set up Helm
@@ -352,7 +368,7 @@ jobs:
             --from-literal=username=admin --from-literal=password="$grafana_password" \
             --dry-run=client -o yaml | kubectl apply -f -
           helm upgrade --install fde-observability observability/helm --namespace observability \
-            --values release-bundle/observability-values.yaml --atomic --wait --timeout 8m
+            --values release-bundle/observability-values.yaml --set rbac.create=false --atomic --wait --timeout 8m
           uv run --project tooling/fde fde deploy-release \
             --config release-bundle/staging-config.yaml --customer "$CUSTOMER" --environment staging --project "$PROJECT_ID" \
             --chart infra/helm/fde --values release-bundle/staging-values.yaml
@@ -408,6 +424,7 @@ jobs:
           service_account: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
       - name: Set up gcloud
         uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3
+        with: { install_components: gke-gcloud-auth-plugin }
       - name: Set up Helm
         uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
         with: { version: v4.1.1 }
@@ -540,6 +557,7 @@ jobs:
           service_account: ${{ vars.GCP_DEPLOY_SERVICE_ACCOUNT }}
       - name: Set up gcloud
         uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3
+        with: { install_components: gke-gcloud-auth-plugin }
       - name: Set up Helm
         uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
         with: { version: v4.1.1 }
