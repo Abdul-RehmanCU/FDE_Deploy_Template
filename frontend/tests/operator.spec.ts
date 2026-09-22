@@ -22,6 +22,8 @@ test("operator completes upload mapping validation confirmation and search", asy
   await page.getByLabel(/^Company/).selectOption("Company")
   await page.getByLabel(/^Country code/).selectOption("Country")
   await page.getByLabel(/^External ID/).selectOption("External ID")
+  await page.evaluate(() => window.scrollTo(0, 0))
+  await page.screenshot({ path: "test-results/evidence/column-mapping.png" })
   await page.getByRole("button", { name: "Save mapping" }).click()
   await expect(
     page.getByRole("button", { name: "Validate rows" }),
@@ -34,34 +36,26 @@ test("operator completes upload mapping validation confirmation and search", asy
   await expect(
     page.getByRole("heading", { name: "Validation results" }),
   ).toBeVisible()
-  await page.screenshot({
-    path: "test-results/evidence/validation-results.png",
-    fullPage: true,
-  })
+  await page
+    .locator("section")
+    .filter({ has: page.getByRole("heading", { name: "Validation results" }) })
+    .screenshot({ path: "test-results/evidence/validation-results.png" })
 
   await page.getByRole("button", { name: "Import 3 valid rows" }).click()
   await expect(page.getByText("completed", { exact: true })).toBeVisible({
     timeout: 30_000,
   })
-  await page.screenshot({
-    path: "test-results/evidence/completed-import.png",
-    fullPage: true,
-  })
+  await page.evaluate(() => window.scrollTo(0, 0))
+  await page.screenshot({ path: "test-results/evidence/completed-import.png" })
 
   await page.goto("/directory")
   await page.getByLabel("Search contacts").fill("Amélie")
   await expect(page.getByText("amelie.tremblay@example.com")).toBeVisible()
-  await page.screenshot({
-    path: "test-results/evidence/directory.png",
-    fullPage: true,
-  })
+  await page.screenshot({ path: "test-results/evidence/directory.png" })
 
   await page.goto("/")
   await expect(
     page.getByRole("heading", { name: "Operations overview" }),
   ).toBeVisible()
-  await page.screenshot({
-    path: "test-results/evidence/overview.png",
-    fullPage: true,
-  })
+  await page.screenshot({ path: "test-results/evidence/overview.png" })
 })
