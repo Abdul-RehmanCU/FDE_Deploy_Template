@@ -397,6 +397,7 @@ jobs:
           successes=$(grep -c '^success$' "$probe_log" || true)
           errors=$(grep -c '^error$' "$probe_log" || true)
           test "$successes" -gt 0
+          echo "Rolling probe successes=$successes errors=$errors"
           {
             echo "### kind rolling update measurement"
             echo "- Successful requests: $successes"
@@ -409,11 +410,16 @@ jobs:
             --values infra/helm/fde/values-kind.yaml \
             --set appVersion=ci-unhealthy \
             --set images.backend.tag=missing-ci \
-            --atomic \
+            --no-hooks \
+            --wait \
             --timeout 90s
           failed_release_status=$?
           set -e
           test "$failed_release_status" -ne 0
+          helm rollback fde 1 \
+            --namespace fde-staging \
+            --wait \
+            --timeout 3m
           kubectl -n fde-staging rollout status deployment/fde-ci-demo-staging-api --timeout=180s
           restored_image=$(kubectl -n fde-staging get deployment/fde-ci-demo-staging-api -o jsonpath='{.spec.template.spec.containers[0].image}')
           test "$restored_image" = localhost/fde-backend:ci
