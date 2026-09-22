@@ -10,6 +10,7 @@ from app.api.main import api_router
 from app.core.config import settings
 from app.core.observability import configure_logging, configure_tracing
 
+
 def custom_generate_unique_id(route: APIRoute) -> str:
     return f"{route.tags[0]}-{route.name}"
 
