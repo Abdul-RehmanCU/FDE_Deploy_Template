@@ -173,25 +173,64 @@ metadata:
   name: fde-alloy-config
 data:
   config.alloy: |
-    discovery.kubernetes "pods" { role = "pod" }
+    discovery.kubernetes "pods" {
+      role = "pod"
+    }
     discovery.relabel "pod_logs" {
       targets = discovery.kubernetes.pods.targets
-      rule { source_labels = ["__meta_kubernetes_pod_node_name"] regex = env("HOSTNAME") action = "keep" }
-      rule { source_labels = ["__meta_kubernetes_namespace"] target_label = "namespace" }
-      rule { source_labels = ["__meta_kubernetes_pod_name"] target_label = "pod" }
-      rule { source_labels = ["__meta_kubernetes_pod_container_name"] target_label = "container" }
-      rule { source_labels = ["__meta_kubernetes_pod_uid", "__meta_kubernetes_pod_container_name"] separator = "/" target_label = "__path__" replacement = "/var/log/pods/*$1/*.log" }
+      rule {
+        source_labels = ["__meta_kubernetes_pod_node_name"]
+        regex = env("HOSTNAME")
+        action = "keep"
+      }
+      rule {
+        source_labels = ["__meta_kubernetes_namespace"]
+        target_label = "namespace"
+      }
+      rule {
+        source_labels = ["__meta_kubernetes_pod_name"]
+        target_label = "pod"
+      }
+      rule {
+        source_labels = ["__meta_kubernetes_pod_container_name"]
+        target_label = "container"
+      }
+      rule {
+        source_labels = ["__meta_kubernetes_pod_uid", "__meta_kubernetes_pod_container_name"]
+        separator = "/"
+        target_label = "__path__"
+        replacement = "/var/log/pods/*$1/*.log"
+      }
     }
-    local.file_match "pod_logs" { path_targets = discovery.relabel.pod_logs.output }
+    local.file_match "pod_logs" {
+      path_targets = discovery.relabel.pod_logs.output
+    }
     loki.source.file "pod_logs" {
       targets = local.file_match.pod_logs.targets
       forward_to = [loki.process.json.receiver]
     }
     loki.process "json" {
-      stage.cri {}
-      stage.json { expressions = { level = "level", trace_id = "trace_id", job_id = "job_id" } }
-      stage.labels { values = { level = "" } }
-      stage.label_drop { values = ["filename", "job_id"] }
+      stage.cri {
+      }
+      stage.json {
+        expressions = {
+          level = "level"
+          trace_id = "trace_id"
+          job_id = "job_id"
+        }
+      }
+      stage.labels {
+        values = {
+          level = ""
+        }
+      }
+      stage.label_drop {
+        values = ["filename", "job_id"]
+      }
       forward_to = [loki.write.default.receiver]
     }
-    loki.write "default" { endpoint { url = "http://fde-loki:3100/loki/api/v1/push" } }
+    loki.write "default" {
+      endpoint {
+        url = "http://fde-loki:3100/loki/api/v1/push"
+      }
+    }
