@@ -65,6 +65,12 @@ export interface ImportActionPublic {
   job_id: string | null
 }
 
+export interface ImportPreviewPublic {
+  header: string[]
+  rows: string[][]
+  truncated: boolean
+}
+
 export interface JobPublic {
   id: string
   import_id: string

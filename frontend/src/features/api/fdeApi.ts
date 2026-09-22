@@ -12,6 +12,7 @@ import type {
   CursorPage,
   DashboardPublic,
   ImportActionPublic,
+  ImportPreviewPublic,
   ImportPublic,
   ImportRowPublic,
   JobAttemptPublic,
@@ -34,6 +35,10 @@ export const fdeApi = {
   getImport: async (id: string) =>
     (await ImportsService.getImport({ path: { import_id: id } }))
       .data as ImportPublic,
+
+  previewImport: async (id: string) =>
+    (await ImportsService.previewImport({ path: { import_id: id } }))
+      .data as ImportPreviewPublic,
 
   uploadImport: async (file: File) =>
     (await ImportsService.uploadImport({ body: { file } }))
