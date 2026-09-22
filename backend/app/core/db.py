@@ -1,33 +1,28 @@
-from sqlmodel import Session, create_engine, select
+from sqlalchemy import event
+from sqlalchemy.engine import Engine
+from sqlmodel import Session, create_engine
 
-from app import crud
 from app.core.config import settings
-from app.models import User, UserCreate
 
-engine = create_engine(str(settings.DATABASE_URL), pool_pre_ping=True)
+engine = create_engine(
+    settings.sqlalchemy_database_url,
+    pool_pre_ping=True,
+    pool_size=settings.DB_POOL_SIZE,
+    max_overflow=settings.DB_MAX_OVERFLOW,
+    pool_timeout=settings.DB_POOL_TIMEOUT_SECONDS,
+)
 
 
-# make sure all SQLModel models are imported (app.models) before initializing DB
-# otherwise, SQLModel might fail to initialize relationships properly
-# for more details: https://github.com/fastapi/full-stack-fastapi-template/issues/28
+@event.listens_for(Engine, "connect")
+def set_postgres_statement_timeout(dbapi_connection: object, connection_record: object) -> None:
+    del connection_record
+    cursor = dbapi_connection.cursor()  # type: ignore[attr-defined]
+    try:
+        cursor.execute("SET statement_timeout = %s", (settings.DB_STATEMENT_TIMEOUT_MS,))
+    finally:
+        cursor.close()
 
 
 def init_db(session: Session) -> None:
-    # Tables should be created with Alembic migrations
-    # But if you don't want to use migrations, create
-    # the tables un-commenting the next lines
-    # from sqlmodel import SQLModel
-
-    # This works because the models are already imported and registered from app.models
-    # SQLModel.metadata.create_all(engine)
-
-    user = session.exec(
-        select(User).where(User.email == settings.FIRST_SUPERUSER)
-    ).first()
-    if not user:
-        user_in = UserCreate(
-            email=settings.FIRST_SUPERUSER,
-            password=settings.FIRST_SUPERUSER_PASSWORD,
-            is_superuser=True,
-        )
-        user = crud.create_user(session=session, user_create=user_in)
+    """Verify connectivity; schema creation is exclusively managed by Alembic."""
+    session.connection()
