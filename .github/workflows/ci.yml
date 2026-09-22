@@ -128,6 +128,8 @@ jobs:
           set -euo pipefail
           for module in \
             infra/terraform/bootstrap \
+            infra/terraform/environments/demo \
+            infra/terraform/environments/expiry \
             infra/terraform/modules/demo \
             infra/terraform/modules/expiry \
             infra/terraform/modules/managed
