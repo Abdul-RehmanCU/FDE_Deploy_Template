@@ -59,7 +59,7 @@ jobs:
       FASTAPI_ENV: development
       PROJECT_NAME: FDE Deployment Template CI
       SECRET_KEY: ci-only-secret-key-with-at-least-32-characters
-      FIRST_SUPERUSER: admin@example.test
+      FIRST_SUPERUSER: admin@example.com
       FIRST_SUPERUSER_PASSWORD: ci-only-superuser-password
       DATABASE_URL: postgresql://postgres:ci-postgres-password@localhost:5432/app
       REDIS_URL: redis://localhost:6379/0
