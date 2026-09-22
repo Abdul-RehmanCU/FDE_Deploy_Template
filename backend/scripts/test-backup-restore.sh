@@ -27,7 +27,7 @@ if [[ ! "$target_db" =~ ^fde_restore_[0-9]+_[0-9]+$ ]]; then
 fi
 
 readarray -t urls < <(
-  python - "$DATABASE_URL" "$target_db" <<'PY'
+  uv run --package app python - "$DATABASE_URL" "$target_db" <<'PY'
 import sys
 from sqlalchemy.engine import make_url
 
