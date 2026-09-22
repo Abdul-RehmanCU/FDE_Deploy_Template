@@ -20,8 +20,9 @@ BACKEND_DIR = Path(__file__).parents[1]
 
 
 def database_url(name: str) -> str:
+    assert settings.DATABASE_URL
     return (
-        make_url(settings.sqlalchemy_database_url)
+        make_url(settings.DATABASE_URL)
         .set(database=name)
         .render_as_string(hide_password=False)
     )
