@@ -16,6 +16,7 @@ GitHub-hosted CI starts both services, then runs:
 cd backend
 alembic upgrade head
 RUN_POSTGRES_TESTS=1 pytest -q tests
+bash scripts/test-backup-restore.sh
 ```
 
 The service-backed suite covers schema constraints/indexes; administrator,
@@ -26,6 +27,11 @@ publication and stalled reconciliation; audit rollback; and PostgreSQL-derived
 worker metrics. Unit tests cover UTF-8 BOM, malformed and oversized data,
 duplicate rules, formula neutralization, object path traversal, secret-file
 precedence, safe errors, PII redaction, upload compensation, and retention.
+The migration-upgrade test first applies the upstream schema, inserts a legacy
+administrator and item, upgrades to head, and proves both legacy reads and the
+new FDE schema survive. The backup drill uses real version-matched PostgreSQL
+client tools and a disposable database; a fresh Alembic migration alone does
+not satisfy recovery evidence.
 
 Published evidence at commit `eebc040e130b10d28c10dff0f339f0399364c78a`
 is [GitHub Actions run 35702605568](https://github.com/Abdul-RehmanCU/FDE_Deploy_Template/actions/runs/35702605568):

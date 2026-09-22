@@ -40,3 +40,25 @@ The demo/in-cluster and managed Cloud SQL procedures are deployment-owned.
 Backup/restore execution against a live GCP installation remains **pending
 verification** until its evidence bundle identifies the tested revision,
 database target, timestamps, counts, and cleanup result.
+
+CI runs the same logical drill against its PostgreSQL service with matching
+client tools:
+
+```console
+cd backend
+bash scripts/test-backup-restore.sh
+```
+
+The script accepts only a generated `fde_restore_<run>_<random>` target, creates
+it through the PostgreSQL maintenance database, uses custom-format `pg_dump`
+and `pg_restore`, compares every application table count, checks foreign-key
+orphans and normalized-email uniqueness, and drops only that disposable target
+in its exit trap. It refuses a pg_dump/server major-version mismatch.
+
+The first FDE migration is additive for the imported upstream application. It
+retains the legacy `item` table and `user.is_superuser` column while adding role
+and import state. Existing administrators are mapped to role `admin`, and an
+old application can still read its users/items during a rollback window. New
+role changes made by the FDE application are synchronized back to
+`is_superuser` only during migration downgrade; running old and new writers
+concurrently is outside the compatibility scope.
