@@ -423,7 +423,15 @@ jobs:
           kubectl -n fde-staging rollout status deployment/fde-ci-demo-staging-api --timeout=180s
           restored_image=$(kubectl -n fde-staging get deployment/fde-ci-demo-staging-api -o jsonpath='{.spec.template.spec.containers[0].image}')
           test "$restored_image" = localhost/fde-backend:ci
-          curl --fail --silent http://127.0.0.1:18082/api/v1/health/ready >/dev/null
+          kubectl -n fde-staging port-forward service/fde-ci-demo-staging-frontend 18084:8080 > "$RUNNER_TEMP/recovery-port-forward.log" 2>&1 &
+          for attempt in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:18084/api/v1/health/ready >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat "$RUNNER_TEMP/recovery-port-forward.log"
+          exit 1
       - name: Restart worker without losing readiness
         run: |
           kubectl -n fde-staging delete pod --selector=app.kubernetes.io/component=worker
