@@ -18,7 +18,7 @@ export const Route = createFileRoute("/_layout/imports/")({
 function ImportsPage() {
   const { user } = useAuth()
   const role = (user as { role?: string } | null)?.role
-  const canImport = role !== "viewer"
+  const canImport = role === "admin" || role === "operator"
   const imports = useQuery({
     queryKey: ["imports"],
     queryFn: () => fdeApi.listImports(),

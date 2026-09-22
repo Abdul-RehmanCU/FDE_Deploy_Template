@@ -61,8 +61,8 @@ function ImportDetailPage() {
   const [outcome, setOutcome] = useState<OutcomeFilter>("accepted")
   const [jobId, setJobId] = useState<string | null>(null)
   const role = (user as { role?: string } | null)?.role
-  const canMutate = role !== "viewer"
-  const canDownload = role !== "viewer"
+  const canMutate = role === "admin" || role === "operator"
+  const canDownload = role === "admin" || role === "operator"
 
   const importQuery = useQuery({
     queryKey: ["import", importId],

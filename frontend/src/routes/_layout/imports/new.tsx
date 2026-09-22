@@ -24,7 +24,7 @@ function NewImportPage() {
   const [file, setFile] = useState<File | null>(null)
   const [localError, setLocalError] = useState<string | null>(null)
   const role = (user as { role?: string } | null)?.role
-  const canImport = role !== "viewer"
+  const canImport = role === "admin" || role === "operator"
 
   const upload = useMutation({
     mutationFn: (selected: File) => fdeApi.uploadImport(selected),
