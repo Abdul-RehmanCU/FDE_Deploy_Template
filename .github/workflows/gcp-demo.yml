@@ -137,7 +137,8 @@ jobs:
       contents: read # required by the called workflow checkout
       id-token: write # required by called keyless GCP authentication
     uses: ./.github/workflows/gcp-expiry.yml
-    secrets: inherit # the reusable expiry job must receive the private cost evidence
+    secrets:
+      DEMO_COST_EVIDENCE_JSON: ${{ secrets.DEMO_COST_EVIDENCE_JSON }}
     with:
       project_id: ${{ needs.preflight.outputs.project_id }}
       customer: ${{ needs.preflight.outputs.customer }}

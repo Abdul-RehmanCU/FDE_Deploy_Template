@@ -8,6 +8,10 @@ on:
       state_bucket: { required: true, type: string }
       expiry_id: { required: true, type: string }
       expires_at: { required: true, type: string }
+    secrets:
+      DEMO_COST_EVIDENCE_JSON:
+        required: true
+        description: Current private USD 25 cost authorization evidence
     outputs:
       manifest_sha:
         value: ${{ jobs.expiry.outputs.manifest_sha }}
