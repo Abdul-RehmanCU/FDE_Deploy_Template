@@ -2,6 +2,7 @@ import json
 import logging
 from datetime import UTC, datetime
 
+from fastapi import FastAPI
 from opentelemetry import trace
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
 from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
@@ -10,6 +11,7 @@ from opentelemetry.instrumentation.sqlalchemy import SQLAlchemyInstrumentor
 from opentelemetry.sdk.resources import Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.trace import Span
 from prometheus_client import Counter, Gauge, Histogram
 
 from app.core.config import settings
@@ -44,15 +46,36 @@ class JsonFormatter(logging.Formatter):
         return json.dumps(payload, separators=(",", ":"))
 
 
+class AccessLogPrivacyFilter(logging.Filter):
+    """Strip query strings because contact search terms may contain PII."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if isinstance(record.args, tuple) and len(record.args) >= 3:
+            values = list(record.args)
+            values[2] = str(values[2]).split("?", 1)[0]
+            record.args = tuple(values)
+        return True
+
+
+def redact_request_trace(span: Span, scope: dict[str, object]) -> None:
+    if not span.is_recording():
+        return
+    path = str(scope.get("path", ""))
+    span.set_attribute("url.query", "")
+    span.set_attribute("url.full", path)
+    span.set_attribute("http.target", path)
+
+
 def configure_logging() -> None:
     handler = logging.StreamHandler()
     handler.setFormatter(JsonFormatter())
     root = logging.getLogger()
     root.handlers = [handler]
     root.setLevel(logging.INFO)
+    logging.getLogger("uvicorn.access").addFilter(AccessLogPrivacyFilter())
 
 
-def configure_tracing(app: object) -> None:
+def configure_tracing(app: FastAPI) -> None:
     if settings.OTEL_EXPORTER_OTLP_ENDPOINT:
         provider = TracerProvider(
             resource=Resource.create(
@@ -69,6 +92,6 @@ def configure_tracing(app: object) -> None:
             )
         )
         trace.set_tracer_provider(provider)
-    FastAPIInstrumentor.instrument_app(app)  # type: ignore[arg-type]
+    FastAPIInstrumentor.instrument_app(app, server_request_hook=redact_request_trace)
     SQLAlchemyInstrumentor().instrument(engine=engine)
     RedisInstrumentor().instrument()
