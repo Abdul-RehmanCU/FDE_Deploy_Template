@@ -1,0 +1,6 @@
+project_id   = "fdetemplate"
+customer     = "demo"
+cluster_name = "fde-demo"
+labels = {
+  expiry-id = "replace-with-run-id"
+}

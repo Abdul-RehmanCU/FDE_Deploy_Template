@@ -1,0 +1,10 @@
+project_id          = "fdetemplate"
+project_number      = "653399508708"
+expiry_id           = "demo-yyyymmddhhmm"
+expires_at          = "2026-09-22T12:00:00Z"
+cluster_name        = "fde-demo"
+artifact_repository = "fde-demo-images"
+bucket_names = [
+  "fdetemplate-fde-demo-staging",
+  "fdetemplate-fde-demo-production-demo",
+]
