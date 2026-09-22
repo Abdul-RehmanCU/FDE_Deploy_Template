@@ -164,8 +164,15 @@ jobs:
               exit 1
             fi
           done
-          gcloud asset search-all-resources --scope="projects/$PROJECT_ID" \
-            --query="labels.expiry-id=$EXPIRY_ID" --format=json > cleanup-evidence/final-owned-assets.json
+          # Cloud Asset indexes deletions asynchronously. Direct workflow and
+          # Scheduler reads above are authoritative; wait briefly for the
+          # search index before declaring owned residue.
+          for _ in {1..30}; do
+            gcloud asset search-all-resources --scope="projects/$PROJECT_ID" \
+              --query="labels.expiry-id=$EXPIRY_ID" --format=json > cleanup-evidence/final-owned-assets.json
+            test "$(jq 'length' cleanup-evidence/final-owned-assets.json)" -eq 0 && break
+            sleep 5
+          done
           test "$(jq 'length' cleanup-evidence/final-owned-assets.json)" -eq 0
           jq -n --arg project "$PROJECT_ID" --arg customer "$CUSTOMER" --arg expiry_id "$EXPIRY_ID" \
             '{project:$project,customer:$customer,expiry_id:$expiry_id,runtime_residue:0,expiry_guard_removed:true,owner_bootstrap_teardown_required:true}' \

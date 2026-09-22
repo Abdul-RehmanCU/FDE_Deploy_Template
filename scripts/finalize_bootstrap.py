@@ -254,28 +254,25 @@ def main() -> int:
             "cannot inspect bootstrap Terraform state after destroy: "
             + state_after_destroy_result.stderr.strip()
         )
-    verify_retirable_state(state_after_destroy)
-    if any(entry.startswith("google_project_service.required[") for entry in state_after_destroy):
-        # All services use disable_on_destroy=false. Remove only their state
-        # records here; targeting them for destroy also targets the dependent
-        # state bucket before its versioned objects have been cleared.
-        run([terraform, "state", "rm", "google_project_service.required"], cwd=terraform_dir)
-    run([terraform, "state", "rm", "google_storage_bucket.terraform_state"], cwd=terraform_dir)
+    if state_after_destroy:
+        verify_retirable_state(state_after_destroy)
+        if any(entry.startswith("google_project_service.required[") for entry in state_after_destroy):
+            # All services use disable_on_destroy=false. Targeting them for
+            # destroy also selects the dependent, still-versioned bucket.
+            run([terraform, "state", "rm", "google_project_service.required"], cwd=terraform_dir)
+        run([terraform, "state", "rm", "google_storage_bucket.terraform_state"], cwd=terraform_dir)
+    elif state:
+        raise RuntimeError("bootstrap state disappeared unexpectedly during finalization")
+    # An empty state is a valid resume point after a previous run removed its
+    # records but stopped while clearing the exact bucket verified above.
 
     authorization = f"{bucket_uri}/authorizations/single-paid-demo.json"
     all_versions_before = list_bucket_generations(bucket_uri, gcloud)
     if all_versions_before:
-        run(
-            [
-                gcloud,
-                "storage",
-                "objects",
-                "update",
-                authorization,
-                "--clear-temporary-hold",
-            ],
-            check=False,
-        )
+        if any(str(item.get("name", "")).split("#", 1)[0] == authorization for item in all_versions_before):
+            run(
+                [gcloud, "storage", "objects", "update", authorization, "--no-temporary-hold"]
+            )
         run(all_generation_delete_command(bucket_uri, gcloud))
     all_versions_after = list_bucket_generations(bucket_uri, gcloud)
     if all_versions_after:

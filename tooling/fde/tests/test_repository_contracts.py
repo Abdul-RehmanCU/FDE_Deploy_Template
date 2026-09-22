@@ -100,3 +100,13 @@ def test_expiry_probe_only_retries_new_logging_role_propagation() -> None:
     assert "for _ in {1..12}; do" in workflow
     assert 'contains("logging.logEntries.create")' in workflow
     assert "sleep 10" in workflow
+
+
+def test_called_expiry_receives_private_cost_evidence() -> None:
+    caller = yaml.load(
+        (ROOT / ".github" / "workflows" / "gcp-demo.yml").read_text(),
+        Loader=yaml.BaseLoader,
+    )
+    expiry_call = caller["jobs"]["expiry"]
+    assert expiry_call["uses"] == "./.github/workflows/gcp-expiry.yml"
+    assert expiry_call["secrets"] == "inherit"

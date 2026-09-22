@@ -100,3 +100,14 @@ def test_only_bucket_and_non_disabling_api_records_can_be_retired() -> None:
         MODULE.verify_retirable_state([
             'google_project_service.required["container.googleapis.com"]',
         ])
+
+
+def test_authorization_hold_uses_supported_gcloud_disable_flag() -> None:
+    source = MODULE_PATH.read_text(encoding="utf-8")
+    assert '"--no-temporary-hold"' in source
+    assert '"--clear-temporary-hold"' not in source
+
+
+def test_partial_retry_requires_state_to_have_started_empty() -> None:
+    source = MODULE_PATH.read_text(encoding="utf-8")
+    assert 'elif state:\n        raise RuntimeError("bootstrap state disappeared unexpectedly' in source
