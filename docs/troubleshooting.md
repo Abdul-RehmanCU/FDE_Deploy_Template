@@ -82,6 +82,8 @@ Review and commit only the expected hash additions.
 
 Stop feature/deployment work. Compare the authoritative expiry ID, project number, manifest SHA, resource labels, names, and creation timestamps. Check all three exact-minute schedules and Workflow executions. A stale trigger must no-op; an ownership mismatch must not delete. Reconcile partial results and rerun only the exact allowlisted cleanup path.
 
+Cloud Asset Inventory is an [eventually consistent metadata index](https://docs.cloud.google.com/asset-inventory/docs/asset-inventory-overview). A deleted node pool can remain in search results after the GKE deletion operation has completed. The cleanup workflow records that as `asset_index_pending` and relies on direct GKE, Compute, Storage, Artifact Registry, Secret Manager, Workflow, and Scheduler reads to establish whether billable resources remain. Recheck the index later; do not relaunch resources to clear it.
+
 ## Billing appears unchanged
 
 Billing data is delayed. Record the query timestamp, currency, billing period, and pending status. Do not infer zero final cost from a current zero row. Keep the cleanup reserve and continue inventory checks.

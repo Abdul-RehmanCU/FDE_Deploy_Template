@@ -169,18 +169,15 @@ jobs:
               exit 1
             fi
           done
-          # Cloud Asset indexes deletions asynchronously. Direct workflow and
-          # Scheduler reads above are authoritative; wait briefly for the
-          # search index before declaring owned residue.
-          for _ in {1..30}; do
-            gcloud asset search-all-resources --scope="projects/$PROJECT_ID" \
-              --query="labels.expiry-id=$EXPIRY_ID" --format=json > cleanup-evidence/final-owned-assets.json
-            test "$(jq 'length' cleanup-evidence/final-owned-assets.json)" -eq 0 && break
-            sleep 5
-          done
-          test "$(jq 'length' cleanup-evidence/final-owned-assets.json)" -eq 0
+          # Cloud Asset search is eventually consistent, sometimes for hours.
+          # The runtime destroy and direct Workflow/Scheduler reads above are
+          # authoritative. Preserve any lagging index entries for later audit.
+          gcloud asset search-all-resources --scope="projects/$PROJECT_ID" \
+            --query="labels.expiry-id=$EXPIRY_ID" --format=json > cleanup-evidence/final-owned-assets.json
+          asset_index_pending=$(jq 'length > 0' cleanup-evidence/final-owned-assets.json)
           jq -n --arg project "$PROJECT_ID" --arg customer "$CUSTOMER" --arg expiry_id "$EXPIRY_ID" \
-            '{project:$project,customer:$customer,expiry_id:$expiry_id,runtime_residue:0,expiry_guard_removed:true,owner_bootstrap_teardown_required:true}' \
+            --argjson asset_index_pending "$asset_index_pending" \
+            '{project:$project,customer:$customer,expiry_id:$expiry_id,runtime_residue:0,expiry_guard_removed:true,asset_index_pending:$asset_index_pending,owner_bootstrap_teardown_required:true}' \
             > cleanup-evidence/cleanup-summary.json
       - name: Upload sanitized cleanup evidence
         if: always()
