@@ -9,7 +9,7 @@ Complete this record for each installation. Replace every `PENDING` value with e
 | Customer | PENDING |
 | Environment | PENDING |
 | GCP project ID / number | PENDING |
-| Region / zone | `northamerica-northeast1` / PENDING |
+| Region / zone | PENDING / PENDING (record privately for the customer) |
 | Namespace | PENDING |
 | Git commit | PENDING |
 | Backend digest | PENDING |

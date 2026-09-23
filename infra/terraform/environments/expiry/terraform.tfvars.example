@@ -1,12 +1,12 @@
-project_id          = "fdetemplate"
-project_number      = "653399508708"
+project_id          = "example-fde-project"
+project_number      = "123456789012"
 expiry_id           = "demo-yyyymmddhhmm"
 expires_at          = "2026-09-22T12:00:00Z"
 cluster_name        = "fde-demo"
 artifact_repository = "fde-demo-images"
 bucket_names = [
-  "fdetemplate-fde-demo-staging",
-  "fdetemplate-fde-demo-production-demo",
+  "example-fde-project-fde-demo-staging",
+  "example-fde-project-fde-demo-production-demo",
 ]
 disk_names = [
   "fde-demo-observability-loki",

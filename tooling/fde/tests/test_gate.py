@@ -12,7 +12,7 @@ NOW = datetime(2026, 9, 22, 8, 0, tzinfo=timezone.utc)
 
 def write_gate(tmp_path: Path, **changes: object) -> Path:
     data = {
-        "project": "fdetemplate",
+        "project": "example-fde-project",
         "customer": "acme",
         "revision": "a" * 40,
         "expires_at": (NOW + timedelta(hours=3, minutes=59)).isoformat(),

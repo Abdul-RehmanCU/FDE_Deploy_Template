@@ -110,7 +110,9 @@ def test_called_expiry_receives_private_cost_evidence() -> None:
     expiry_call = caller["jobs"]["expiry"]
     assert expiry_call["uses"] == "./.github/workflows/gcp-expiry.yml"
     assert expiry_call["secrets"] == {
-        "DEMO_COST_EVIDENCE_JSON": "${{ secrets.DEMO_COST_EVIDENCE_JSON }}"
+        "DEMO_COST_EVIDENCE_JSON": "${{ secrets.DEMO_COST_EVIDENCE_JSON }}",
+        "GCP_REGION": "${{ secrets.GCP_REGION }}",
+        "GCP_ZONE": "${{ secrets.GCP_ZONE }}",
     }
     callee = yaml.load(
         (ROOT / ".github" / "workflows" / "gcp-expiry.yml").read_text(),

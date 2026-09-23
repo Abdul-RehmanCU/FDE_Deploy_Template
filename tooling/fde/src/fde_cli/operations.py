@@ -201,7 +201,7 @@ def validate_demo_cost_drivers(resources: list[dict[str, object]], *, zone: str)
     if any(item.get("type") in forbidden for item in resources):
         raise OperationError("demo plan contains a public-LB or managed-profile cost driver")
     if len(clusters) != 1 or clusters[0].get("location") != zone:
-        raise OperationError("demo plan must contain one zonal Montréal cluster")
+        raise OperationError("demo plan must contain one cluster in the configured zone")
     if len(node_pools) != 1 or node_pools[0].get("node_count") != 1:
         raise OperationError("demo plan must contain one fixed node")
     node_configs = node_pools[0].get("node_config")
@@ -460,7 +460,13 @@ def deploy_demo_infrastructure(
     cost = load_cost_gate(cost_path)
     gate = load_release_gate(gate_path)
     validate_paid_cost_gate(cost)
-    if cost.project != config.project or gate.project != config.project or gate.customer != config.customer:
+    if (
+        cost.project != config.project
+        or cost.region != config.region
+        or cost.zone != config.zone
+        or gate.project != config.project
+        or gate.customer != config.customer
+    ):
         raise OperationError("cost/release evidence does not match explicit deployment scope")
     terraform = executable("terraform")
     state_sha = run([terraform, "output", "-raw", "manifest_sha"], cwd=expiry_terraform_dir).stdout.strip()

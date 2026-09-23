@@ -5,7 +5,7 @@ run "managed_profile_plan" {
 
   variables {
     project_id   = "example-fde-production"
-    region       = "northamerica-northeast1"
+    region       = "example-region1"
     customer     = "example"
     environment  = "production"
     cluster_name = "fde-example-production"
@@ -13,8 +13,8 @@ run "managed_profile_plan" {
   }
 
   assert {
-    condition     = google_container_cluster.managed.location == "northamerica-northeast1"
-    error_message = "Managed GKE must be regional in Montréal."
+    condition     = google_container_cluster.managed.location == "example-region1"
+    error_message = "Managed GKE must use the configured region."
   }
   assert {
     condition     = google_container_cluster.managed.deletion_protection
@@ -47,6 +47,7 @@ run "managed_rejects_demo_environment" {
 
   variables {
     project_id   = "example-fde-production"
+    region       = "example-region1"
     customer     = "example"
     environment  = "production-demo"
     cluster_name = "fde-example-production"

@@ -4,7 +4,7 @@ Start with the execution surface and exact revision. A local success does not di
 
 ## Configuration is rejected
 
-Run `fde validate-config` and read the exact field error. Common causes are a missing customer/environment/project, non-Montréal demo region, mutable image tag where a digest is required, plaintext secret value, managed profile under demo authorization, or customer mismatch between the command and configuration.
+Run `fde validate-config` and read the exact field error. Common causes are a missing customer/environment/project, region and zone mismatch, mutable image tag where a digest is required, plaintext secret value, managed profile under demo authorization, or customer mismatch between the command and configuration.
 
 Do not bypass validation with direct Terraform or Helm commands.
 

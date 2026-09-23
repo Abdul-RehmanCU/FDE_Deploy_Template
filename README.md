@@ -5,7 +5,7 @@
 [![CI](https://github.com/Abdul-RehmanCU/FDE_Deploy_Template/actions/workflows/ci.yml/badge.svg)](https://github.com/Abdul-RehmanCU/FDE_Deploy_Template/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-0b67c9.svg)](LICENSE)
 [![Python 3.14](https://img.shields.io/badge/Python-3.14-0b67c9.svg)](.python-version)
-[![GCP Montréal](https://img.shields.io/badge/GCP-northamerica--northeast1-0f9f85.svg)](PLAN.md)
+[![GCP configurable region](https://img.shields.io/badge/GCP-configurable_region-0f9f85.svg)](PLAN.md)
 
 FDE Deploy is a reusable field deployment template for taking a customer data application from source to a customer-scoped environment. It demonstrates the work around the application as carefully as the application itself: validation, identity, immutable releases, telemetry, failure recovery, bounded cost, evidence collection, and teardown.
 
@@ -39,7 +39,7 @@ The product is a guided contact onboarding workflow. Administrators and operator
 | Durable jobs | PostgreSQL outbox, Celery transport, bounded retries, cancellation, replay safety, stalled-job reconciliation | Real PostgreSQL/Redis CI |
 | Customer UI | Responsive overview, imports, mapping, validation review, jobs, directory, user administration, audit activity, loading/error/empty states | Desktop/mobile browser CI |
 | Delivery controls | Immutable customer configuration, cost and evidence gates, explicit plan/deploy/verify/rollback/evidence/destroy commands | CLI tests |
-| GCP demo profile | Montréal zonal GKE, fixed node, Artifact Registry, regional storage, Workload Identity, exact-resource expiry cleanup | Terraform validation; live proof pending |
+| GCP demo profile | Configured zonal GKE, fixed node, Artifact Registry, regional storage, Workload Identity, exact-resource expiry cleanup | Terraform validation; live proof pending |
 | Managed profile | Private regional GKE, HA Cloud SQL, HA Redis, regional storage, Secret Manager, deletion protection | Implemented, not live-tested |
 | Observability | OpenTelemetry, Prometheus, Loki, Tempo, Grafana, internal services, five alert classes | Correlated kind runtime and screenshot evidence; GKE repetition pending |
 

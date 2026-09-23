@@ -18,7 +18,7 @@ def test_bootstrap_checks_api_before_storage_and_terraform(
 ) -> None:
     commands: list[list[str]] = []
     enabled = initially_enabled
-    bucket = "fdetemplate-state-test"
+    bucket = "example-fde-project-state-test"
 
     def fake_run(args, **kwargs):
         nonlocal enabled
@@ -27,12 +27,12 @@ def test_bootstrap_checks_api_before_storage_and_terraform(
         if args[1:3] == ["services", "list"]:
             stdout = f"{SERVICE}\n" if enabled else ""
         elif args[1:3] == ["services", "enable"]:
-            assert args[3:] == [SERVICE, "--project=fdetemplate", "--quiet"]
+            assert args[3:] == [SERVICE, "--project=example-fde-project", "--quiet"]
             enabled = True
         elif args[1:4] == ["storage", "buckets", "describe"]:
             assert enabled
             stdout = json.dumps({
-                "location": "NORTHAMERICA-NORTHEAST1",
+                "location": "EXAMPLE-REGION1",
                 "labels": {"application": "fde-template", "purpose": "terraform-state"},
             })
         elif args[1:4] == ["storage", "buckets", "list"]:
@@ -50,7 +50,7 @@ def test_bootstrap_checks_api_before_storage_and_terraform(
         terraform_dir=tmp_path,
         state_bucket=bucket,
         github_repository="example/template",
-        confirm_project="fdetemplate",
+        confirm_project="example-fde-project",
     )
     first_storage = next(i for i, args in enumerate(commands) if args[1] == "storage")
     assert all(args[1] == "services" for args in commands[:first_storage])
@@ -80,9 +80,9 @@ def test_missing_api_stops_bootstrap_before_storage_or_terraform(
         operations.bootstrap_gcp(
             load_config(write(tmp_path, VALID)),
             terraform_dir=tmp_path,
-            state_bucket="fdetemplate-state-test",
+            state_bucket="example-fde-project-state-test",
             github_repository="example/template",
-            confirm_project="fdetemplate",
+            confirm_project="example-fde-project",
         )
     assert len(commands) == (2 if activation_denied else 3)
 

@@ -1,4 +1,4 @@
-project_id   = "fdetemplate"
+project_id   = "example-fde-project"
 customer     = "demo"
 cluster_name = "fde-demo"
 expiry_id    = "demo-yyyymmddhhmm"

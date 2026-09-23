@@ -25,6 +25,8 @@ def render(
     manifest: dict[str, Any],
     terraform_outputs: dict[str, Any],
     project: str,
+    region: str,
+    zone: str,
     customer: str,
     environment: str,
     brand_name: str,
@@ -34,6 +36,8 @@ def render(
         raise ValueError("demo environment must be staging or production-demo")
     if manifest.get("commit") != revision:
         raise ValueError("image manifest commit does not match the selected revision")
+    if manifest.get("region") != region or not zone.startswith(region + "-"):
+        raise ValueError("image manifest and deployment location differ")
 
     repository = str(manifest.get("repository", "")).rstrip("/")
     images = manifest.get("images")
@@ -53,8 +57,8 @@ def render(
         "customer": customer,
         "environment": environment,
         "project": project,
-        "region": "northamerica-northeast1",
-        "zone": "northamerica-northeast1-a",
+        "region": region,
+        "zone": zone,
         "profile": "demo",
         "namespace": environment,
         "image_repository": f"{repository}/backend",
@@ -128,6 +132,8 @@ def main() -> int:
     parser.add_argument("--manifest", type=Path, required=True)
     parser.add_argument("--terraform-outputs", type=Path, required=True)
     parser.add_argument("--project", required=True)
+    parser.add_argument("--region", required=True)
+    parser.add_argument("--zone", required=True)
     parser.add_argument("--customer", required=True)
     parser.add_argument("--environment", required=True)
     parser.add_argument("--brand-name", required=True)
@@ -151,6 +157,8 @@ def main() -> int:
         manifest=manifest,
         terraform_outputs=terraform_outputs,
         project=args.project,
+        region=args.region,
+        zone=args.zone,
         customer=args.customer,
         environment=args.environment,
         brand_name=args.brand_name,

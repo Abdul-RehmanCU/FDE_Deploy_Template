@@ -1,13 +1,13 @@
 customer: demo
 environment: staging
-project: fdetemplate
-region: northamerica-northeast1
-zone: northamerica-northeast1-a
+project: example-fde-project
+region: example-region1
+zone: example-region1-a
 profile: demo
 namespace: staging
-image_repository: northamerica-northeast1-docker.pkg.dev/fdetemplate/fde-demo-images/api
+image_repository: example-region1-docker.pkg.dev/example-fde-project/fde-demo-images/api
 image_digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-frontend_image_repository: northamerica-northeast1-docker.pkg.dev/fdetemplate/fde-demo-images/frontend
+frontend_image_repository: example-region1-docker.pkg.dev/example-fde-project/fde-demo-images/frontend
 frontend_image_digest: sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
 app_version: v1.0.0-demo
 branding:

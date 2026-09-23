@@ -123,7 +123,7 @@ def main() -> int:
     parser.add_argument("--project", required=True)
     parser.add_argument("--state-bucket", required=True)
     parser.add_argument("--github-repository", required=True)
-    parser.add_argument("--region", default="northamerica-northeast1")
+    parser.add_argument("--region", required=True)
     parser.add_argument(
         "--confirm", required=True, help="Must equal FINALIZE-BOOTSTRAP"
     )
@@ -171,7 +171,7 @@ def main() -> int:
             "state bucket labels do not identify the FDE Terraform state bucket"
         )
     if str(bucket.get("location", "")).lower() != args.region.lower():
-        raise SystemExit("state bucket is not in the confirmed Montréal region")
+        raise SystemExit("state bucket is not in the confirmed region")
     require_soft_delete_disabled(bucket)
 
     run(

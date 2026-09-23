@@ -23,3 +23,13 @@ def test_rejects_understated_total(tmp_path: Path) -> None:
     path.write_text(text, encoding="utf-8")
     with pytest.raises(CostGateError, match="reconcile"):
         load_cost_gate(path)
+
+
+def test_rejects_cost_evidence_for_a_different_zone(tmp_path: Path) -> None:
+    text = ESTIMATE.read_text(encoding="utf-8").replace(
+        "zone: example-region1-a", "zone: another-region2-a"
+    )
+    path = tmp_path / "estimate.yaml"
+    path.write_text(text, encoding="utf-8")
+    with pytest.raises(CostGateError, match="consistent region and zone"):
+        load_cost_gate(path)

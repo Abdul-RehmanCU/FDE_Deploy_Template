@@ -1,13 +1,13 @@
 customer: example
 environment: production
 project: example-fde-production
-region: northamerica-northeast1
-zone: northamerica-northeast1-a
+region: example-region1
+zone: example-region1-a
 profile: managed
 namespace: production
-image_repository: northamerica-northeast1-docker.pkg.dev/example-fde-production/fde-images/api
+image_repository: example-region1-docker.pkg.dev/example-fde-production/fde-images/api
 image_digest: sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
-frontend_image_repository: northamerica-northeast1-docker.pkg.dev/example-fde-production/fde-images/frontend
+frontend_image_repository: example-region1-docker.pkg.dev/example-fde-production/fde-images/frontend
 frontend_image_digest: sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 app_version: v1.0.0
 domain: directory.example.ca

@@ -4,13 +4,11 @@ variable "project_id" {
 }
 
 variable "region" {
-  description = "Canadian region used by state and identities."
+  description = "Privately configured region used by state and identities."
   type        = string
-  default     = "northamerica-northeast1"
-
   validation {
-    condition     = var.region == "northamerica-northeast1"
-    error_message = "The version-one demo is fixed to Montréal."
+    condition     = can(regex("^[a-z][a-z0-9-]+[0-9]$", var.region))
+    error_message = "Supply a valid GCP region."
   }
 }
 

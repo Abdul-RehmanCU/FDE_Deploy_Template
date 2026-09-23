@@ -44,6 +44,8 @@ jobs:
       DISPATCH_REVIEW_ACCEPTED: ${{ inputs.independent_review_accepted }}
       DISPATCH_PAID_CONFIRMATION: ${{ inputs.confirm_paid_run }}
       COST_EVIDENCE_JSON: ${{ secrets.DEMO_COST_EVIDENCE_JSON }}
+      REGION: ${{ secrets.GCP_REGION }}
+      ZONE: ${{ secrets.GCP_ZONE }}
     steps:
       - name: Check out selected main revision
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -73,6 +75,8 @@ jobs:
           expires_at=$DISPATCH_EXPIRES_AT
           ci_run_id=$DISPATCH_CI_RUN_ID
           test -n "$project_id" && test -n "$customer" && test -n "$state_bucket" && test -n "$ci_run_id"
+          test -n "$REGION" && test -n "$ZONE"
+          [[ "$ZONE" == "$REGION"-? ]]
           ci=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$ci_run_id")
           test "$(jq -r .head_sha <<<"$ci")" = "$GITHUB_SHA"
           test "$(jq -r .conclusion <<<"$ci")" = success
@@ -83,7 +87,7 @@ jobs:
           test -n "$COST_EVIDENCE_JSON"
           printf '%s' "$COST_EVIDENCE_JSON" > "$RUNNER_TEMP/paid-cost-evidence.yaml"
           uv run --project tooling/fde python -c \
-            "from fde_cli.cost import load_cost_gate; from fde_cli.operations import validate_paid_cost_gate; validate_paid_cost_gate(load_cost_gate('$RUNNER_TEMP/paid-cost-evidence.yaml'))"
+            "import os; from fde_cli.cost import load_cost_gate; from fde_cli.operations import validate_paid_cost_gate; c=load_cost_gate('$RUNNER_TEMP/paid-cost-evidence.yaml'); validate_paid_cost_gate(c); assert (c.project, c.region, c.zone) == (os.environ['DISPATCH_PROJECT'], os.environ['REGION'], os.environ['ZONE'])"
           {
             echo "project_id=$project_id"
             echo "customer=$customer"
@@ -139,6 +143,8 @@ jobs:
     uses: ./.github/workflows/gcp-expiry.yml
     secrets:
       DEMO_COST_EVIDENCE_JSON: ${{ secrets.DEMO_COST_EVIDENCE_JSON }}
+      GCP_REGION: ${{ secrets.GCP_REGION }}
+      GCP_ZONE: ${{ secrets.GCP_ZONE }}
     with:
       project_id: ${{ needs.preflight.outputs.project_id }}
       customer: ${{ needs.preflight.outputs.customer }}
@@ -165,8 +171,8 @@ jobs:
       MANIFEST_SHA: ${{ needs.expiry.outputs.manifest_sha }}
       EXPIRY_ARTIFACT: ${{ needs.expiry.outputs.evidence_artifact }}
       COST_EVIDENCE_JSON: ${{ secrets.DEMO_COST_EVIDENCE_JSON }}
-      REGION: northamerica-northeast1
-      ZONE: northamerica-northeast1-a
+      REGION: ${{ secrets.GCP_REGION }}
+      ZONE: ${{ secrets.GCP_ZONE }}
     steps:
       - name: Check out selected revision
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -256,6 +262,8 @@ jobs:
       contents: read # required by the called workflow checkout
       id-token: write # required by called keyless GCP authentication
     uses: ./.github/workflows/build-images.yml
+    secrets:
+      GCP_REGION: ${{ secrets.GCP_REGION }}
     with:
       project_id: ${{ needs.preflight.outputs.project_id }}
       artifact_repository: fde-${{ needs.preflight.outputs.customer }}-images
@@ -276,8 +284,8 @@ jobs:
       STATE_BUCKET: ${{ needs.preflight.outputs.state_bucket }}
       EXPIRY_ID: ${{ needs.preflight.outputs.expiry_id }}
       MANIFEST_SHA: ${{ needs.build-images.outputs.manifest_sha256 }}
-      REGION: northamerica-northeast1
-      ZONE: northamerica-northeast1-a
+      REGION: ${{ secrets.GCP_REGION }}
+      ZONE: ${{ secrets.GCP_ZONE }}
     steps:
       - name: Check out selected revision
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -330,7 +338,7 @@ jobs:
           for environment in staging production-demo; do
             uv run --project tooling/fde python scripts/ci/render_demo_release.py \
               --manifest "$manifest" --terraform-outputs "$RUNNER_TEMP/demo-outputs.json" \
-              --project "$PROJECT_ID" --customer "$CUSTOMER" --environment "$environment" \
+              --project "$PROJECT_ID" --region "$REGION" --zone "$ZONE" --customer "$CUSTOMER" --environment "$environment" \
               --brand-name "FDE Demonstration Directory" --revision "$GITHUB_SHA" \
               --config-out "release-bundle/${environment}-config.yaml" \
               --values-out "release-bundle/${environment}-values.yaml" \
@@ -398,8 +406,8 @@ jobs:
     env:
       PROJECT_ID: ${{ needs.preflight.outputs.project_id }}
       CUSTOMER: ${{ needs.preflight.outputs.customer }}
-      REGION: northamerica-northeast1
-      ZONE: northamerica-northeast1-a
+      REGION: ${{ secrets.GCP_REGION }}
+      ZONE: ${{ secrets.GCP_ZONE }}
     steps:
       - name: Check out selected revision
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -575,12 +583,13 @@ jobs:
         env:
           PROJECT_ID: ${{ needs.preflight.outputs.project_id }}
           CUSTOMER: ${{ needs.preflight.outputs.customer }}
+          ZONE: ${{ secrets.GCP_ZONE }}
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p rollback-evidence
           gcloud container clusters get-credentials "fde-${CUSTOMER}-demo" \
-            --zone=northamerica-northeast1-a --project="$PROJECT_ID"
+            --zone="${ZONE}" --project="$PROJECT_ID"
           printf '[]' > rollback-evidence/restored-releases.json
           for environment in staging production-demo; do
             release="fde-${CUSTOMER}-${environment}"
@@ -627,6 +636,9 @@ jobs:
       contents: read # required by the called workflow checkout
       id-token: write # required by called keyless GCP authentication
     uses: ./.github/workflows/gcp-cleanup.yml
+    secrets:
+      GCP_REGION: ${{ secrets.GCP_REGION }}
+      GCP_ZONE: ${{ secrets.GCP_ZONE }}
     with:
       confirm_cleanup: DESTROY-DEMO
       project_id: ${{ needs.preflight.outputs.project_id }}

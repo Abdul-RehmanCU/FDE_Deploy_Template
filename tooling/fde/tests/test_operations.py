@@ -31,9 +31,9 @@ def config(tmp_path: Path):
 
 def test_explicit_scope_must_match_configuration(tmp_path: Path) -> None:
     cfg = config(tmp_path)
-    assert_scope(cfg, "acme", "staging", "fdetemplate")
+    assert_scope(cfg, "acme", "staging", "example-fde-project")
     with pytest.raises(OperationError, match="does not match"):
-        assert_scope(cfg, "other", "staging", "fdetemplate")
+        assert_scope(cfg, "other", "staging", "example-fde-project")
 
 
 def test_managed_profile_cannot_deploy_under_demo_authorization(tmp_path: Path) -> None:
@@ -62,7 +62,7 @@ def test_bootstrap_requires_exact_project_before_cloud_calls(tmp_path: Path) -> 
         bootstrap_gcp(
             config(tmp_path),
             terraform_dir=tmp_path,
-            state_bucket="fdetemplate-state-test",
+            state_bucket="example-fde-project-state-test",
             github_repository="Abdul-RehmanCU/FDE_Deploy_Template",
             confirm_project="wrong-project",
         )
@@ -71,37 +71,37 @@ def test_bootstrap_requires_exact_project_before_cloud_calls(tmp_path: Path) -> 
 def test_state_bucket_ownership_accepts_actual_gcloud_storage_shape(tmp_path: Path) -> None:
     cfg = config(tmp_path)
     metadata = {
-        "name": "fdetemplate-state-test",
-        "location": "NORTHAMERICA-NORTHEAST1",
+        "name": "example-fde-project-state-test",
+        "location": "EXAMPLE-REGION1",
         "labels": {"application": "fde-template", "purpose": "terraform-state"},
         "soft_delete_policy": {"retentionDurationSeconds": "0"},
     }
     validate_state_bucket_ownership(
         cfg,
-        "fdetemplate-state-test",
+        "example-fde-project-state-test",
         metadata,
-        [{"name": "fdetemplate-state-test"}],
+        [{"name": "example-fde-project-state-test"}],
     )
     with pytest.raises(OperationError, match="does not belong"):
-        validate_state_bucket_ownership(cfg, "fdetemplate-state-test", metadata, [])
+        validate_state_bucket_ownership(cfg, "example-fde-project-state-test", metadata, [])
 
 
 def expiry_contract() -> dict[str, object]:
     return {
-        "project": "fdetemplate",
-        "region": "northamerica-northeast1",
-        "zone": "northamerica-northeast1-a",
+        "project": "example-fde-project",
+        "region": "example-region1",
+        "zone": "example-region1-a",
         "gate_expires_at": datetime(2026, 9, 22, 10, 0, tzinfo=timezone.utc),
         "gate_sha": "a" * 64,
         "state_sha": "a" * 64,
         "manifest": {
-            "project_id": "fdetemplate",
+            "project_id": "example-fde-project",
             "expiry_id": "demo-run-001",
             "expires_at": "2026-09-22T10:00:00Z",
-            "region": "northamerica-northeast1",
-            "zone": "northamerica-northeast1-a",
+            "region": "example-region1",
+            "zone": "example-region1-a",
             "cluster_name": "fde-demo",
-            "bucket_names": ["fdetemplate-fde-demo-production-demo", "fdetemplate-fde-demo-staging"],
+            "bucket_names": ["example-fde-project-fde-demo-production-demo", "example-fde-project-fde-demo-staging"],
             "artifact_repository": "fde-demo-images",
             "disk_resources": [{"name": "disk-a"}, {"name": "disk-b"}],
         },
@@ -109,8 +109,8 @@ def expiry_contract() -> dict[str, object]:
         "planned_disks": {"disk-a": "demo-run-001", "disk-b": "demo-run-001"},
         "planned_clusters": {"fde-demo": "demo-run-001"},
         "planned_buckets": {
-            "fdetemplate-fde-demo-production-demo": "demo-run-001",
-            "fdetemplate-fde-demo-staging": "demo-run-001",
+            "example-fde-project-fde-demo-production-demo": "demo-run-001",
+            "example-fde-project-fde-demo-staging": "demo-run-001",
         },
         "planned_repositories": {"fde-demo-images": "demo-run-001"},
     }
@@ -129,7 +129,7 @@ def test_expiry_contract_accepts_exact_live_evidence() -> None:
         ("sentinel", {}, "SHA"),
         ("gate_expires_at", datetime(2026, 9, 22, 11, 0, tzinfo=timezone.utc), "deadline"),
         ("region", "us-central1", "region/zone"),
-        ("zone", "northamerica-northeast1-b", "region/zone"),
+        ("zone", "example-region1-b", "region/zone"),
         ("planned_clusters", {"other": "demo-run-001"}, "cluster set"),
         ("planned_buckets", {"other": "demo-run-001"}, "bucket set"),
         ("planned_repositories", {"other": "demo-run-001"}, "repository set"),
@@ -147,7 +147,7 @@ def test_expiry_contract_rejects_fake_or_drifted_evidence(
 def representative_plan_resources() -> list[dict[str, object]]:
     labels = {"expiry-id": "demo-run-001"}
     resources: list[dict[str, object]] = [
-        {"type": "google_container_cluster", "values": {"name": "fde-demo", "location": "northamerica-northeast1-a", "resource_labels": labels}},
+        {"type": "google_container_cluster", "values": {"name": "fde-demo", "location": "example-region1-a", "resource_labels": labels}},
         {"type": "google_container_node_pool", "values": {"name": "fixed-demo", "node_count": 1, "autoscaling": [], "node_config": [{"machine_type": "e2-standard-4", "disk_type": "pd-standard", "disk_size_gb": 30}]}},
         {"type": "google_artifact_registry_repository", "values": {"name": None, "repository_id": "fde-demo-images", "labels": labels}},
         {"type": "google_storage_bucket", "values": {"name": "bucket-a", "labels": labels}},
@@ -164,7 +164,7 @@ def test_plan_collector_uses_repository_id_when_computed_name_is_null() -> None:
     assert repositories == {"fde-demo-images": "demo-run-001"}
     assert len(disks) == 7 and clusters == {"fde-demo": "demo-run-001"}
     assert sorted(buckets) == ["bucket-a", "bucket-b"]
-    validate_demo_cost_drivers(resources, zone="northamerica-northeast1-a")
+    validate_demo_cost_drivers(resources, zone="example-region1-a")
 
 
 @pytest.mark.parametrize(
@@ -172,7 +172,7 @@ def test_plan_collector_uses_repository_id_when_computed_name_is_null() -> None:
     [
         (("google_container_node_pool", "node_count", 2), "one fixed node"),
         (("google_container_node_pool", "autoscaling", [{"max_node_count": 2}]), "autoscaling"),
-        (("google_container_cluster", "location", "us-central1-a"), "zonal Montréal"),
+        (("google_container_cluster", "location", "us-central1-a"), "configured zone"),
         (("google_compute_disk", "type", "pd-ssd"), "54 GiB"),
         (("google_compute_disk", "size", 20), "54 GiB"),
     ],
@@ -185,14 +185,14 @@ def test_cost_driver_gate_rejects_pricing_drift(
     target = next(item for item in resources if item["type"] == resource_type)
     target["values"][field] = value  # type: ignore[index]
     with pytest.raises(OperationError, match=message):
-        validate_demo_cost_drivers(resources, zone="northamerica-northeast1-a")
+        validate_demo_cost_drivers(resources, zone="example-region1-a")
 
 
 def test_cost_driver_gate_rejects_public_load_balancer_or_managed_service() -> None:
     resources = representative_plan_resources()
     resources.append({"type": "google_compute_forwarding_rule", "values": {}})
     with pytest.raises(OperationError, match="public-LB"):
-        validate_demo_cost_drivers(resources, zone="northamerica-northeast1-a")
+        validate_demo_cost_drivers(resources, zone="example-region1-a")
 
 
 def test_cost_driver_gate_rejects_larger_machine() -> None:
@@ -200,13 +200,15 @@ def test_cost_driver_gate_rejects_larger_machine() -> None:
     pool = next(item for item in resources if item["type"] == "google_container_node_pool")
     pool["values"]["node_config"][0]["machine_type"] = "e2-standard-8"  # type: ignore[index]
     with pytest.raises(OperationError, match="machine"):
-        validate_demo_cost_drivers(resources, zone="northamerica-northeast1-a")
+        validate_demo_cost_drivers(resources, zone="example-region1-a")
 
 
 def test_paid_cost_gate_requires_fresh_explicit_authorization() -> None:
     now = datetime(2026, 9, 22, 10, 0, tzinfo=timezone.utc)
     base = dict(
-        project="fdetemplate",
+        project="example-fde-project",
+        region="example-region1",
+        zone="example-region1-a",
         estimated_total_usd=Decimal("4.96619304"),
         calculated_total_usd=Decimal("4.96619304"),
         estimate_cap_usd=Decimal("10"),
@@ -225,11 +227,11 @@ def test_paid_cost_gate_requires_fresh_explicit_authorization() -> None:
 def cleanup_manifest() -> dict[str, object]:
     prefix = "fde-acme"
     return {
-        "project_id": "fdetemplate",
+        "project_id": "example-fde-project",
         "expiry_id": "demo-test-run",
         "cluster_name": f"{prefix}-demo",
         "artifact_repository": f"{prefix}-images",
-        "bucket_names": ["fdetemplate-fde-acme-production-demo", "fdetemplate-fde-acme-staging"],
+        "bucket_names": ["example-fde-project-fde-acme-production-demo", "example-fde-project-fde-acme-staging"],
         "disk_resources": [
             {"name": name}
             for name in sorted(
@@ -287,11 +289,11 @@ def valid_helm_values(tmp_path: Path) -> tuple[object, Path, dict[str, object]]:
         },
         "backend": {"replicas": 2, "resources": {"requests": {"cpu": "250m", "memory": "384Mi"}}},
         "worker": {"replicas": 1, "resources": {"requests": {"cpu": "250m", "memory": "384Mi"}}},
-        "serviceAccount": {"gcpServiceAccount": "fde-acme-staging@fdetemplate.iam.gserviceaccount.com"},
-        "storage": {"backend": "gcs", "gcsBucket": "fdetemplate-fde-acme-staging"},
+        "serviceAccount": {"gcpServiceAccount": "fde-acme-staging@example-fde-project.iam.gserviceaccount.com"},
+        "storage": {"backend": "gcs", "gcsBucket": "example-fde-project-fde-acme-staging"},
         "secretProvider": {
             "enabled": True,
-            "projectId": "fdetemplate",
+            "projectId": "example-fde-project",
             "secretNames": {
                 "databaseUrl": f"{prefix}-database-url",
                 "redisUrl": f"{prefix}-redis-url",
@@ -322,11 +324,11 @@ def test_helm_values_match_complete_installation_contract(tmp_path: Path) -> Non
         ("root", "customer", "other"),
         ("branding", "name", "Other Directory"),
         ("images.backend", "digest", "sha256:" + "c" * 64),
-        ("images.frontend", "repository", "northamerica-northeast1-docker.pkg.dev/fdetemplate/fde/other"),
+        ("images.frontend", "repository", "example-region1-docker.pkg.dev/example-fde-project/fde/other"),
         ("backend", "replicas", 3),
         ("worker.resources.requests", "cpu", "500m"),
         ("storage", "gcsBucket", "wrong"),
-        ("serviceAccount", "gcpServiceAccount", "other@fdetemplate.iam.gserviceaccount.com"),
+        ("serviceAccount", "gcpServiceAccount", "other@example-fde-project.iam.gserviceaccount.com"),
         ("secretProvider", "projectId", "other-project"),
     ],
 )

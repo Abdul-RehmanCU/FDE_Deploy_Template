@@ -9,6 +9,9 @@ on:
       expiry_id: { required: true, type: string }
       expires_at: { required: true, type: string }
       confirm_cleanup: { required: true, type: string }
+    secrets:
+      GCP_REGION: { required: true }
+      GCP_ZONE: { required: true }
   workflow_dispatch:
     inputs:
       project_id: { description: Dedicated GCP project ID, required: true, type: string }
@@ -44,8 +47,8 @@ jobs:
       STATE_BUCKET: ${{ inputs.state_bucket }}
       EXPIRY_ID: ${{ inputs.expiry_id }}
       EXPIRES_AT: ${{ inputs.expires_at }}
-      REGION: northamerica-northeast1
-      ZONE: northamerica-northeast1-a
+      REGION: ${{ secrets.GCP_REGION }}
+      ZONE: ${{ secrets.GCP_ZONE }}
     steps:
       - name: Check out selected revision
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -81,6 +84,8 @@ jobs:
           [[ "$PROJECT_ID" =~ ^[a-z][a-z0-9-]{4,28}[a-z0-9]$ ]]
           [[ "$CUSTOMER" =~ ^[a-z][a-z0-9-]{1,38}[a-z0-9]$ ]]
           [[ "$EXPIRY_ID" =~ ^[a-z0-9][a-z0-9-]{5,48}[a-z0-9]$ ]]
+          test -n "$REGION" && test -n "$ZONE"
+          [[ "$ZONE" == "$REGION"-? ]]
           mkdir -p "$RUNNER_TEMP/fde-cleanup" cleanup-evidence
           gcloud storage buckets list --project="$PROJECT_ID" --filter="name=$STATE_BUCKET" \
             --format='json(name)' > "$RUNNER_TEMP/fde-cleanup/owned-state-buckets.json"

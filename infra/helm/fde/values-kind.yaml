@@ -11,7 +11,7 @@ images:
     tag: ci
     pullPolicy: Never
 serviceAccount:
-  gcpServiceAccount: ci@fdetemplate.iam.gserviceaccount.com
+  gcpServiceAccount: ci@example-fde-project.iam.gserviceaccount.com
 storage:
   backend: local
   gcsBucket: unused-in-kind

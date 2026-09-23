@@ -12,6 +12,8 @@ on:
       DEMO_COST_EVIDENCE_JSON:
         required: true
         description: Current private USD 25 cost authorization evidence
+      GCP_REGION: { required: true }
+      GCP_ZONE: { required: true }
     outputs:
       manifest_sha:
         value: ${{ jobs.expiry.outputs.manifest_sha }}
@@ -64,8 +66,8 @@ jobs:
       workflow_name: ${{ steps.guard.outputs.workflow_name }}
       evidence_artifact: expiry-evidence-${{ github.run_id }}
     env:
-      REGION: northamerica-northeast1
-      ZONE: northamerica-northeast1-a
+      REGION: ${{ secrets.GCP_REGION }}
+      ZONE: ${{ secrets.GCP_ZONE }}
       PROJECT_ID: ${{ inputs.project_id }}
       CUSTOMER: ${{ inputs.customer }}
       STATE_BUCKET: ${{ inputs.state_bucket }}
@@ -86,6 +88,8 @@ jobs:
           [[ "$CUSTOMER" =~ ^[a-z][a-z0-9-]{1,38}[a-z0-9]$ ]]
           [[ "$STATE_BUCKET" =~ ^[a-z0-9][a-z0-9._-]{1,61}[a-z0-9]$ ]]
           [[ "$EXPIRY_ID" =~ ^[a-z0-9][a-z0-9-]{5,48}[a-z0-9]$ ]]
+          test -n "$REGION" && test -n "$ZONE"
+          [[ "$ZONE" == "$REGION"-? ]]
           python - <<'PY'
           import os
           from datetime import datetime, timezone
@@ -112,7 +116,7 @@ jobs:
           test -n "$COST_EVIDENCE_JSON"
           printf '%s' "$COST_EVIDENCE_JSON" > "$RUNNER_TEMP/fde-paid-cost-evidence.yaml"
           uv run --project tooling/fde python -c \
-            "from fde_cli.cost import load_cost_gate; from fde_cli.operations import validate_paid_cost_gate; validate_paid_cost_gate(load_cost_gate('$RUNNER_TEMP/fde-paid-cost-evidence.yaml'))"
+            "import os; from fde_cli.cost import load_cost_gate; from fde_cli.operations import validate_paid_cost_gate; c=load_cost_gate('$RUNNER_TEMP/fde-paid-cost-evidence.yaml'); validate_paid_cost_gate(c); assert (c.project, c.region, c.zone) == (os.environ['PROJECT_ID'], os.environ['REGION'], os.environ['ZONE'])"
       - name: Authenticate infrastructure identity
         uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3
         with:

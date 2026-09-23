@@ -7,17 +7,17 @@ branding:
 
 images:
   backend:
-    repository: northamerica-northeast1-docker.pkg.dev/fdetemplate/fde/api
+    repository: example-region1-docker.pkg.dev/example-fde-project/fde/api
     digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
     pullPolicy: IfNotPresent
   frontend:
-    repository: northamerica-northeast1-docker.pkg.dev/fdetemplate/fde/frontend
+    repository: example-region1-docker.pkg.dev/example-fde-project/fde/frontend
     digest: sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
     pullPolicy: IfNotPresent
 
 serviceAccount:
   name: fde-runtime
-  gcpServiceAccount: replace-me@fdetemplate.iam.gserviceaccount.com
+  gcpServiceAccount: replace-me@example-fde-project.iam.gserviceaccount.com
 
 backend:
   replicas: 2
@@ -56,7 +56,7 @@ storage:
 secretProvider:
   enabled: true
   kubernetesSecretName: fde-runtime-secrets
-  projectId: fdetemplate
+  projectId: example-fde-project
   secretNames:
     databaseUrl: replace-me-database-url
     redisUrl: replace-me-redis-url
@@ -73,14 +73,14 @@ demoDependencies:
   postgres:
     image: postgres:16.10-alpine3.22
     storage: 10Gi
-    volumeHandle: projects/fdetemplate/zones/northamerica-northeast1-a/disks/fde-replace-staging-postgres
+    volumeHandle: projects/example-fde-project/zones/example-region1-a/disks/fde-replace-staging-postgres
     resources:
       requests: { cpu: 150m, memory: 256Mi }
       limits: { cpu: 500m, memory: 512Mi }
   redis:
     image: redis:8.2.1-alpine3.22
     storage: 5Gi
-    volumeHandle: projects/fdetemplate/zones/northamerica-northeast1-a/disks/fde-replace-staging-redis
+    volumeHandle: projects/example-fde-project/zones/example-region1-a/disks/fde-replace-staging-redis
     resources:
       requests: { cpu: 50m, memory: 96Mi }
       limits: { cpu: 250m, memory: 256Mi }

@@ -1,9 +1,9 @@
 schema_version: 1
 currency: USD
 prepared_at: "2026-09-22T07:50:00Z"
-project: fdetemplate
-region: northamerica-northeast1
-zone: northamerica-northeast1-a
+project: example-fde-project
+region: example-region1
+zone: example-region1-a
 maximum_runtime_hours: 4
 reported_cost_baseline:
   amount: 0.00
@@ -33,7 +33,7 @@ items:
     unit: GiB-hour
     unit_price_usd: 0.000054795
     estimated_usd: 0.032877
-    basis: "Conservative 150 GiB aggregate for four hours at Montréal standard PD rate; actual plan is seven predeclared data disks totaling 54 GiB plus one 30 GiB node boot disk."
+    basis: "Illustrative regional Standard PD rate for 150 GiB over four hours; reprice the private selected region before any paid run. The plan has seven data disks totaling 54 GiB plus one 30 GiB node boot disk."
   - id: external-ip
     quantity: 4
     unit: address-hour

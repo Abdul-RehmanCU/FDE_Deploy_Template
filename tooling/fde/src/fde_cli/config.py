@@ -13,8 +13,7 @@ _PROJECT = re.compile(r"^[a-z][a-z0-9-]{4,28}[a-z0-9]$")
 _DIGEST = re.compile(r"^sha256:[0-9a-f]{64}$")
 _BRAND = re.compile(r"^[A-Za-z0-9 ._-]{1,80}$")
 _ALLOWED_PROFILES = {"demo", "managed"}
-_ALLOWED_DEMO_REGION = "northamerica-northeast1"
-_ALLOWED_DEMO_ZONE = "northamerica-northeast1-a"
+_REGION = re.compile(r"^[a-z][a-z0-9-]+[0-9]$")
 
 
 class ConfigurationError(ValueError):
@@ -118,8 +117,8 @@ def load_config(path: str | Path) -> InstallationConfig:
         raise ConfigurationError("project is not a valid GCP project ID")
     if profile not in _ALLOWED_PROFILES:
         raise ConfigurationError("profile must be demo or managed")
-    if profile == "demo" and (region != _ALLOWED_DEMO_REGION or zone != _ALLOWED_DEMO_ZONE):
-        raise ConfigurationError("demo is fixed to Montréal northamerica-northeast1/a")
+    if not _REGION.fullmatch(region) or not re.fullmatch(re.escape(region) + r"-[a-z]", zone):
+        raise ConfigurationError("region/zone must identify one consistent GCP location")
     if profile == "managed" and environment != "production":
         raise ConfigurationError("managed profile requires environment=production")
     if not _DIGEST.fullmatch(image_digest):

@@ -15,6 +15,8 @@ class CostGateError(ValueError):
 @dataclass(frozen=True)
 class CostGate:
     project: str
+    region: str
+    zone: str
     estimated_total_usd: Decimal
     calculated_total_usd: Decimal
     estimate_cap_usd: Decimal
@@ -54,6 +56,8 @@ def load_cost_gate(path: str | Path) -> CostGate:
     gate = data.get("gate", {})
     result = CostGate(
         project=str(data.get("project", "")),
+        region=str(data.get("region", "")),
+        zone=str(data.get("zone", "")),
         estimated_total_usd=_decimal(data.get("estimated_total_usd"), "estimated_total_usd"),
         calculated_total_usd=item_total,
         estimate_cap_usd=_decimal(auth.get("demo_estimate_cap_usd"), "demo_estimate_cap_usd"),
@@ -64,6 +68,8 @@ def load_cost_gate(path: str | Path) -> CostGate:
     )
     if not result.project:
         raise CostGateError("cost estimate project is required")
+    if not result.region or not result.zone.startswith(result.region + "-"):
+        raise CostGateError("cost estimate needs a consistent region and zone")
     if result.reserve_usd < Decimal("15"):
         raise CostGateError("delayed-charge reserve cannot be below USD 15")
     if not result.estimate_passes:

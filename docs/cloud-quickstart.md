@@ -1,6 +1,6 @@
 # Cloud-first quickstart
 
-This guide prepares one short-lived GCP demonstration in Montréal. It does not authorize provisioning. The deployment gate must pass at the exact commit being deployed.
+This guide prepares one short-lived GCP demonstration in a privately configured Canadian region. It does not authorize provisioning. The deployment gate must pass at the exact commit being deployed.
 
 ## Prerequisites
 
@@ -11,6 +11,8 @@ This guide prepares one short-lived GCP demonstration in Montréal. It does not 
 - Independent review of the exact resource manifest and expiry cleanup revision.
 
 Do not create a service-account key. The bootstrap stack creates repository-scoped Workload Identity Federation providers and separate build, infrastructure, deployment, runtime, and cleanup identities.
+
+Set repository Actions secrets `GCP_REGION` and `GCP_ZONE` to the approved matching Canadian location before any cloud workflow. Keep the actual project ID, account identifiers, and current cost evidence in private deployment settings. The committed examples use non-live placeholders and must be replaced in a private customer configuration. A public Actions run can still reveal deployment metadata in logs or artifacts; use a private deployment repository when the real cloud identity and location must remain undiscoverable.
 
 ## 1. Select and verify the project
 
@@ -32,7 +34,7 @@ uv run --project tooling/fde fde validate-config --config path/to/customer.yaml
 uv run --project tooling/fde fde doctor --config path/to/customer.yaml --cloud
 ```
 
-The demo profile accepts only `northamerica-northeast1` and the bounded topology in the plan. The CLI refuses the managed profile under the demo authorization.
+The demo profile accepts the privately configured region and matching zone with the bounded topology in the plan. The CLI refuses the managed profile under the demo authorization.
 
 ## 3. Reconcile cost evidence
 

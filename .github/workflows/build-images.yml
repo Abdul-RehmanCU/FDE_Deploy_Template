@@ -8,9 +8,11 @@ on:
         required: true
         type: string
       artifact_repository:
-        description: Montréal Artifact Registry repository ID
+        description: Regional Artifact Registry repository ID
         required: true
         type: string
+    secrets:
+      GCP_REGION: { required: true }
     outputs:
       backend_digest:
         description: Immutable backend image digest
@@ -28,7 +30,7 @@ on:
         required: true
         type: string
       artifact_repository:
-        description: Montréal Artifact Registry repository ID
+        description: Regional Artifact Registry repository ID
         required: true
         default: fde
         type: string
@@ -55,8 +57,8 @@ jobs:
     timeout-minutes: 30
     environment: demo-build
     env:
-      REGION: northamerica-northeast1
-      REGISTRY: northamerica-northeast1-docker.pkg.dev
+      REGION: ${{ secrets.GCP_REGION }}
+      REGISTRY: ${{ secrets.GCP_REGION }}-docker.pkg.dev
     steps:
       - name: Check out selected main revision
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -70,7 +72,9 @@ jobs:
       - name: Set up gcloud
         uses: google-github-actions/setup-gcloud@aa5489c8933f4cc7a4f7d45035b3b1440c9c10db # v3
       - name: Configure Artifact Registry authentication
-        run: gcloud auth configure-docker "$REGISTRY" --quiet
+        run: |
+          test -n "$REGION" && test -n "$REGISTRY"
+          gcloud auth configure-docker "$REGISTRY" --quiet
       - name: Set up Buildx
         uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
       - name: Build and publish backend

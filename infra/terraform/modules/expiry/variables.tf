@@ -1,16 +1,18 @@
 variable "project_id" { type = string }
 variable "project_number" { type = string }
 variable "region" {
-  type    = string
-  default = "northamerica-northeast1"
+  type = string
   validation {
-    condition     = var.region == "northamerica-northeast1"
-    error_message = "Expiry workflow must remain in Montréal."
+    condition     = can(regex("^[a-z][a-z0-9-]+[0-9]$", var.region))
+    error_message = "Expiry region must be configured with a valid GCP region."
   }
 }
 variable "zone" {
-  type    = string
-  default = "northamerica-northeast1-a"
+  type = string
+  validation {
+    condition     = can(regex("^${var.region}-[a-z]$", var.zone))
+    error_message = "Expiry zone must belong to the configured region."
+  }
 }
 variable "expiry_id" {
   type        = string

@@ -10,8 +10,8 @@ Build a reusable, public repository demonstrating: **given a customer, deploy an
 | --- | --- |
 | Repository | `Abdul-RehmanCU/FDE_Deploy_Template`, public, MIT licensed |
 | Cloud | GCP only; AWS and Azure are outside version one |
-| Demonstration project | `fdetemplate` |
-| Region / demo zone | Montréal: `northamerica-northeast1` / `northamerica-northeast1-a` |
+| Demonstration project | `example-fde-project` |
+| Region / demo zone | Set privately as repository Actions secrets `GCP_REGION` / `GCP_ZONE`; record the approved Canadian location outside the public repository |
 | Budget | Maximum authorized GCP spend: **USD 25 total**, not monthly |
 | Cloud lifetime | Short-lived demonstration; capture evidence and tear down |
 | Application | Customer data onboarding and searchable contact directory |
@@ -87,7 +87,7 @@ Expose separate liveness, dependency-aware readiness, and version endpoints. Ser
 
 ### Cloud-first execution
 
-GitHub Actions builds and tests the images, publishes immutable image digests to a Montréal Artifact Registry repository, executes Terraform, deploys to GKE, runs browser tests, and collects evidence. Authenticate to GCP with Workload Identity Federation scoped to this repository and the appropriate GitHub environment. Separate build, infrastructure, deploy, runtime, and cleanup identities; no downloaded service-account keys.
+GitHub Actions builds and tests the images, publishes immutable image digests to the configured regional Artifact Registry repository, executes Terraform, deploys to GKE, runs browser tests, and collects evidence. Authenticate to GCP with Workload Identity Federation scoped to this repository and the appropriate GitHub environment. Separate build, infrastructure, deploy, runtime, and cleanup identities; no downloaded service-account keys.
 
 Cloud integration tests use real Postgres and Redis containers on GitHub runners. A kind test exercises the Helm chart on a GitHub runner before any GKE provisioning. Keep Docker Compose, PowerShell instructions, and Unix instructions as optional developer conveniences.
 

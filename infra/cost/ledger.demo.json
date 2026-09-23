@@ -1,7 +1,7 @@
 {
   "$schema": "./ledger.schema.json",
   "schema_version": 1,
-  "project": "fdetemplate",
+  "project": "example-fde-project",
   "currency": "USD",
   "authorization": {
     "total_usd": 25.0,

@@ -1,4 +1,4 @@
-project_id        = "fdetemplate"
-region            = "northamerica-northeast1"
+project_id        = "example-fde-project"
+region            = "example-region1"
 github_repository = "Abdul-RehmanCU/FDE_Deploy_Template"
-state_bucket_name = "fdetemplate-fde-tfstate-REPLACE"
+state_bucket_name = "example-fde-project-fde-tfstate-REPLACE"

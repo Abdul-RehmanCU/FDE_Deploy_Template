@@ -14,15 +14,15 @@ BOOTSTRAP_MAIN = ROOT / "bootstrap" / "main.tf"
 
 def rendered_workflow() -> str:
     manifest = {
-        "project_id": "fdetemplate",
-        "project_number": "653399508708",
-        "region": "northamerica-northeast1",
-        "zone": "northamerica-northeast1-a",
+        "project_id": "example-fde-project",
+        "project_number": "123456789012",
+        "region": "example-region1",
+        "zone": "example-region1-a",
         "expiry_id": "demo-20260922",
         "expires_at": "2026-09-22T12:00:00Z",
         "cluster_name": "fde-demo",
         "artifact_repository": "fde-demo-images",
-        "bucket_names": ["fdetemplate-fde-demo-staging"],
+        "bucket_names": ["example-fde-project-fde-demo-staging"],
         "disk_resources": [{"name": "pvc-exact-name", "expiry_id": "demo-20260922"}],
         "address_resources": [],
     }
@@ -77,7 +77,7 @@ def test_bucket_cleanup_covers_versions_replay_and_concurrency() -> None:
     assert text.index("verify_bucket_owner") < text.index("list_first_page")
     assert "verify_repository_owner" in text
     assert "creationTimestamp != creation_timestamp" in text
-    assert '"expiry-id") != expected_expiry_id' in text
+    assert 'map.get(existing.body, ["labels", "expiry-id"]) != expected_expiry_id' in text
     assert "cleanup-incomplete" in text
 
 

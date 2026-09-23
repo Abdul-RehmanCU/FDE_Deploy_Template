@@ -154,11 +154,11 @@
             "properties": {
               "postgres": {
                 "required": ["volumeHandle"],
-                "properties": { "volumeHandle": { "type": "string", "pattern": "^projects/[^/]+/zones/northamerica-northeast1-a/disks/[a-z0-9-]+$" } }
+                "properties": { "volumeHandle": { "type": "string", "pattern": "^projects/[^/]+/zones/[^/]+/disks/[a-z0-9-]+$" } }
               },
               "redis": {
                 "required": ["volumeHandle"],
-                "properties": { "volumeHandle": { "type": "string", "pattern": "^projects/[^/]+/zones/northamerica-northeast1-a/disks/[a-z0-9-]+$" } }
+                "properties": { "volumeHandle": { "type": "string", "pattern": "^projects/[^/]+/zones/[^/]+/disks/[a-z0-9-]+$" } }
               }
             }
           }

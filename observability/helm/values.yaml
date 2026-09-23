@@ -18,9 +18,9 @@ storage:
   loki: 8Gi
   tempo: 8Gi
   volumeHandles:
-    prometheus: projects/fdetemplate/zones/northamerica-northeast1-a/disks/fde-demo-observability-prometheus
-    loki: projects/fdetemplate/zones/northamerica-northeast1-a/disks/fde-demo-observability-loki
-    tempo: projects/fdetemplate/zones/northamerica-northeast1-a/disks/fde-demo-observability-tempo
+    prometheus: projects/example-fde-project/zones/example-region1-a/disks/fde-demo-observability-prometheus
+    loki: projects/example-fde-project/zones/example-region1-a/disks/fde-demo-observability-loki
+    tempo: projects/example-fde-project/zones/example-region1-a/disks/fde-demo-observability-tempo
 resources:
   small:
     requests: { cpu: 50m, memory: 128Mi }

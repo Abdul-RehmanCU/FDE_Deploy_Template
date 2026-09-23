@@ -8,14 +8,14 @@ from fde_cli.config import ConfigurationError, load_config
 VALID = """
 customer: acme
 environment: staging
-project: fdetemplate
-region: northamerica-northeast1
-zone: northamerica-northeast1-a
+project: example-fde-project
+region: example-region1
+zone: example-region1-a
 profile: demo
 namespace: acme-staging
-image_repository: northamerica-northeast1-docker.pkg.dev/fdetemplate/fde/api
+image_repository: example-region1-docker.pkg.dev/example-fde-project/fde/api
 image_digest: sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
-frontend_image_repository: northamerica-northeast1-docker.pkg.dev/fdetemplate/fde/frontend
+frontend_image_repository: example-region1-docker.pkg.dev/example-fde-project/fde/frontend
 frontend_image_digest: sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
 app_version: test-version
 branding:
@@ -43,15 +43,20 @@ def test_valid_demo_configuration(tmp_path: Path) -> None:
     assert len(config.fingerprint) == 16
 
 
+def test_demo_accepts_another_consistent_configured_region(tmp_path: Path) -> None:
+    config = load_config(write(tmp_path, VALID.replace("example-region1", "sample-region2")))
+    assert (config.region, config.zone) == ("sample-region2", "sample-region2-a")
+
+
 @pytest.mark.parametrize("key", ["password", "secret", "token", "private_key", "api_key"])
 def test_rejects_embedded_secrets(tmp_path: Path, key: str) -> None:
     with pytest.raises(ConfigurationError, match="forbidden"):
         load_config(write(tmp_path, VALID + f"\n{key}: unsafe\n"))
 
 
-def test_demo_location_is_fixed(tmp_path: Path) -> None:
-    with pytest.raises(ConfigurationError, match="Montréal"):
-        load_config(write(tmp_path, VALID.replace("northamerica-northeast1-a", "us-east1-b")))
+def test_demo_location_requires_consistent_region_and_zone(tmp_path: Path) -> None:
+    with pytest.raises(ConfigurationError, match="region/zone"):
+        load_config(write(tmp_path, VALID.replace("example-region1-a", "us-east1-b")))
 
 
 def test_requires_digest(tmp_path: Path) -> None:
