@@ -1,6 +1,33 @@
 customer: ci-demo
 environment: staging
 appVersion: ci
+# Standard private GitHub runners have two CPUs; keep the kind node schedulable
+# while preserving the same replica counts and workload limits as the demo.
+backend:
+  resources:
+    requests: { cpu: 100m, memory: 384Mi }
+    limits: { cpu: 750m, memory: 768Mi }
+worker:
+  resources:
+    requests: { cpu: 100m, memory: 384Mi }
+    limits: { cpu: 750m, memory: 768Mi }
+publisher:
+  resources:
+    requests: { cpu: 25m, memory: 128Mi }
+    limits: { cpu: 250m, memory: 256Mi }
+frontend:
+  resources:
+    requests: { cpu: 25m, memory: 64Mi }
+    limits: { cpu: 250m, memory: 128Mi }
+demoDependencies:
+  postgres:
+    resources:
+      requests: { cpu: 100m, memory: 256Mi }
+      limits: { cpu: 500m, memory: 512Mi }
+  redis:
+    resources:
+      requests: { cpu: 25m, memory: 96Mi }
+      limits: { cpu: 250m, memory: 256Mi }
 images:
   backend:
     repository: localhost/fde-backend
