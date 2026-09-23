@@ -144,8 +144,11 @@ def test_wif_owner_derives_from_reusable_repository_variable() -> None:
 
 def test_runtime_secret_and_act_as_bindings_are_resource_scoped() -> None:
     demo = (ROOT / "modules" / "demo" / "main.tf").read_text(encoding="utf-8")
+    managed = (ROOT / "modules" / "managed" / "main.tf").read_text(encoding="utf-8")
     expiry = (ROOT / "modules" / "expiry" / "main.tf").read_text(encoding="utf-8")
     assert 'resource "google_secret_manager_secret_iam_member" "runtime"' in demo
+    assert 'member    = "serviceAccount:${google_service_account.runtime[each.value.namespace].email}"' in demo
+    assert 'member    = "serviceAccount:${google_service_account.runtime.email}"' in managed
     assert 'resource "google_secret_manager_secret_iam_member" "deploy_add_versions"' in demo
     assert 'role      = "roles/secretmanager.secretVersionAdder"' in demo
     assert 'member    = "serviceAccount:fde-deploy@${var.project_id}.iam.gserviceaccount.com"' in demo

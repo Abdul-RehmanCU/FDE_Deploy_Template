@@ -62,6 +62,12 @@ helm -n CUSTOMER-ENV status RELEASE_NAME
 
 Check image availability, secret volume keys, PVC ownership, PostgreSQL/Redis readiness, migration Job output, read-only-root writable mounts, resource quotas, and network policies. Sanitize logs before sharing them.
 
+For the first live GKE staging attempt, Cloud Logging recorded `FailedMount` on `runtime-secrets` with `secretmanager.versions.access` denied. The chart annotates its Kubernetes service account to impersonate a per-environment IAM service account, so the secret-level `roles/secretmanager.secretAccessor` grant must target that IAM service account. A direct grant to the Kubernetes principal alone does not authorize the impersonated identity. See [GKE workload identity impersonation](https://docs.cloud.google.com/kubernetes-engine/docs/how-to/workload-identity) and [GKE Secret Manager CSI setup](https://docs.cloud.google.com/secret-manager/docs/secret-manager-managed-csi-component). Confirm the secret policy member and the service-account annotation match without reading or printing secret versions.
+
+The same attempt's frontend log also reported `host not found in upstream` for the API Service. The GKE Calico policy now permits TCP/UDP port 53 to the cluster's service CIDR, consistent with [GKE's kube-dns network-policy guidance](https://docs.cloud.google.com/kubernetes-engine/docs/how-to/nodelocal-dns-cache). Check the actual `kube-dns` Service IP and a Pod's `/etc/resolv.conf` on a future cluster before attributing any remaining lookup failure to policy. Kubernetes [default-deny egress](https://kubernetes.io/docs/concepts/services-networking/network-policies/) blocks DNS unless allowed.
+
+After an atomic Helm rollback removes the Pods, use [Cloud Logging's historical GKE logs](https://docs.cloud.google.com/kubernetes-engine/docs/troubleshooting/introduction-logging) to inspect prior `events` and staging container logs. Do not redeploy solely to recover a deleted Pod's events.
+
 ## Terraform provider checksum mismatch
 
 Provider locks include Linux and Windows hashes. Do not delete the lockfile. Regenerate it in the affected root with the pinned Terraform version:

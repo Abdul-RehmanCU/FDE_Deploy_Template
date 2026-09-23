@@ -1,7 +1,3 @@
-data "google_project" "current" {
-  project_id = var.project_id
-}
-
 locals {
   prefix = "fde-${var.customer}-prod"
   labels = merge(var.labels, {
@@ -406,8 +402,8 @@ resource "google_secret_manager_secret_iam_member" "runtime" {
   project   = var.project_id
   secret_id = each.value.secret_id
   role      = "roles/secretmanager.secretAccessor"
-  member    = "principal://iam.googleapis.com/projects/${data.google_project.current.number}/locations/global/workloadIdentityPools/${var.project_id}.svc.id.goog/subject/ns/production/sa/fde-runtime"
+  member    = "serviceAccount:${google_service_account.runtime.email}"
 
-  # The managed CSI add-on authenticates the Kubernetes principal directly.
+  # The chart links the production KSA to this IAM service account.
   depends_on = [google_container_node_pool.managed]
 }

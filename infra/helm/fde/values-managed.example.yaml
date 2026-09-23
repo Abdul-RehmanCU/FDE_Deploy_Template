@@ -4,9 +4,9 @@ demoDependencies:
   enabled: false
 networkPolicy:
   enabled: true
+  dnsServiceCidr: 10.68.0.0/20
   managedServices:
     # Replace only from: terraform output -json helm_managed_network_policy
     postgresCidr: 10.64.0.10/32
     redisCidr: 10.64.0.11/32
     redisTlsPort: 6378
-

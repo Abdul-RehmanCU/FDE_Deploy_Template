@@ -74,9 +74,10 @@
     },
     "networkPolicy": {
       "type": "object",
-      "required": ["enabled", "managedServices"],
+      "required": ["enabled", "dnsServiceCidr", "managedServices"],
       "properties": {
         "enabled": { "type": "boolean" },
+        "dnsServiceCidr": { "type": "string", "pattern": "^[0-9]{1,3}(\\.[0-9]{1,3}){3}/[0-9]{1,2}$" },
         "managedServices": {
           "type": "object",
           "required": ["postgresCidr", "redisCidr", "redisTlsPort"],

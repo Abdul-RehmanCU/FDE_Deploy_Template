@@ -15,6 +15,14 @@ spec:
   podSelector: {}
   policyTypes: [Egress]
   egress:
+    # GKE Calico evaluates DNS egress to the kube-dns Service IP before
+    # translating it to a kube-system Pod. Limit this allowance to port 53.
+    {{- if .Values.secretProvider.enabled }}
+    - to: [{ ipBlock: { cidr: {{ .Values.networkPolicy.dnsServiceCidr | quote }} } }]
+      ports:
+        - { protocol: UDP, port: 53 }
+        - { protocol: TCP, port: 53 }
+    {{- end }}
     - to:
         - namespaceSelector: { matchLabels: { kubernetes.io/metadata.name: kube-system } }
       ports:

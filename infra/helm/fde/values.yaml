@@ -93,6 +93,7 @@ ingress:
 
 networkPolicy:
   enabled: true
+  dnsServiceCidr: 10.44.0.0/20
   managedServices:
     postgresCidr: ""
     redisCidr: ""
