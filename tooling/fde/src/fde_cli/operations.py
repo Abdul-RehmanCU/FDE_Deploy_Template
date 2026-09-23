@@ -436,6 +436,8 @@ def terraform_plan(
             "-input=false",
             "-lock-timeout=60s",
             f"-var=project_id={config.project}",
+            f"-var=region={config.region}",
+            f"-var=zone={config.zone}",
             f"-var=customer={config.customer}",
             f"-var=cluster_name=fde-{config.customer}-demo",
             f"-var=expiry_id={expiry_id}",
@@ -654,7 +656,22 @@ def destroy_demo(
     else:
         raise OperationError("expiry state is unavailable and no cleanup manifest fallback was supplied")
     validate_cleanup_manifest(config, expiry_id, manifest)
-    run([terraform, "destroy", "-input=false", "-auto-approve", "-lock-timeout=60s", f"-var=project_id={config.project}", f"-var=customer={config.customer}", f"-var=cluster_name=fde-{config.customer}-demo", f"-var=expiry_id={expiry_id}"], cwd=terraform_dir)
+    run(
+        [
+            terraform,
+            "destroy",
+            "-input=false",
+            "-auto-approve",
+            "-lock-timeout=60s",
+            f"-var=project_id={config.project}",
+            f"-var=region={config.region}",
+            f"-var=zone={config.zone}",
+            f"-var=customer={config.customer}",
+            f"-var=cluster_name=fde-{config.customer}-demo",
+            f"-var=expiry_id={expiry_id}",
+        ],
+        cwd=terraform_dir,
+    )
     gcloud = executable("gcloud")
     inventory_commands: Iterable[tuple[str, list[str]]] = (
         ("clusters", [gcloud, "container", "clusters", "list", f"--project={config.project}", "--format=json"]),

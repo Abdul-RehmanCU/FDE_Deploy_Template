@@ -1,10 +1,11 @@
+import json
 from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from pathlib import Path
 
+import fde_cli.operations as operations
 import pytest
 import yaml
-
 from fde_cli.config import load_config
 from fde_cli.cost import CostGate
 from fde_cli.operations import (
@@ -15,6 +16,7 @@ from fde_cli.operations import (
     deploy_demo,
     destroy_demo,
     remaining_instance_names,
+    terraform_plan,
     validate_cleanup_manifest,
     validate_demo_cost_drivers,
     validate_expiry_contract,
@@ -22,6 +24,7 @@ from fde_cli.operations import (
     validate_paid_cost_gate,
     validate_state_bucket_ownership,
 )
+from fde_cli.process import Result
 from test_config import VALID, write
 
 
@@ -55,6 +58,26 @@ def test_managed_profile_cannot_deploy_under_demo_authorization(tmp_path: Path) 
 def test_destroy_requires_exact_customer_before_running_tools(tmp_path: Path) -> None:
     with pytest.raises(OperationError, match="exactly match"):
         destroy_demo(config(tmp_path), tmp_path, "wrong", "demo-test-run", tmp_path)
+
+
+def test_demo_plan_and_destroy_pass_required_location(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    cfg = config(tmp_path)
+    calls: list[list[str]] = []
+
+    def fake_run(args: list[str], **_kwargs: object) -> Result:
+        calls.append(args)
+        output = json.dumps(cleanup_manifest()) if "compiled_manifest" in args else "[]"
+        return Result(tuple(args), 0, output, "")
+
+    monkeypatch.setattr(operations, "run", fake_run)
+    monkeypatch.setattr(operations, "executable", lambda name: name)
+    terraform_plan(cfg, tmp_path, "state-bucket", "demo/demo-test-run", tmp_path / "demo.tfplan", "demo-test-run")
+    destroy_demo(cfg, tmp_path, "acme", "demo-test-run", tmp_path)
+
+    for action in ("plan", "destroy"):
+        command = next(args for args in calls if len(args) > 1 and args[1] == action)
+        assert "-var=region=example-region1" in command
+        assert "-var=zone=example-region1-a" in command
 
 
 def test_bootstrap_requires_exact_project_before_cloud_calls(tmp_path: Path) -> None:

@@ -139,13 +139,14 @@ Immediately after runtime and expiry cleanup are proven and sanitized evidence i
 ```bash
 python scripts/finalize_bootstrap.py \
   --project PROJECT_ID --state-bucket STATE_BUCKET --github-repository OWNER/FDE_Deploy_Template \
-  --confirm FINALIZE-BOOTSTRAP --evidence-out path/to/private-final-bootstrap-evidence.json
+  --region YOUR_APPROVED_REGION --confirm FINALIZE-BOOTSTRAP \
+  --evidence-out path/to/private-final-bootstrap-evidence.json
 ```
 
 This command targets only bootstrap-managed IAM/WIF/service-state resources, confirms that only the labeled state bucket remains in Terraform state, removes all state-object generations, deletes that exact bucket last, and fails if the FDE WIF pool, four automation service accounts, or their project IAM bindings remain. The selected Google APIs intentionally remain enabled because the Terraform resources set `disable_on_destroy=false`; enabled APIs alone have no runtime charge and disabling them could affect unrelated project defaults.
 
 ## GKE-specific identity and network contracts
 
-The managed Secret Manager CSI add-on authenticates the namespace-specific Kubernetes service account directly. Terraform grants that principal access only to its environment secrets; the annotated Google service account remains the application identity for GCS. See [Google's managed CSI authentication contract](https://docs.cloud.google.com/secret-manager/docs/secret-manager-managed-csi-component#configure-applications-to-authenticate-to-the-secret-manager-api).
+The chart links each Kubernetes service account to a namespace-specific Google service account. Terraform grants that impersonated service account access only to its environment secrets and GCS bucket. Both the annotation and `roles/iam.workloadIdentityUser` binding are required. See [GKE's service-account impersonation contract](https://docs.cloud.google.com/kubernetes-engine/docs/how-to/workload-identity).
 
 Both Standard GKE profiles explicitly select Calico and enable the network-policy add-on. GKE rejects enabled network policy without a provider; [the provider requirement is documented here](https://docs.cloud.google.com/kubernetes-engine/docs/how-to/network-policy). GitHub cloud jobs install `gke-gcloud-auth-plugin` before connecting.
